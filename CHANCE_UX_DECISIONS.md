@@ -27,7 +27,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 
 | Actor | Registration | Create game session | Join game session | Submit card | Edit own cards |
 |---|---|---|---|---|---|
-| Guest | Display name only | No | Yes | Yes (in active game session only) | No |
+| Guest | Display name only | No | Yes | No | No |
 | Registered User | Invite code required | Yes | Yes | Yes (in game session OR outside) | Yes |
 | Admin | Registered + admin flag | Yes | Yes | Yes | Yes (+ any card) |
 
@@ -71,9 +71,9 @@ Chance is a social party app that acts as a live companion layer on top of physi
 - A small unobtrusive account indicator in the corner if a User is remembered
 - Log out available from the side menu at any time
 - **Creating a game session:** requires a User — if no remembered account, inline login/register prompt
-- **Joining a game session (with remembered User):** prompt — "Join as [display name] or join as someone else?" — one tap to link, or enter a different name as guest
-- **Joining a game session (no remembered User):** straight to name entry
-- **Mid-session:** User can log in from the side menu; this links the current active Player to that User
+- **Joining a game session (with remembered User):** prompt — "Join as [display name] or join as someone else?" — one tap to link as registered player (card-sharing selector shown, default: Network), or enter a different name as guest
+- **Joining a game session (no remembered User):** straight to name entry (joins as guest; no card-sharing setting)
+- **Mid-session:** User can log in from the side menu; this links the current active Player to that User and presents the card-sharing selector (default: Network)
 
 ---
 
@@ -82,7 +82,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 ### Creation
 1. Registered User taps "Create game session" on Home
 2. Game Settings screen opens — **no Game Session record exists yet**
-3. Host configures: session name, drinking toggle, age-appropriate toggle, game tag(s)
+3. Host configures: session name, drinking toggle, age-appropriate toggle, game tag(s), card-sharing level (None / My cards / My network — default: My network)
 4. Host taps Save → **Game Session record is created** → join code and QR generated
 5. Host lands on the Game screen immediately — the game is live
 6. Join code and QR are shared from **within the Game screen** — never from Game Settings
@@ -102,6 +102,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 - Filter changes apply to **future draws only** — no retroactive effect
 - Other players receive a **toast notification** when filters are updated (informational only)
 - Any Player can draw at any time — no turn tracking in the app
+- Only registered Players can submit new cards; guests draw from the existing pool
 - Multiple concurrent draws are allowed — ordered by timestamp in history
 
 ### Ending
@@ -119,8 +120,10 @@ Chance is a social party app that acts as a live companion layer on top of physi
 | Field | Type | Notes |
 |---|---|---|
 | `id` | uuid | Permanent card identifier |
-| `authorUserId` | FK → User | The registered User who first submitted the card |
-| `active` | boolean | False = deactivated by owner or admin; excluded from all future draw pools |
+| `authorUserId` | FK → User | The registered User who submitted the card — **never null** (only registered users submit) |
+| `active` | boolean | False = deactivated by owner or admin; excluded from all draw pools everywhere |
+| `isGlobal` | boolean | True = admin-promoted to the global pool; eligible for all sessions regardless of who is playing |
+| `createdInSessionId` | FK → Session (nullable) | The session in which this card was originally submitted; null = created outside a session |
 | `currentVersionId` | FK → CardVersion | Points to the latest version |
 | `createdAt` | timestamp | |
 
@@ -153,12 +156,25 @@ Chance is a social party app that acts as a live companion layer on top of physi
 - Enforced server-side at draw time and validated at submission
 
 ### Card draw algorithm (weighted random)
-- Base weight: `1.0` for all eligible cards
-- Session-card boost: cards submitted during the current game session → `3.0×` multiplier
+
+The pool for a session is assembled from four tiers. A card must have `active = true` and pass session filters (drinking, age, game tag) to be eligible in any tier.
+
+| Tier | Eligible when | Base weight |
+|---|---|---|
+| **This-session** | `createdInSessionId` = current session | `3.0×` |
+| **Game-lineage** | `createdInSessionId` is set AND at least one player in the session has `cardSharing = 'network'` and participated in that origin session | `1.0` |
+| **Player library** | `authorUserId` links to a registered player in this session with `cardSharing = 'mine'` or `'network'` | `1.0` |
+| **Global** | `isGlobal = true` | `1.0` |
+
+Cards may qualify under multiple tiers; the highest base weight applies. Weight modifiers applied on top:
 - Upvote bonus: `+0.2` per net upvote, capped at `+2.0`
 - Downvote penalty: net negative votes → `0.5×`
 - Recently drawn suppression: cards drawn in the last N draws → `0.1×`
-- Excluded entirely: inactive cards, cards failing session filters (drinking, age, game tag)
+
+**`cardSharing` levels** (set per player per session, default: Network):
+- **None** — player contributes nothing to the pool
+- **My cards** — player's own library cards enter the pool (Tier 3)
+- **My network** — player's library cards + game-lineage cards from their recent sessions (Tiers 3 + 4)
 
 ---
 
@@ -211,7 +227,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 | Notifications + badge count | Logged in OR in active game session as any player |
 | Past game sessions | Logged in |
 | My cards | Logged in |
-| Submit card | In an active game session (any player) OR logged in outside game session |
+| Submit card | Logged in (registered player in active game session, or outside game session) |
 | Return to game settings | In an active game session AND active player is host |
 | Leave game session | In an active game session |
 | End game session | In an active game session AND active player is host |
@@ -241,7 +257,7 @@ Game settings  ← host only, never shown to non-hosts
 ├── Accessible two ways:
 │   ├── New: "Create game session" on Home (no record yet)
 │   └── Edit: side menu mid-game (record exists, changes apply to future draws only)
-├── Fields: session name · drinking toggle · age-appropriate toggle · game tag(s)
+├── Fields: session name · drinking toggle · age-appropriate toggle · game tag(s) · card-sharing level (host's own setting)
 ├── Save (new) → creates Game Session record → join code generated → → Game
 ├── Save (edit) → updates filter settings → [toast to all players] → → Game
 └── Cancel (new, unsaved) → → Home — no record created
@@ -255,8 +271,9 @@ Game
 │   └── Tap to dismiss → back to Game
 ├── [modal] Add player to device
 │   └── Enter name → fuzzy match → silently resumes or joins fresh
-├── [modal] Submit card (from side menu)
+├── [modal] Submit card (from side menu — registered players only)
 │   └── Image · title · description · hidden flag · game tags · drinking · family-safe
+│   └── Card auto-saved to submitter's library after session
 └── → Game session history (on host leaving/ending, or non-host leaving)
 
 Notifications (side menu)
@@ -282,7 +299,8 @@ My cards (registered users only, side menu)
 ├── "All cards" tab — admins only
 │   ├── Full card pool, searchable and filterable
 │   ├── Edit any card → new CardVersion attributed to admin
-│   └── Deactivate entire card (card.active = false) — history unaffected
+│   ├── Deactivate entire card (card.active = false) — history unaffected
+│   └── Promote card to global pool (card.isGlobal = true) / Demote from global pool
 ├── [modal] Card detail — editable view (own cards, or any card if admin)
 │   ├── Full edit form pre-populated with current version
 │   │   └── Image · title · description · hidden flag · game tags · drinking · family-safe
@@ -308,7 +326,7 @@ Player switcher (tap)
 
 ## 12. Admin portal (web only — not mobile)
 
-The admin portal is a separate Next.js web UI (`/admin`). It is intentionally minimal — card management has been moved into the mobile app for admin-scoped Users.
+The admin portal is a separate Next.js web UI (`/admin`). It is intentionally minimal — card management (including global pool curation) lives in the mobile app under My Cards → All cards, accessible only to admin-scoped Users.
 
 ```
 Admin portal
@@ -364,6 +382,11 @@ All mutations are written locally first and synced to the server opportunistical
 | Host leaving = game ends | Leaving IS ending for the host |
 | CardVersions are append-only | Saves never overwrite; draw history is version-locked |
 | Card deactivation is non-destructive | History always shows the version that was drawn |
+| Only registered users can submit cards | Guests draw from the pool but cannot contribute cards |
+| `createdInSessionId` tracks a card's origin session | Enables game-lineage pool tier; cards submitted outside sessions have null |
+| `isGlobal` is admin-only | Users cannot self-promote cards to the global pool |
+| `cardSharing` defaults to Network | Registered players opt down if needed; guests have no sharing setting |
+| In-session submissions auto-save to the submitter's library | `active = true`, `isGlobal = false`, `createdInSessionId` set to that session |
 | Player normalized name is the session key | Not device, not account |
 | Hidden description visible only to drawer | Only drawer can share it; no one else can reveal it |
 | Voting and flagging in history only | Not on the full-screen card reveal |

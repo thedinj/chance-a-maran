@@ -16,6 +16,14 @@ export interface Player {
     userId: string | null;
     /** False when the host marks the player inactive. They can rejoin by re-entering the same name. */
     active: boolean;
+    /**
+     * Controls how this registered player contributes cards to the session pool.
+     * - 'none'    — contributes nothing
+     * - 'mine'    — contributes own library cards
+     * - 'network' — contributes own cards + cards from players in their recent sessions (default)
+     * Null for guest players (no card library).
+     */
+    cardSharing: 'none' | 'mine' | 'network' | null;
 }
 
 export interface FilterSettings {
@@ -60,6 +68,10 @@ export interface Card {
     id: string;
     authorUserId: string;
     active: boolean;
+    /** Admin-promoted to the global pool; eligible for all sessions regardless of player presence. */
+    isGlobal: boolean;
+    /** The session in which this card was originally submitted. Null if created outside a session. */
+    createdInSessionId: string | null;
     currentVersionId: string;
     currentVersion: CardVersion;
     createdAt: string;

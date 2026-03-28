@@ -9,8 +9,6 @@ import type {
     CreateSessionRequest,
     DrawEvent,
     FilterSettings,
-    GuestJoinRequest,
-    GuestJoinResponse,
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
@@ -63,6 +61,8 @@ const DEMO_CARD: Card = {
     id: "card-1",
     authorUserId: "user-demo",
     active: true,
+    isGlobal: true,
+    createdInSessionId: null,
     currentVersionId: "cv-1",
     currentVersion: DEMO_CARD_VERSION,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -96,20 +96,39 @@ export class FakeApiClient implements ApiClient {
         if (req.email === "wrong@chance.app") {
             return fail("AUTHENTICATION_ERROR", "Invalid email or password.");
         }
-        const user: User = req.email === DEMO_USER.email
-            ? DEMO_USER
-            : { id: id(), email: req.email, displayName: req.email.split("@")[0]!, isAdmin: false };
+        const user: User =
+            req.email === DEMO_USER.email
+                ? DEMO_USER
+                : {
+                      id: id(),
+                      email: req.email,
+                      displayName: req.email.split("@")[0]!,
+                      isAdmin: false,
+                  };
         state.currentUser = user;
-        return ok({ user, accessToken: `fake-access-${user.id}`, refreshToken: `fake-refresh-${user.id}` });
+        return ok({
+            user,
+            accessToken: `fake-access-${user.id}`,
+            refreshToken: `fake-refresh-${user.id}`,
+        });
     }
 
     async register(req: RegisterRequest): Promise<ApiResult<AuthResponse>> {
         if (!req.invitationCode) {
             return fail("INVITATION_CODE_ERROR", "An invitation code is required.");
         }
-        const user: User = { id: id(), email: req.email, displayName: req.displayName, isAdmin: false };
+        const user: User = {
+            id: id(),
+            email: req.email,
+            displayName: req.displayName,
+            isAdmin: false,
+        };
         state.currentUser = user;
-        return ok({ user, accessToken: `fake-access-${user.id}`, refreshToken: `fake-refresh-${user.id}` });
+        return ok({
+            user,
+            accessToken: `fake-access-${user.id}`,
+            refreshToken: `fake-refresh-${user.id}`,
+        });
     }
 
     async logout(): Promise<ApiResult<void>> {
@@ -117,7 +136,9 @@ export class FakeApiClient implements ApiClient {
         return ok(undefined);
     }
 
-    async refreshTokens(refreshToken: string): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>> {
+    async refreshTokens(
+        refreshToken: string
+    ): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>> {
         if (!refreshToken.startsWith("fake-refresh-")) {
             return fail("AUTHENTICATION_ERROR", "Invalid refresh token.");
         }
@@ -127,7 +148,7 @@ export class FakeApiClient implements ApiClient {
 
     async claimAccount(
         _guestAccessToken: string,
-        credentials: LoginRequest | RegisterRequest,
+        credentials: LoginRequest | RegisterRequest
     ): Promise<ApiResult<AuthResponse>> {
         return this.login(credentials as LoginRequest);
     }
@@ -143,6 +164,7 @@ export class FakeApiClient implements ApiClient {
             displayName: state.currentUser.displayName,
             userId: state.currentUser.id,
             active: true,
+            cardSharing: "network",
         };
         const session: Session = {
             id: sessionId,
@@ -163,12 +185,12 @@ export class FakeApiClient implements ApiClient {
 
     async joinByCode(req: JoinByCodeRequest): Promise<ApiResult<JoinByCodeResponse>> {
         const session = Array.from(state.sessions.values()).find(
-            (s) => s.joinCode === req.joinCode.toUpperCase() && s.status === "active",
+            (s) => s.joinCode === req.joinCode.toUpperCase() && s.status === "active"
         );
         if (!session) return fail("NOT_FOUND", "Session not found or no longer active.");
 
         const existing = (state.players.get(session.id) ?? []).find(
-            (p) => p.displayName.trim().toLowerCase() === req.displayName.trim().toLowerCase(),
+            (p) => p.displayName.trim().toLowerCase() === req.displayName.trim().toLowerCase()
         );
         if (existing) {
             existing.active = true;
@@ -181,6 +203,7 @@ export class FakeApiClient implements ApiClient {
             displayName: req.displayName.trim(),
             userId: state.currentUser?.id ?? null,
             active: true,
+            cardSharing: state.currentUser ? "network" : null,
         };
         state.players.get(session.id)!.push(player);
         return ok({ session, player, accessToken: `fake-guest-${player.id}` });
@@ -193,12 +216,17 @@ export class FakeApiClient implements ApiClient {
             session,
             players: state.players.get(sessionId) ?? [],
             drawEvents: state.drawEvents.get(sessionId) ?? [],
-            pendingTransfers: (state.transfers.get(sessionId) ?? []).filter((t) => t.status === "pending"),
+            pendingTransfers: (state.transfers.get(sessionId) ?? []).filter(
+                (t) => t.status === "pending"
+            ),
             serverTimestamp: ts(),
         });
     }
 
-    async updateSessionFilters(sessionId: string, filterSettings: FilterSettings): Promise<ApiResult<Session>> {
+    async updateSessionFilters(
+        sessionId: string,
+        filterSettings: FilterSettings
+    ): Promise<ApiResult<Session>> {
         const session = state.sessions.get(sessionId);
         if (!session) return fail("NOT_FOUND", "Session not found.");
         session.filterSettings = filterSettings;
@@ -262,6 +290,8 @@ export class FakeApiClient implements ApiClient {
             id: version.cardId,
             authorUserId: state.currentUser?.id ?? "unknown",
             active: true,
+            isGlobal: false,
+            createdInSessionId: null,
             currentVersionId: version.id,
             currentVersion: version,
             createdAt: ts(),
@@ -301,7 +331,10 @@ export class FakeApiClient implements ApiClient {
 
     // ── Transfers ─────────────────────────────────────────────────────────────
 
-    async createTransfer(drawEventId: string, toPlayerId: string): Promise<ApiResult<CardTransfer>> {
+    async createTransfer(
+        drawEventId: string,
+        toPlayerId: string
+    ): Promise<ApiResult<CardTransfer>> {
         let sessionId: string | undefined;
         for (const [sid, events] of state.drawEvents.entries()) {
             if (events.some((e) => e.id === drawEventId)) {
@@ -325,7 +358,7 @@ export class FakeApiClient implements ApiClient {
 
     async respondToTransfer(
         transferId: string,
-        status: "accepted" | "rejected",
+        status: "accepted" | "rejected"
     ): Promise<ApiResult<CardTransfer>> {
         for (const transfers of state.transfers.values()) {
             const transfer = transfers.find((t) => t.id === transferId);

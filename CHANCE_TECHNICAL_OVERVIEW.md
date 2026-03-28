@@ -41,7 +41,7 @@ The card pool is the heart of the app. It is seeded from a global community data
 - **Ephemeral guests:** guest players need no account or app install — they enter a display name to join and receive a session-scoped JWT; their identity does not persist beyond the session
 - **In-session account claiming:** a guest can log in or register at any time during a session; their ephemeral guest identity is merged into their real account and play continues uninterrupted — votes, draws, and submissions already made are preserved under the claimed account
 - **Invite-only registration:** accounts require an invitation code issued by an admin; controls growth and community quality
-- **Living card pool:** current-session cards are prioritized in the draw algorithm; the pool improves with every play
+- **Living card pool:** draw pool assembled from four tiers — global (admin-curated), game-lineage (cards from past sessions of the same game type, mediated by player sharing settings), player libraries (cards from registered players present in the session), and this-session submissions (3× boost). Strangers' cards never enter your game unless mediated by a player you're playing with.
 - **Cooperative card transfer:** either player in a session can offer a card to another; recipient accepts or rejects
 - **Flexible game tagging:** cards can be associated with one or more real-world games, or tagged as universally applicable
 - **Community moderation:** upvote/downvote and flagging feed back into card draw weight and admin review queue
@@ -51,10 +51,10 @@ The card pool is the heart of the app. It is seeded from a global community data
 | User Type         | Registration                | Can Host Session | Can Join Session | Can Submit Cards | Persistent Account           |
 | ----------------- | --------------------------- | ---------------- | ---------------- | ---------------- | ---------------------------- |
 | Registered        | Requires invitation code    | ✅               | ✅               | ✅               | ✅                           |
-| Guest (ephemeral) | Display name only (no code) | ❌               | ✅               | ✅               | ❌ — session-scoped JWT only |
+| Guest (ephemeral) | Display name only (no code) | ❌               | ✅               | ❌               | ❌ — session-scoped JWT only |
 | Admin             | Registered + admin scope    | ✅               | ✅               | ✅               | ✅                           |
 
-> **Note on guest ephemerality:** Guest JWTs are issued per session and are not stored in persistent secure storage. A guest's display name and session-player record exist for the lifetime of the session only. Votes and card submissions made by a guest are attributed to their `player_id` (not a `user_id`), preserving authorship without requiring an account.
+> **Note on guest ephemerality:** Guest JWTs are issued per session and are not stored in persistent secure storage. A guest's display name and session-player record exist for the lifetime of the session only. Votes made by a guest are attributed to their `player_id`. Guests cannot submit cards — card authorship requires a persistent `user_id`.
 
 ### 1.4 Platform
 
@@ -187,16 +187,21 @@ Engine: SQLite via `better-sqlite3`. Foreign key constraints enforced (`PRAGMA f
 | `users`            | `id`, `email`, `password_hash`, `display_name`, `is_admin`, `invitation_code_id` (FK), `created_at`                                                |
 | `invitation_codes` | `id`, `code` (unique), `created_by_user_id` (FK, admin), `used_by_user_id` (FK, nullable), `expires_at` (nullable), `is_active`                    |
 | `sessions`         | `id`, `host_user_id` (FK, registered users only), `join_code`, `qr_token`, `filter_settings` (JSON), `status`, `created_at`                        |
-| `session_players`  | `session_id`, `user_id`, `joined_at` — join table                                                                                                  |
-| `cards`            | `id`, `content`, `author_id`, `is_drinking`, `spiciness_level`, `is_family_safe`, `upvotes`, `downvotes`, `flag_count`, `is_removed`, `created_at` |
+| `session_players`  | `session_id`, `user_id`, `joined_at`, `card_sharing TEXT DEFAULT 'network' CHECK(IN ('none','mine','network'))` — join table                        |
+| `cards`            | `id`, `content`, `author_id` (FK → users, **never null**), `is_global INTEGER DEFAULT 0`, `created_in_session_id` (FK → sessions, nullable), `is_drinking`, `spiciness_level`, `is_family_safe`, `upvotes`, `downvotes`, `active`, `created_at` |
 | `card_game_tags`   | `card_id`, `game_name` — one row per game association; cards with no rows here are universal                                                       |
-| `session_cards`    | `session_id`, `card_id`, `submitted_in_session` (bool) — tracks pool membership                                                                    |
 | `draw_events`      | `id`, `session_id`, `player_id`, `card_id`, `drawn_at`, `revealed_to_all_at` (nullable)                                                            |
-| `card_votes`       | `player_id`, `card_id`, `vote` (up/down/flag), `created_at`                                                                                        |
+| `card_votes`       | `player_id`, `card_id`, `vote` (up/down), `created_at`                                                                                             |
 | `card_transfers`   | `id`, `from_player_id`, `to_player_id`, `card_id`, `draw_event_id`, `status`, `created_at`                                                         |
 | `refresh_tokens`   | `id`, `user_id`, `token_hash`, `expires_at`, `revoked`                                                                                             |
 
 **Notes on `card_game_tags`:** A card with zero rows in `card_game_tags` is treated as universally applicable (equivalent to "Any Game"). A card with one or more rows is only eligible for sessions filtered to one of those games, or sessions with no game filter set. This is enforced in the card-picker service at draw time and in the API validation layer on card submission.
+
+**Required indexes for card-picker performance:**
+- `cards(is_global, active)` — global tier scan
+- `cards(created_in_session_id, active)` — game-lineage + this-session tier scan
+- `session_players(session_id, card_sharing)` — player-library tier join
+- `session_players(user_id)` — resolving a player's past sessions for the network tier
 
 ### 4.4 Invitation Code System
 
@@ -210,14 +215,55 @@ Engine: SQLite via `better-sqlite3`. Foreign key constraints enforced (`PRAGMA f
 
 ### 4.5 Weighted Card Draw Algorithm
 
-The card-picker service selects a card from the active session pool using a weighted random algorithm. Weights are computed at draw time and are not persisted.
+The card-picker service assembles a pool from four eligibility tiers, selects a winner via weighted random, then fetches the full card content. Weights are computed at draw time and are not persisted. A card must have `active = true` and pass session filters (drinking, age, game tag) to qualify in any tier.
 
-- **Base weight:** `1.0` for all global pool cards passing the session filter
-- **Session-card boost:** cards submitted during the current session receive a configurable multiplier (default `3.0×`)
-- **Upvote bonus:** `+0.2` per net upvote (upvotes − downvotes), capped at `+2.0`
-- **Downvote penalty:** cards with net negative votes receive a `0.5×` penalty
-- **Recently drawn suppression:** cards drawn in the last N draws (N = configurable constant) receive a `0.1×` weight to avoid repeats
-- **Excluded cards:** flagged/removed cards and cards that fail session filters (drinking, age, game tag) are excluded entirely before weight calculation
+#### Pool tiers
+
+| Tier | Condition | Base weight |
+|---|---|---|
+| **This-session** | `cards.created_in_session_id = currentSessionId` | `3.0×` |
+| **Game-lineage** | `created_in_session_id IS NOT NULL` AND at least one player in the session has `card_sharing = 'network'` AND participated in that origin session AND that card's author had `card_sharing != 'none'` in that session | `1.0` |
+| **Player library** | `author_id` links to a player in this session with `card_sharing IN ('mine','network')` | `1.0` |
+| **Global** | `is_global = 1` | `1.0` |
+
+"Recent sessions" for the game-lineage tier is bounded by `RECENT_GAMES_WINDOW` (constant in `packages/core/src/constants/`). Cards qualifying under multiple tiers use the highest base weight.
+
+#### Two-step selection (avoids loading full card content for the entire pool)
+
+**Step 1 — fetch IDs + weight inputs only** (three indexed queries):
+```sql
+-- Global tier
+SELECT id, upvotes, downvotes FROM cards
+WHERE is_global = 1 AND active = 1 AND <game tag filter>
+
+-- This-session + game-lineage tiers
+SELECT id, upvotes, downvotes,
+       CASE WHEN created_in_session_id = :sessionId THEN 'current' ELSE 'network' END AS tier
+FROM cards
+WHERE created_in_session_id IN (:currentSessionId, :recentSessionIds...)
+  AND active = 1 AND <game tag filter>
+  -- network rows additionally filtered to authors who were sharing in those sessions
+
+-- Player-library tier
+SELECT c.id, c.upvotes, c.downvotes
+FROM cards c
+JOIN session_players sp ON sp.user_id = c.author_id
+WHERE sp.session_id = :sessionId AND sp.card_sharing != 'none'
+  AND c.active = 1 AND <game tag filter>
+```
+
+**Step 2 — weighted selection in the card-picker service (JS):**
+Deduplicate card IDs (keep highest-priority tier), apply tier base weight + modifier stack, weighted random draw:
+- Upvote bonus: `+0.2` per net upvote (upvotes − downvotes), capped at `+2.0`
+- Downvote penalty: net negative votes → `0.5×`
+- Recently drawn suppression: drawn in the last N draws → `0.1×`
+
+**Step 3 — fetch winner's full content:**
+```sql
+SELECT c.*, cv.*
+FROM cards c JOIN card_versions cv ON cv.id = c.current_version_id
+WHERE c.id = :winnerId
+```
 
 ### 4.6 API Design
 
@@ -302,10 +348,10 @@ Applied globally: `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-
 Built with Mantine UI inside the Next.js app at `/admin`. Protected by a separate admin session (not user JWT). Admin scope is stored on the `users` table (`is_admin` flag).
 
 - **Invitation codes:** create single-use codes with optional expiry; view usage history; deactivate codes
-- **Flagged card review:** approve (keep), edit content, or permanently remove cards
-- **Global card pool seeding:** submit canonical cards with any tag combination
 - **User management:** view accounts, deactivate users, promote to admin
 - **Analytics:** card play counts, upvote/downvote ratios, top cards by game tag, session volume over time
+
+Card management (global pool curation, card deactivation, flag review) lives in the mobile app under My Cards → All cards, accessible to admin-scoped users only.
 
 ---
 
@@ -629,11 +675,11 @@ Zod schemas defined once in `core` and used at all three layers:
 
 ### 7.4 Content Moderation
 
-A two-layer moderation system keeps the card pool healthy:
+The concentric circles pool model limits exposure: strangers' cards never enter a session unless a player with `card_sharing = 'network'` vouches for them via game-lineage. The global pool is admin-curated, not crowd-sourced.
 
-- **Community layer:** upvotes and downvotes adjust draw weights in real time; three unique flags trigger an automatic hold pending admin review
-- **Admin layer:** flagged cards appear in the admin portal review queue; admin can approve, edit content, or permanently remove
-- Removed cards are soft-deleted (`is_removed = true`) and excluded from all future draw pools
+- **Community layer:** upvotes and downvotes adjust draw weights in real time; flags are a lightweight report signal (no automatic hold)
+- **Admin layer:** admins review reported cards and deactivate as needed (`card.active = false`); admins also manage the global pool directly (promote/demote `card.is_global`) from the My Cards → All cards tab in the mobile app
+- Card deactivation is the single moderation primitive — it excludes the card from all future draw pools while preserving draw history
 
 ### 7.5 TypeScript Configuration
 
@@ -675,7 +721,8 @@ A two-layer moderation system keeps the card pool healthy:
 - Card transfer between players (either-initiates, other-accepts)
 - In-session account claiming (guest → registered mid-session)
 - Inline error handling; `NetworkStatusBanner` for offline state
-- Admin portal: invitation code management, flagged card review, user management, basic analytics
+- Admin portal: invitation code management, user management, basic analytics
+- Global card pool management (promote/demote/deactivate) in mobile app, admin-scoped users only
 - Android + iOS builds via Capacitor
 
 ### 9.2 Post-MVP Considerations

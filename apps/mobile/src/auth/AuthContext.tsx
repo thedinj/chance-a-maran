@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import type { ApiResult, AuthResponse, Player, User } from "../lib/api";
 import { apiClient, setApiAccessToken } from "../lib/api";
-import type { ApiResult, AuthResponse, LoginRequest, Player, RegisterRequest, User } from "../lib/api";
 
 interface AuthState {
     /** Logged-in registered user, or null if unauthenticated or guest-only. */
@@ -18,7 +18,7 @@ interface AuthContextValue extends AuthState {
         email: string,
         password: string,
         displayName: string,
-        invitationCode: string,
+        invitationCode: string
     ): Promise<ApiResult<AuthResponse>>;
     logout(): Promise<void>;
     /** Called after successfully joining a session as a guest. */
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (result.ok) applyAuthResponse(result.data);
             return result;
         },
-        [applyAuthResponse],
+        [applyAuthResponse]
     );
 
     const register = useCallback(
@@ -78,13 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: string,
             password: string,
             displayName: string,
-            invitationCode: string,
+            invitationCode: string
         ): Promise<ApiResult<AuthResponse>> => {
-            const result = await apiClient.register({ email, password, displayName, invitationCode });
+            const result = await apiClient.register({
+                email,
+                password,
+                displayName,
+                invitationCode,
+            });
             if (result.ok) applyAuthResponse(result.data);
             return result;
         },
-        [applyAuthResponse],
+        [applyAuthResponse]
     );
 
     const logout = useCallback(async () => {
@@ -113,12 +118,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (response: AuthResponse) => {
             applyAuthResponse(response);
         },
-        [applyAuthResponse],
+        [applyAuthResponse]
     );
 
     return (
         <AuthContext.Provider
-            value={{ ...state, login, register, logout, setGuestSession, clearGuestSession, upgradeFromGuest }}
+            value={{
+                ...state,
+                login,
+                register,
+                logout,
+                setGuestSession,
+                clearGuestSession,
+                upgradeFromGuest,
+            }}
         >
             {children}
         </AuthContext.Provider>

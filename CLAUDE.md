@@ -127,12 +127,15 @@ Single source of truth for:
 
 ## API Design Conventions
 
-- `withAuth` validates any JWT (guest or registered). Most gameplay endpoints — draw, vote, submit card, transfer — only require `withAuth`.
-- Registered-only check is applied to a small number of endpoints: `POST /api/sessions` (create) and account management. Everything else in gameplay is guest-accessible.
+- `withAuth` validates any JWT (guest or registered). Most gameplay endpoints — draw, vote, transfer — only require `withAuth`.
+- Registered-only check is applied to: `POST /api/sessions` (create), `POST /api/cards` (submit), and account management. Everything else in gameplay is guest-accessible.
 - Guest JWTs are **ephemeral** — session-scoped, never persisted to Capacitor Secure Storage; cleared when the session ends or the app restarts.
-- **In-session account claiming** (`POST /api/auth/claim`): a guest can log in or register mid-session. Requires a guest JWT in the `Authorization` header + credentials in the body. Atomically sets `session_players.user_id` and issues a registered JWT pair. All prior guest activity (draws, votes, submissions) is preserved. Rejected with `409` if the registered user is already in the session. `/login` and `/register` detect an active guest JWT and route through the claim flow automatically.
+- **In-session account claiming** (`POST /api/auth/claim`): a guest can log in or register mid-session. Requires a guest JWT in the `Authorization` header + credentials in the body. Atomically sets `session_players.user_id` and issues a registered JWT pair. All prior guest activity (draws, votes) is preserved. Rejected with `409` if the registered user is already in the session. `/login` and `/register` detect an active guest JWT and route through the claim flow automatically.
 - **Single-device play is the primary use case.** A registered host creates the session; other players join as ephemeral guests by entering a display name. All players take turns on the same phone; the active player is selected via an in-session player switcher. Players with their own devices can also join and follow along simultaneously — both modes are supported.
 - Invitation codes: single-use, admin-created, optional expiry. `POST /api/auth/register` consumes the code atomically.
 - `card_game_tags` — zero rows = universal card (eligible for all sessions). One or more rows = eligible only for sessions filtered to one of those games.
-- Cards are soft-deleted (`is_removed = true`), never hard-deleted.
-- Three unique flags trigger automatic admin review hold on a card.
+- Cards are deactivated (`card.active = false`) by the owner or admin; this excludes them from all future draw pools but preserves draw history. No hard-delete.
+- `card.is_global` (admin-only) promotes a card to the global pool. `card.created_in_session_id` (nullable FK → sessions) tracks the session where the card was born — used for game-lineage pool tier and the 3× boost.
+- Only registered users can submit cards. Guests draw only.
+- `session_players.card_sharing` (`'none' | 'mine' | 'network'`, default `'network'`) controls how a registered player contributes to the session pool.
+- Flags are a lightweight report signal only — no automatic hold.
