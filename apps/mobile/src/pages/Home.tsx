@@ -1,19 +1,10 @@
-import {
-    IonButton,
-    IonContent,
-    IonInput,
-    IonPage,
-    IonSpinner,
-} from "@ionic/react";
+import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import React, { useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { apiClient } from "../lib/api";
-import { useSession } from "../session/SessionContext";
 
 export default function Home() {
-    const { user, isGuest, isInitializing } = useAuth();
-    const { setSession } = useSession();
+    const { user, isGuest, isInitializing, logout } = useAuth();
     const history = useHistory();
 
     const [joinCode, setJoinCode] = useState("");
@@ -24,6 +15,12 @@ export default function Home() {
 
     function handleCreateSession() {
         history.push("/game-settings");
+    }
+
+    function handleLogout() {
+        startTransition(async () => {
+            await logout();
+        });
     }
 
     function handleJoin() {
@@ -56,14 +53,30 @@ export default function Home() {
                     {/* Account indicator — top right, unobtrusive */}
                     <div style={styles.accountBar}>
                         {hasAccount ? (
-                            <span style={styles.accountName}>{user!.displayName}</span>
+                            <div style={styles.authLinks}>
+                                <span style={styles.accountName}>{user!.displayName}</span>
+                                <span style={styles.dot}>◆</span>
+                                <button
+                                    style={styles.textLink}
+                                    onClick={handleLogout}
+                                    disabled={isPending}
+                                >
+                                    Sign out
+                                </button>
+                            </div>
                         ) : !isGuest ? (
                             <div style={styles.authLinks}>
-                                <button style={styles.textLink} onClick={() => history.push("/login")}>
+                                <button
+                                    style={styles.textLink}
+                                    onClick={() => history.push("/login")}
+                                >
                                     Sign in
                                 </button>
                                 <span style={styles.dot}>◆</span>
-                                <button style={styles.textLink} onClick={() => history.push("/register")}>
+                                <button
+                                    style={styles.textLink}
+                                    onClick={() => history.push("/register")}
+                                >
                                     Register
                                 </button>
                             </div>
@@ -116,7 +129,10 @@ export default function Home() {
                     {!hasAccount && !isGuest && (
                         <p style={styles.nudge}>
                             Have an invite?{" "}
-                            <button style={styles.textLink} onClick={() => history.push("/register")}>
+                            <button
+                                style={styles.textLink}
+                                onClick={() => history.push("/register")}
+                            >
                                 Create an account
                             </button>{" "}
                             to host games.
