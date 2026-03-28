@@ -1,0 +1,123 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500&display=swap");
+
+/* ─── Chance Design Tokens ─────────────────────────────────────────── */
+:root {
+    /* Surfaces */
+    --color-bg: #0e0f1a;
+    --color-surface: #161824;
+    --color-surface-elevated: #1e2133;
+    --color-border: #3a3220;
+
+    /* Accents */
+    --color-accent-primary: #8b7fe8;
+    --color-accent-amber: #d4a847;
+    --color-accent-green: #4ecba0;
+
+    /* Text */
+    --color-text-primary: #f0ede4;
+    --color-text-secondary: #8a8578;
+
+    /* Semantic */
+    --color-danger: #c0392b;
+    --color-success: #2e8b74;
+
+    /* Typography */
+    --font-display: "Cormorant Garamond", Georgia, serif;
+    --font-ui: "DM Sans", system-ui, sans-serif;
+
+    --text-display: 32px;
+    --text-heading: 22px;
+    --text-subheading: 16px;
+    --text-body: 15px;
+    --text-caption: 12px;
+    --text-label: 11px;
+
+    /* Spacing (4px base) */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Motion */
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --duration-fast: 160ms;
+    --duration-normal: 240ms;
+    --duration-card: 380ms;
+
+    /* ─── Ionic variable overrides ──────────────────────────────────── */
+    --ion-background-color: var(--color-bg);
+    --ion-background-color-rgb: 14, 15, 26;
+    --ion-text-color: var(--color-text-primary);
+    --ion-text-color-rgb: 240, 237, 228;
+    --ion-font-family: var(--font-ui);
+
+    --ion-color-primary: var(--color-accent-primary);
+    --ion-color-primary-rgb: 139, 127, 232;
+    --ion-color-primary-contrast: var(--color-text-primary);
+    --ion-color-primary-contrast-rgb: 240, 237, 228;
+    --ion-color-primary-shade: #7a70d0;
+    --ion-color-primary-tint: #978cea;
+
+    --ion-color-secondary: var(--color-accent-amber);
+    --ion-color-secondary-rgb: 212, 168, 71;
+    --ion-color-secondary-contrast: var(--color-bg);
+    --ion-color-secondary-contrast-rgb: 14, 15, 26;
+    --ion-color-secondary-shade: #bb9440;
+    --ion-color-secondary-tint: #d8b15a;
+
+    --ion-color-danger: var(--color-danger);
+    --ion-color-danger-rgb: 192, 57, 43;
+    --ion-color-danger-contrast: var(--color-text-primary);
+    --ion-color-danger-contrast-rgb: 240, 237, 228;
+
+    --ion-color-success: var(--color-success);
+    --ion-color-success-rgb: 46, 139, 116;
+    --ion-color-success-contrast: var(--color-text-primary);
+    --ion-color-success-contrast-rgb: 240, 237, 228;
+
+    --ion-item-background: var(--color-surface);
+    --ion-item-border-color: var(--color-border);
+    --ion-toolbar-background: var(--color-surface);
+    --ion-toolbar-color: var(--color-text-primary);
+    --ion-tab-bar-background: var(--color-surface);
+    --ion-tab-bar-border-color: var(--color-border);
+    --ion-card-background: var(--color-surface);
+    --ion-border-color: var(--color-border);
+
+    --ion-overlay-background-color: var(--color-surface);
+    --ion-backdrop-color: #0e0f1a;
+    --ion-backdrop-opacity: 0.7;
+}
+
+/* Force dark on all Ionic components — no light mode */
+ion-content {
+    --background: var(--color-bg);
+}
+
+ion-toolbar {
+    --background: var(--color-surface);
+    --border-color: var(--color-border);
+}
+
+ion-item {
+    --background: var(--color-surface);
+    --border-color: var(--color-border);
+    --color: var(--color-text-primary);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 150ms !important;
+        transition-duration: 150ms !important;
+        animation-timing-function: linear !important;
+        transition-timing-function: linear !important;
+    }
+}
