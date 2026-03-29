@@ -110,6 +110,22 @@ ion-item {
     --color: var(--color-text-primary);
 }
 
+/* ─── Game screen animations ────────────────────────────────────────── */
+@keyframes drawButtonGlow {
+    0%, 100% { box-shadow: 0 0 8px 0 color-mix(in srgb, var(--color-accent-primary) 10%, transparent); }
+    50%       { box-shadow: 0 0 18px 4px color-mix(in srgb, var(--color-accent-primary) 22%, transparent); }
+}
+
+@keyframes drawButtonPulse {
+    0%, 100% { border-color: var(--color-accent-primary); }
+    50%       { border-color: color-mix(in srgb, var(--color-accent-primary) 50%, transparent); }
+}
+
+@keyframes cardDeal {
+    from { transform: translateY(24px) rotate(2deg); opacity: 0.7; }
+    to   { transform: translateY(0)    rotate(0deg); opacity: 1; }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *,

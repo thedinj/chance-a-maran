@@ -89,14 +89,14 @@
 
 | Area | Status | Notes |
 |---|---|---|
-| Game page shell | ⬜ | Stub — "coming soon" |
-| Persistent player switcher | ⬜ | |
-| Draw button (idle glow, tap flash, disabled state) | ⬜ | |
-| Full-screen card reveal overlay | ⬜ | |
-| Hidden description toggle / Share description | ⬜ | |
+| Game page shell | ✅ | |
+| Persistent player switcher | ✅ | |
+| Draw button (idle glow, tap flash, disabled state) | ✅ | |
+| Full-screen card reveal overlay | ✅ | |
+| Hidden description toggle / Share description | ✅ | |
 | Game Changer dramatic intro sequence | ⬜ | 3500ms intro, badge, audio cue |
-| Join code / QR share (in-game) | ⬜ | |
-| Add player to device modal | ⬜ | |
+| Join code / QR share (in-game) | ✅ | Join code only — QR deferred |
+| Add player to device modal | ⬜ | + button stub exists |
 | Background sync indicator (draw loading state) | ⬜ | |
 
 ### Card submission

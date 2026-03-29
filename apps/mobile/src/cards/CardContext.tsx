@@ -6,7 +6,16 @@ export function CardProvider({ children }: { children: React.ReactNode }) {
     const [drawHistory, setDrawHistory] = useState<DrawEvent[]>([]);
 
     const addDrawEvent = useCallback((event: DrawEvent) => {
-        setDrawHistory((prev) => [event, ...prev]);
+        setDrawHistory((prev) => {
+            const existingIndex = prev.findIndex((e) => e.id === event.id);
+            if (existingIndex === -1) {
+                return [event, ...prev];
+            }
+
+            const next = [...prev];
+            next[existingIndex] = event;
+            return next;
+        });
     }, []);
 
     const updateDrawEvent = useCallback((updated: DrawEvent) => {
