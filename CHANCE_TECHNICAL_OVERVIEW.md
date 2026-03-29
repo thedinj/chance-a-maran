@@ -39,7 +39,7 @@ The card pool is the heart of the app. It is seeded from a global community data
 - **Session-first design:** guest mode for non-host players; only registered users can host/initiate sessions
 - **Single-device play:** the whole group can play on one shared phone — the registered host starts the session, other players join as ephemeral guests (display name only), and the phone is passed to whoever is taking their turn
 - **Ephemeral guests:** guest players need no account or app install — they enter a display name to join and receive a session-scoped JWT; their identity does not persist beyond the session
-- **In-session account claiming:** a guest can log in or register at any time during a session; their ephemeral guest identity is merged into their real account and play continues uninterrupted — votes, draws, and submissions already made are preserved under the claimed account
+- **In-session account claiming:** if no registered User already exists on the device, a primary guest can log in or register during a session; their ephemeral guest identity is merged into their real account and play continues uninterrupted — votes, draws, and submissions already made are preserved under the claimed account
 - **Invite-only registration:** accounts require an invitation code issued by an admin; controls growth and community quality
 - **Living card pool:** draw pool assembled from four tiers — global (admin-curated), game-lineage (cards from past sessions of the same game type, mediated by player sharing settings), player libraries (cards from registered players present in the session), and this-session submissions (3× boost). Strangers' cards never enter your game unless mediated by a player you're playing with.
 - **Cooperative card transfer:** either player in a session can offer a card to another; recipient accepts or rejects
@@ -110,11 +110,12 @@ Zod schemas for all Chance domain entities. Used for runtime validation and Type
 
 | Schema                     | Description                                                                                                                                                      |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CardSchema`               | Content, game tags (array — one or more games, or empty for universal), drinking flag, family-safe flag, spiciness level, author, upvotes, downvotes, flag count |
-| `SessionSchema`            | Session ID, host (registered user), players, filter settings, active card pool, status                                                                           |
+| `CardSchema`               | Permanent card identity: author, card type (`chanceCard \| reparationsCard`), global flag, session origin, upvotes, downvotes, active flag, pointer to current `CardVersion`. Card content fields live in `CardVersionSchema`. |
+| `CardVersionSchema`        | Immutable card content snapshot: `cardId`, `versionNumber`, `title`, `description`, `hiddenDescription` (boolean), `imageUrl`, `drinksPerHourThisPlayer` (number, default 0), `avgDrinksPerHourAllPlayers` (number, default 0), `isFamilySafe`, `isGameChanger`, `gameTags` (string[]), `authoredByUserId`, `createdAt` |
+| `SessionSchema`            | Session ID, host player, players, filter settings, active card pool, status                                                                                      |
 | `PlayerSchema`             | Player ID, display name, guest flag, account link                                                                                                                |
 | `CardTransferSchema`       | Initiator, recipient, card reference, draw event reference, status (pending / accepted / rejected)                                                               |
-| `DrawEventSchema`          | Session, player, drawn card, timestamp, visibility state (private / revealed)                                                                                    |
+| `DrawEventSchema`          | Session, player, drawn card (`card_id`), drawn card version (`card_version_id` — the version current at draw time; immutable), timestamp, visibility state (private / revealed) |
 | `FilterSettingsSchema`     | Age-appropriate toggle, drinking toggle, game tag filter (array — any of these games, or all-games)                                                              |
 | `VoteSchema`               | Player, card, direction (up / down) or flag                                                                                                                      |
 | `InvitationCodeSchema`     | Code string, created by (admin user), used by (user, nullable), expires at (nullable), active flag                                                               |
@@ -129,6 +130,7 @@ Zod schemas for all Chance domain entities. Used for runtime validation and Type
 - Token TTL defaults for JWT access and refresh tokens
 - Card weight constants: session-card boost multiplier (default `3.0×`), vote weight deltas, recently-drawn suppression factor
 - Reveal delay constant: time before a drawn card becomes visible to all players (default `3000ms`)
+- Game Changer delay constant: dramatic intro duration for Game Changer cards before the standard reveal overlay animates in (default `3500ms`)
 - Session poll intervals: active foreground (`5000ms`), backgrounded (`30000ms`)
 - Request timeout (`15000ms`), health check endpoint (`/api/health`)
 - Invitation code length and character set
@@ -186,14 +188,17 @@ Engine: SQLite via `better-sqlite3`. Foreign key constraints enforced (`PRAGMA f
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `users`            | `id`, `email`, `password_hash`, `display_name`, `is_admin`, `invitation_code_id` (FK), `created_at`                                                |
 | `invitation_codes` | `id`, `code` (unique), `created_by_user_id` (FK, admin), `used_by_user_id` (FK, nullable), `expires_at` (nullable), `is_active`                    |
-| `sessions`         | `id`, `host_user_id` (FK, registered users only), `join_code`, `qr_token`, `filter_settings` (JSON), `status`, `created_at`                        |
-| `session_players`  | `session_id`, `user_id`, `joined_at`, `card_sharing TEXT DEFAULT 'network' CHECK(IN ('none','mine','network'))` — join table                        |
-| `cards`            | `id`, `content`, `author_id` (FK → users, **never null**), `is_global INTEGER DEFAULT 0`, `created_in_session_id` (FK → sessions, nullable), `is_drinking`, `spiciness_level`, `is_family_safe`, `upvotes`, `downvotes`, `active`, `created_at` |
+| `sessions`         | `id`, `host_player_id` (FK → session_players — must have `user_id IS NOT NULL`; only registered users can host), `join_code`, `qr_token`, `filter_settings` (JSON), `status`, `created_at` |
+| `session_players`  | `session_id`, `user_id` (FK → users, nullable — null for guests), `display_name` (normalized), `player_token TEXT` (UUID — set on guest join, null for registered players, nulled by host reset; validated by `withAuth` on every guest request), `joined_at`, `card_sharing TEXT DEFAULT 'network' CHECK(IN ('none','mine','network'))` — join table |
+| `cards`            | `id`, `current_version_id` (FK → card_versions), `author_id` (FK → users, **never null**), `card_type TEXT DEFAULT 'chanceCard' CHECK(card_type IN ('chanceCard','reparationsCard'))`, `is_global INTEGER DEFAULT 0`, `created_in_session_id` (FK → sessions, nullable), `upvotes`, `downvotes`, `active`, `created_at` |
+| `card_versions`    | `id`, `card_id` (FK → cards), `version_number` INTEGER, `title` TEXT NOT NULL, `description` TEXT, `hidden_description` INTEGER DEFAULT 0, `image_url` TEXT, `drinks_per_hour_this_player` REAL DEFAULT 0, `avg_drinks_per_hour_all_players` REAL DEFAULT 0, `is_family_safe` INTEGER DEFAULT 1, `is_game_changer` INTEGER DEFAULT 0, `authored_by_user_id` (FK → users), `created_at` |
 | `card_game_tags`   | `card_id`, `game_name` — one row per game association; cards with no rows here are universal                                                       |
-| `draw_events`      | `id`, `session_id`, `player_id`, `card_id`, `drawn_at`, `revealed_to_all_at` (nullable)                                                            |
+| `draw_events`      | `id`, `session_id`, `player_id`, `card_id`, `card_version_id` (FK → card_versions — the version current at draw time; immutable), `drawn_at`, `revealed_to_all_at` (nullable) |
 | `card_votes`       | `player_id`, `card_id`, `vote` (up/down), `created_at`                                                                                             |
 | `card_transfers`   | `id`, `from_player_id`, `to_player_id`, `card_id`, `draw_event_id`, `status`, `created_at`                                                         |
 | `refresh_tokens`   | `id`, `user_id`, `token_hash`, `expires_at`, `revoked`                                                                                             |
+
+**Notes on `card_versions`:** Card content is versioned — edits create a new `card_versions` row; previous rows are immutable. `cards.current_version_id` always points to the latest version. `draw_events.card_version_id` records the exact version drawn, permanently. `drinks_per_hour_this_player` and `avg_drinks_per_hour_all_players` replace the old `is_drinking` boolean; a card is treated as a drinking card (excluded when the session drinking filter is off) when either value is greater than 0. These fields are also designed to support future session-level drink-rate enforcement without a schema migration.
 
 **Notes on `card_game_tags`:** A card with zero rows in `card_game_tags` is treated as universally applicable (equivalent to "Any Game"). A card with one or more rows is only eligible for sessions filtered to one of those games, or sessions with no game filter set. This is enforced in the card-picker service at draw time and in the API validation layer on card submission.
 
@@ -297,10 +302,41 @@ Every API response — success or failure — uses a consistent envelope:
 
 - Only registered users can call `POST /api/sessions` (enforced by `withAuth` + registered-user check)
 - Backend generates a short alphanumeric join code and a QR token
-- Guest players supply a display name; receive a session-scoped guest JWT (no email or password required); guest JWTs are ephemeral — not stored in persistent secure storage
-- Registered users authenticate normally; their account is linked to the session player record
 - **Single-device play:** multiple players — including a mix of one registered host and several ephemeral guests — can all participate from the same device. Each player identifies themselves via the active-player selector on the Game screen. The phone is passed between players as turns change; no separate devices are required
 - Session state (player list, drawn cards, pending transfers) is polled by mobile clients — no persistent WebSocket required at MVP
+
+#### Guest join — first time (no name match)
+
+1. Client sends `POST /api/sessions/:id/join` with `{ displayName }`
+2. Server creates a `session_players` record with `user_id = null`; generates a UUID `player_token` stored on the record
+3. Server issues a guest JWT containing the `player_token` as a claim
+4. Response includes the JWT and the `player_token`
+5. Client stores the JWT in memory (ephemeral); stores `{ token, joinedAt: ISO }` in Capacitor Preferences at key `player_token_${sessionId}_${normalizedName}`
+
+#### Guest rejoin — same device (name match, token present)
+
+1. Client finds a stored entry for this session + name in Preferences
+2. Client sends `POST /api/sessions/:id/join` with `{ displayName, playerToken }`
+3. Server finds the name match, verifies `session_players.player_token` matches — issues a fresh guest JWT
+4. Seamless resume; zero UX change
+
+#### Contested join — different device or impersonation attempt (name match, no valid token)
+
+1. Client sends `POST /api/sessions/:id/join` with `{ displayName }` (no token)
+2. Server finds a name match and a non-null `player_token` on the record — rejects with a descriptive error
+3. Client displays: *"This name is already taken. Ask the host to free it up if you need to rejoin."*
+4. Joiner must choose a different name, or the host resets that player's identity (see below)
+
+#### Host identity reset (guests only)
+
+- Host sends `PATCH /api/sessions/:id/players/:playerId` with `{ resetToken: true }` — requires host JWT
+- Server nulls `session_players.player_token` for the target player; rejected if `user_id IS NOT NULL` (registered players cannot be reset this way)
+- The original guest device's JWT is now invalid — `withAuth` will return `401` on its next request, navigating it back to the join screen
+- The name is now free for any device to claim
+
+#### Registered players
+
+Registered users authenticate normally via their account credentials; their player record has `user_id` set. They do not use `player_token` — their identity is verified by the registered JWT stored in Capacitor Secure Storage. They cannot be impersonated via name entry and cannot have their identity reset by the host.
 
 ### 4.8 Card Transfer Flow
 
@@ -317,6 +353,7 @@ Every API response — success or failure — uses a consistent envelope:
 - `withAuth` + registered-user check gates the small number of routes that require a persistent account (e.g. `POST /api/sessions`)
 - `withAdmin` additionally checks `is_admin`; used only for admin portal API routes
 - Guest mode: lightweight session-scoped JWT issued on display-name entry; no email or password; not stored in persistent secure storage
+- **Guest `player_token` validation:** for guest JWTs, `withAuth` additionally reads `session_players.player_token` and compares it to the `player_token` claim in the JWT. Mismatch (e.g., token was reset by host) → `401 Unauthorized`. This enforces single-device-at-a-time for guest players with no extra middleware needed.
 - `X-Token-Status` response header signals token validity to the mobile client
 - Rate limiting on login, guest-register, and invitation-validate endpoints
 
@@ -338,6 +375,7 @@ A guest player can log in or register at any time while a session is active. The
 - If the registered user is already present in the session as a registered player, the claim is rejected (`409 Conflict`)
 - `POST /api/auth/claim` requires a valid guest JWT; calling it with a registered JWT is a no-op error
 - Registration-via-claim follows the same invitation code requirement as normal registration
+- Client hides the claim flow when `auth.user !== null` (a registered User already exists on the device); claiming is only accessible when the device has no registered User; secondary guest players cannot claim accounts; the server-side 409 check is unchanged
 
 ### 4.10 Security Headers (middleware)
 
@@ -381,7 +419,7 @@ apps/mobile/src/
 │   └── useOptimisticMutation.ts # Generic optimistic mutation + queue hook
 ├── pages/
 │   ├── Home.tsx               # Landing: create (registered) or join session
-│   ├── Lobby.tsx              # Pre-game player list + filter setup (host)
+│   ├── GameSettings.tsx       # Host-only filter configuration; creates session on Save or updates filters mid-game
 │   ├── Game.tsx               # Active session: draw button, card history
 │   ├── CardDetail.tsx         # Full-screen card reveal + vote/flag/transfer
 │   ├── CardSubmit.tsx         # Submit a new card to the session pool
@@ -426,7 +464,7 @@ React Router v5. Most of the app is reachable with any valid JWT — including a
 | `/login`                  | Open             | Registered user login; if a guest JWT is active, completing login triggers the claim flow instead of a normal session start |
 | `/register`               | Open             | Account registration (requires invitation code); same claim-flow behaviour as `/login` when a guest JWT is active |
 | `/join/:code`             | Open             | Direct join link; prompts for display name if no JWT            |
-| `/lobby/:sessionId`       | Session member   | Pre-game lobby — player list, filter setup (host only), start   |
+| `/game-settings`          | Registered only (new session) / Session member + host (edit) | Game Settings — filter configuration; creates session record on Save (new), or updates filters mid-game (edit) |
 | `/game/:sessionId`        | Session member   | Active game — draw button, card history, transfer notifications |
 | `/card/:drawEventId`      | Session member   | Full-screen card detail — vote/flag/transfer actions            |
 | `/submit-card/:sessionId` | Session member   | Submit a new card to the current session pool                   |
@@ -442,6 +480,8 @@ React Router v5. Most of the app is reachable with any valid JWT — including a
 | Card state                    | `CardContext` — active pool, draw history                              |
 | Transfer state                | `TransferContext` — pending incoming/outgoing transfers                |
 | Header/nav state              | `AppHeaderContext`                                                     |
+
+**One registered User per device:** `AuthContext.user` holds at most one registered User at a time. Secondary players added via the player switcher are always guests — account linking is not offered in the "Add player" flow. If `auth.user !== null`, the in-session claim flow is hidden throughout the app.
 
 ### 5.5 Error Handling Strategy
 
@@ -481,7 +521,12 @@ Online/offline state is tracked via the Capacitor Network plugin in `useNetworkS
 2. 'Draw' button is enabled only for the active player's turn
 3. Player taps Draw
 4. POST /api/sessions/:id/draw — button shows loading state during the request
-5. On success: card-flip animation plays; card content shown in private view
+5. On success: if the drawn CardVersion has isGameChanger = true, a GAME_CHANGER_DELAY (default 3500ms)
+   plays first — a full-screen dramatic intro with the Game Changer badge and special audio
+   (cymbal crash + drumroll). After the delay, the standard card-flip animation plays and card
+   content is shown in private view.
+   Otherwise (isGameChanger = false): card-flip animation plays immediately; card content shown
+   in private view.
 6. On failure: error shown inline; player can try again
 7. After REVEAL_DELAY, server sets draw_event.revealed_to_all_at
 8. On separate devices: other players see the card on their next poll cycle
@@ -499,17 +544,19 @@ Online/offline state is tracked via the Capacitor Network plugin in `useNetworkS
 
 ### 5.10 Session Setup & Filter Configuration (Host)
 
-Before the game begins, the host configures the session in the Lobby screen:
+Before the game begins, the host configures the session in the Game Settings screen:
 
 - **Age-appropriate toggle:** excludes cards where `is_family_safe = false`
-- **Drinking toggle:** excludes cards where `is_drinking = true` when disabled
+- **Drinking toggle:** excludes cards where `drinks_per_hour_this_player > 0 OR avg_drinks_per_hour_all_players > 0` when disabled
 - **Game tag selector:** host picks one or more real-world games, or leaves as "Any Game"; only cards tagged for one of those games (or universally tagged) are included in the draw pool
 
 These settings are saved to the `sessions.filter_settings` JSON column and enforced server-side at draw time. The filter settings schema is defined in `core` and validated by Zod on both client and server.
 
+> **Note:** The card-sharing level shown in Game Settings is the host's own `card_sharing` setting on their `session_players` record — not part of `filter_settings`. It is written to `session_players.card_sharing` for the host player when the session is created or updated.
+
 ### 5.11 Card Submission
 
-Any player in an active session can submit a card. Required fields: content, game tag(s) or "universal", drinking flag, family-safe flag.
+Only registered players in an active session can submit a card. Guests draw from the pool but cannot contribute cards. Required fields: title, game tag(s) or "universal", drinks per hour (this player), average drinks per hour (all players), family-safe flag. Optional fields: description, hidden description flag, image, isGameChanger flag (also settable by admin).
 
 - `POST /api/cards` fires on submit; form shows loading state
 - On success: card is added to the session pool and becomes immediately eligible for draw; `submitted_in_session = true` enables the session-card draw boost
@@ -521,8 +568,11 @@ Any player in an active session can submit a card. Required fields: content, gam
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | JWT access + refresh tokens (registered users) | Capacitor Secure Storage (encrypted native keychain)                                             |
 | Guest JWTs                                     | In-memory only — ephemeral, not persisted; cleared when the session ends or the app is restarted |
+| Guest player tokens                            | Capacitor Preferences — key: `player_token_${sessionId}_${normalizedName}`, value: `{ token: string, joinedAt: ISO }` |
 | API URL override                               | Capacitor Preferences                                                                            |
 | Active player identity (shared-device mode)    | In-memory session state (`SessionContext`)                                                       |
+
+**Player token cache eviction:** On app start, `pruneStalePlayerTokens()` (in `lib/playerTokenStore.ts`) scans all Preferences keys with the `player_token_` prefix, parses `joinedAt`, and removes entries older than `PLAYER_TOKEN_TTL_DAYS` (constant in `packages/core/src/constants/`, default `30`). This call is fire-and-forget — it does not block the boot path. The 30-day window comfortably covers active sessions (max 16-day lifetime) while preventing unbounded accumulation.
 
 ### 5.13 API Client (`lib/api/client.ts`)
 
@@ -735,6 +785,7 @@ The concentric circles pool model limits exposure: strangers' cards never enter 
 - Card categories / theme browsing UI
 - Localization (i18n) for non-English card content
 - Social graph: friends list, invite friends directly to sessions
+- Session-level drink rate enforcement: track cumulative `drinks_per_hour_this_player` and `avg_drinks_per_hour_all_players` over a rolling window during an active session; when a player's projected rate exceeds a configurable threshold, suppress drinking cards from their draw pool until the rate drops. The per-card rate fields are already in the schema to support this without a migration.
 
 ---
 

@@ -1,35 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import type { ApiResult, AuthResponse, Player, User } from "../lib/api";
+import React, { useCallback, useEffect, useState } from "react";
+import type { AuthResponse, Player } from "../lib/api";
 import { apiClient, setApiAccessToken } from "../lib/api";
-
-interface AuthState {
-    /** Logged-in registered user, or null if unauthenticated or guest-only. */
-    user: User | null;
-    /** True when holding a guest JWT for an active session. */
-    isGuest: boolean;
-    accessToken: string | null;
-    /** True during initial storage hydration — don't render auth-dependent UI until false. */
-    isInitializing: boolean;
-}
-
-interface AuthContextValue extends AuthState {
-    login(email: string, password: string): Promise<ApiResult<AuthResponse>>;
-    register(
-        email: string,
-        password: string,
-        displayName: string,
-        invitationCode: string
-    ): Promise<ApiResult<AuthResponse>>;
-    logout(): Promise<void>;
-    /** Called after successfully joining a session as a guest. */
-    setGuestSession(token: string, player: Player): void;
-    /** Clears the guest JWT — called when session ends or app restarts. */
-    clearGuestSession(): void;
-    /** Called after in-session account claiming succeeds — upgrades guest to registered. */
-    upgradeFromGuest(response: AuthResponse): void;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { AuthContext, type AuthState } from "./useAuth";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState<AuthState>({
@@ -116,10 +88,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const upgradeFromGuest = useCallback(
         (response: AuthResponse) => {
+            // Only valid when no registered user exists on the device (auth.user === null).
+            // Calling this while a registered user is already present is a logic error —
+            // the single-registered-user-per-device constraint must be enforced at the call site.
             applyAuthResponse(response);
         },
         [applyAuthResponse]
     );
+
+    const updateCurrentUser = useCallback((user: User) => {
+        setState((prev) => ({ ...prev, user }));
+    }, []);
 
     return (
         <AuthContext.Provider
@@ -131,15 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setGuestSession,
                 clearGuestSession,
                 upgradeFromGuest,
+                updateCurrentUser,
             }}
         >
             {children}
         </AuthContext.Provider>
     );
-}
-
-export function useAuth(): AuthContextValue {
-    const ctx = useContext(AuthContext);
-    if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-    return ctx;
 }

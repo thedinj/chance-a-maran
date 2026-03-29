@@ -21,6 +21,7 @@ import { AppHeaderProvider } from "./AppHeaderContext";
 import { AuthProvider } from "./auth/AuthContext";
 import { CardProvider } from "./cards/CardContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { AppMenu } from "./components/AppMenu";
 import { NetworkStatusBanner } from "./components/NetworkStatusBanner";
 import { SessionProvider } from "./session/SessionContext";
 import { TransferProvider } from "./transfers/TransferContext";
@@ -36,6 +37,10 @@ const GameHistory = React.lazy(() => import("./pages/GameHistory"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Register = React.lazy(() => import("./pages/Register"));
 const Settings = React.lazy(() => import("./pages/AppSettings"));
+const About = React.lazy(() => import("./pages/About"));
+const InviteRequest = React.lazy(() => import("./pages/InviteRequest"));
+const SubmitCard = React.lazy(() => import("./pages/SubmitCard"));
+const MyCards = React.lazy(() => import("./pages/MyCards"));
 
 setupIonicReact();
 
@@ -57,7 +62,8 @@ export default function App() {
                                          * would unmount that Context when its children suspend,
                                          * resetting all state.
                                          */}
-                                        <IonRouterOutlet>
+                                        <AppMenu />
+                                        <IonRouterOutlet id="main-content">
                                             <Route exact path="/">
                                                 <Home />
                                             </Route>
@@ -109,6 +115,30 @@ export default function App() {
                                             <Route exact path="/settings">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <Settings />
+                                                </Suspense>
+                                            </Route>
+
+                                            <Route exact path="/about">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <About />
+                                                </Suspense>
+                                            </Route>
+
+                                            <Route exact path="/invite-request">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <InviteRequest />
+                                                </Suspense>
+                                            </Route>
+
+                                            <Route exact path="/submit-card">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <SubmitCard />
+                                                </Suspense>
+                                            </Route>
+
+                                            <Route exact path="/cards">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <MyCards />
                                                 </Suspense>
                                             </Route>
 

@@ -1,3 +1,4 @@
+import { type ErrorCodeType as ErrorCode } from "@chance/core";
 import type {
     ApiClient,
     ApiResult,
@@ -6,9 +7,11 @@ import type {
     Card,
     CardTransfer,
     CardVersion,
+    ChangePasswordRequest,
     CreateSessionRequest,
     DrawEvent,
     FilterSettings,
+    GetAllCardsFilters,
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
@@ -17,6 +20,7 @@ import type {
     Session,
     SessionState,
     SubmitCardRequest,
+    UpdateUserRequest,
     User,
 } from "./types";
 
@@ -29,7 +33,7 @@ function ok<T>(data: T): ApiSuccess<T> {
     return { ok: true, data, serverTimestamp: ts() };
 }
 
-function fail(code: string, message: string): ApiResult<never> {
+function fail(code: ErrorCode, message: string): ApiResult<never> {
     return { ok: false, error: { code, message }, serverTimestamp: ts() };
 }
 
@@ -40,6 +44,7 @@ const DEMO_USER: User = {
     email: "demo@chance.app",
     displayName: "Demo Host",
     isAdmin: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 const DEMO_CARD_VERSION: CardVersion = {
@@ -50,8 +55,10 @@ const DEMO_CARD_VERSION: CardVersion = {
     description: "Do your best impression of someone at the table.",
     hiddenDescription: false,
     imageUrl: null,
-    isDrinking: false,
+    drinksPerHourThisPlayer: 0,
+    avgDrinksPerHourAllPlayers: 0,
     isFamilySafe: true,
+    isGameChanger: false,
     gameTags: [],
     authoredByUserId: "user-demo",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -68,22 +75,101 @@ const DEMO_CARD: Card = {
     createdAt: "2026-01-01T00:00:00.000Z",
 };
 
+// Second demo card — two versions, so the V2 badge shows
+const DEMO_CARD_2_V1: CardVersion = {
+    id: "cv-2-v1",
+    cardId: "card-2",
+    versionNumber: 1,
+    title: "Truth or truth",
+    description: "Tell the group something they don't know about you.",
+    hiddenDescription: false,
+    imageUrl: null,
+    drinksPerHourThisPlayer: 0,
+    avgDrinksPerHourAllPlayers: 0,
+    isFamilySafe: true,
+    isGameChanger: false,
+    gameTags: [],
+    authoredByUserId: "user-demo",
+    createdAt: "2026-01-02T00:00:00.000Z",
+};
+const DEMO_CARD_2_V2: CardVersion = {
+    ...DEMO_CARD_2_V1,
+    id: "cv-2-v2",
+    versionNumber: 2,
+    description: "Tell the group something embarrassing about yourself.",
+    createdAt: "2026-02-01T00:00:00.000Z",
+};
+const DEMO_CARD_2: Card = {
+    id: "card-2",
+    authorUserId: "user-demo",
+    active: true,
+    isGlobal: false,
+    createdInSessionId: null,
+    currentVersionId: "cv-2-v2",
+    currentVersion: DEMO_CARD_2_V2,
+    createdAt: "2026-01-02T00:00:00.000Z",
+};
+
+// Third demo card — inactive, Catan-tagged
+const DEMO_CARD_3_V1: CardVersion = {
+    id: "cv-3-v1",
+    cardId: "card-3",
+    versionNumber: 1,
+    title: "Hot seat",
+    description: "The player to your left gets to ask you any question.",
+    hiddenDescription: true,
+    imageUrl: null,
+    drinksPerHourThisPlayer: 0,
+    avgDrinksPerHourAllPlayers: 0,
+    isFamilySafe: false,
+    isGameChanger: false,
+    gameTags: ["Catan"],
+    authoredByUserId: "user-demo",
+    createdAt: "2026-01-03T00:00:00.000Z",
+};
+const DEMO_CARD_3: Card = {
+    id: "card-3",
+    authorUserId: "user-demo",
+    active: false,
+    isGlobal: false,
+    createdInSessionId: null,
+    currentVersionId: "cv-3-v1",
+    currentVersion: DEMO_CARD_3_V1,
+    createdAt: "2026-01-03T00:00:00.000Z",
+};
+
 // ─── In-memory state ─────────────────────────────────────────────────────────
 
 interface FakeState {
     currentUser: User | null;
     sessions: Map<string, Session>;
     players: Map<string, Player[]>;
+    /** Server-side player_token store — keyed by player ID. Not exposed to client. */
+    playerTokens: Map<string, string>;
     drawEvents: Map<string, DrawEvent[]>;
     transfers: Map<string, CardTransfer[]>;
+    cards: Map<string, Card>;
+    /** All versions per card, oldest first. */
+    cardVersions: Map<string, CardVersion[]>;
 }
 
 const state: FakeState = {
     currentUser: null,
     sessions: new Map(),
     players: new Map(),
+    playerTokens: new Map(),
     drawEvents: new Map(),
     transfers: new Map(),
+    cards: new Map([
+        [DEMO_CARD.id, DEMO_CARD],
+        [DEMO_CARD_2.id, DEMO_CARD_2],
+        [DEMO_CARD_3.id, DEMO_CARD_3],
+    ]),
+    cardVersions: new Map([
+        [DEMO_CARD.id, [DEMO_CARD_VERSION]],
+        [DEMO_CARD_2.id, [DEMO_CARD_2_V1, DEMO_CARD_2_V2]],
+        [DEMO_CARD_3.id, [DEMO_CARD_3_V1]],
+    ]),
 };
 
 // ─── FakeApiClient ────────────────────────────────────────────────────────────
@@ -104,6 +190,7 @@ export class FakeApiClient implements ApiClient {
                       email: req.email,
                       displayName: req.email.split("@")[0]!,
                       isAdmin: false,
+                      createdAt: ts(),
                   };
         state.currentUser = user;
         return ok({
@@ -122,6 +209,7 @@ export class FakeApiClient implements ApiClient {
             email: req.email,
             displayName: req.displayName,
             isAdmin: false,
+            createdAt: ts(),
         };
         state.currentUser = user;
         return ok({
@@ -187,31 +275,85 @@ export class FakeApiClient implements ApiClient {
         const session = Array.from(state.sessions.values()).find(
             (s) => s.joinCode === req.joinCode.toUpperCase() && s.status === "active"
         );
-        if (!session) return fail("NOT_FOUND", "Session not found or no longer active.");
+        if (!session) return fail("NOT_FOUND_ERROR", "Session not found or no longer active.");
 
         const existing = (state.players.get(session.id) ?? []).find(
             (p) => p.displayName.trim().toLowerCase() === req.displayName.trim().toLowerCase()
         );
+
         if (existing) {
+            // Name match — registered players require account auth, not name entry
+            if (existing.userId !== null) {
+                if (state.currentUser?.id === existing.userId) {
+                    // Same registered user rejoining — allow
+                    existing.active = true;
+                    return ok({
+                        session,
+                        player: existing,
+                        accessToken: `fake-guest-${existing.id}`,
+                        playerToken: null,
+                    });
+                }
+                return fail(
+                    "AUTHENTICATION_ERROR",
+                    "This name is linked to an account. Please sign in to rejoin."
+                );
+            }
+
+            // Guest player — validate player_token
+            const storedToken = state.playerTokens.get(existing.id);
+            if (storedToken) {
+                if (req.playerToken === storedToken) {
+                    // Same device — silent resume
+                    existing.active = true;
+                    return ok({
+                        session,
+                        player: existing,
+                        accessToken: `fake-guest-${existing.id}`,
+                        playerToken: storedToken,
+                    });
+                }
+                // Different device or impersonation attempt
+                return fail(
+                    "CONFLICT_ERROR",
+                    "This name is already taken. Ask the host to free it up if you need to rejoin."
+                );
+            }
+
+            // Token was reset by host (or first join edge case) — issue a new token
+            const newToken = id();
+            state.playerTokens.set(existing.id, newToken);
             existing.active = true;
-            return ok({ session, player: existing, accessToken: `fake-guest-${existing.id}` });
+            return ok({
+                session,
+                player: existing,
+                accessToken: `fake-guest-${existing.id}`,
+                playerToken: newToken,
+            });
         }
 
+        // No name match — new player
+        const isRegistered = state.currentUser !== null;
         const player: Player = {
             id: id(),
             sessionId: session.id,
             displayName: req.displayName.trim(),
             userId: state.currentUser?.id ?? null,
             active: true,
-            cardSharing: state.currentUser ? "network" : null,
+            cardSharing: isRegistered ? "network" : null,
         };
         state.players.get(session.id)!.push(player);
-        return ok({ session, player, accessToken: `fake-guest-${player.id}` });
+
+        // Guest players get a device-binding token; registered players don't
+        const playerToken = isRegistered ? null : id();
+        if (playerToken) state.playerTokens.set(player.id, playerToken);
+
+        return ok({ session, player, accessToken: `fake-guest-${player.id}`, playerToken });
     }
 
     async getSessionState(sessionId: string, _since?: string): Promise<ApiResult<SessionState>> {
         const session = state.sessions.get(sessionId);
-        if (!session) return fail("NOT_FOUND", "Session not found.");
+        if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
         return ok({
             session,
             players: state.players.get(sessionId) ?? [],
@@ -228,14 +370,14 @@ export class FakeApiClient implements ApiClient {
         filterSettings: FilterSettings
     ): Promise<ApiResult<Session>> {
         const session = state.sessions.get(sessionId);
-        if (!session) return fail("NOT_FOUND", "Session not found.");
+        if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
         session.filterSettings = filterSettings;
         return ok(session);
     }
 
     async endSession(sessionId: string): Promise<ApiResult<void>> {
         const session = state.sessions.get(sessionId);
-        if (!session) return fail("NOT_FOUND", "Session not found.");
+        if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
         session.status = "ended";
         return ok(undefined);
     }
@@ -251,7 +393,7 @@ export class FakeApiClient implements ApiClient {
 
     async drawCard(sessionId: string, playerId: string): Promise<ApiResult<DrawEvent>> {
         const session = state.sessions.get(sessionId);
-        if (!session) return fail("NOT_FOUND", "Session not found.");
+        if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
         const drawEvent: DrawEvent = {
             id: id(),
             sessionId,
@@ -271,23 +413,59 @@ export class FakeApiClient implements ApiClient {
         return ok(drawEvent);
     }
 
-    async submitCard(_sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>> {
+    async submitCard(sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>> {
+        const cardId = id();
         const version: CardVersion = {
             id: id(),
-            cardId: id(),
+            cardId,
             versionNumber: 1,
             title: req.title,
             description: req.description,
             hiddenDescription: req.hiddenDescription,
             imageUrl: req.imageUrl ?? null,
-            isDrinking: req.isDrinking,
+            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
+            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
             isFamilySafe: req.isFamilySafe,
+            isGameChanger: req.isGameChanger,
             gameTags: req.gameTags,
             authoredByUserId: state.currentUser?.id ?? "unknown",
             createdAt: ts(),
         };
         const card: Card = {
-            id: version.cardId,
+            id: cardId,
+            authorUserId: state.currentUser?.id ?? "unknown",
+            active: true,
+            isGlobal: false,
+            createdInSessionId: sessionId || null,
+            currentVersionId: version.id,
+            currentVersion: version,
+            createdAt: ts(),
+        };
+        state.cards.set(cardId, card);
+        state.cardVersions.set(cardId, [version]);
+        return ok(card);
+    }
+
+    async submitCardOutsideSession(req: SubmitCardRequest): Promise<ApiResult<Card>> {
+        const cardId = id();
+        const version: CardVersion = {
+            id: id(),
+            cardId,
+            versionNumber: 1,
+            title: req.title,
+            description: req.description,
+            hiddenDescription: req.hiddenDescription,
+            imageUrl: req.imageUrl ?? null,
+            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
+            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
+            isFamilySafe: req.isFamilySafe,
+            isGameChanger: req.isGameChanger,
+            gameTags: req.gameTags,
+            authoredByUserId: state.currentUser?.id ?? "unknown",
+            createdAt: ts(),
+        };
+        const card: Card = {
+            id: cardId,
             authorUserId: state.currentUser?.id ?? "unknown",
             active: true,
             isGlobal: false,
@@ -296,6 +474,8 @@ export class FakeApiClient implements ApiClient {
             currentVersion: version,
             createdAt: ts(),
         };
+        state.cards.set(cardId, card);
+        state.cardVersions.set(cardId, [version]);
         return ok(card);
     }
 
@@ -315,7 +495,7 @@ export class FakeApiClient implements ApiClient {
                 return ok(event);
             }
         }
-        return fail("NOT_FOUND", "Draw event not found.");
+        return fail("NOT_FOUND_ERROR", "Draw event not found.");
     }
 
     async resolveCard(drawEventId: string): Promise<ApiResult<DrawEvent>> {
@@ -326,7 +506,7 @@ export class FakeApiClient implements ApiClient {
                 return ok(event);
             }
         }
-        return fail("NOT_FOUND", "Draw event not found.");
+        return fail("NOT_FOUND_ERROR", "Draw event not found.");
     }
 
     // ── Transfers ─────────────────────────────────────────────────────────────
@@ -342,7 +522,7 @@ export class FakeApiClient implements ApiClient {
                 break;
             }
         }
-        if (!sessionId) return fail("NOT_FOUND", "Draw event not found.");
+        if (!sessionId) return fail("NOT_FOUND_ERROR", "Draw event not found.");
 
         const transfer: CardTransfer = {
             id: id(),
@@ -367,7 +547,132 @@ export class FakeApiClient implements ApiClient {
                 return ok(transfer);
             }
         }
-        return fail("NOT_FOUND", "Transfer not found.");
+        return fail("NOT_FOUND_ERROR", "Transfer not found.");
+    }
+
+    // ── User management ───────────────────────────────────────────────────────
+
+    async updateUser(req: UpdateUserRequest): Promise<ApiResult<User>> {
+        if (!state.currentUser) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        if (req.displayName !== undefined) state.currentUser.displayName = req.displayName;
+        if (req.email !== undefined) state.currentUser.email = req.email;
+        return ok({ ...state.currentUser });
+    }
+
+    async changePassword(req: ChangePasswordRequest): Promise<ApiResult<void>> {
+        if (!state.currentUser) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        // Fake: reject if current password is "wrong"
+        if (req.currentPassword === "wrong") {
+            return fail("AUTHENTICATION_ERROR", "Current password is incorrect.");
+        }
+        return ok(undefined);
+    }
+
+    // ── Player management ─────────────────────────────────────────────────────
+
+    async resetPlayerToken(sessionId: string, playerId: string): Promise<ApiResult<void>> {
+        const players = state.players.get(sessionId) ?? [];
+        const player = players.find((p) => p.id === playerId);
+        if (!player) return fail("NOT_FOUND_ERROR", "Player not found.");
+        if (player.userId !== null) {
+            return fail("AUTHORIZATION_ERROR", "Cannot reset identity for a registered player.");
+        }
+        state.playerTokens.delete(playerId);
+        return ok(undefined);
+    }
+
+    // ── My Cards management ───────────────────────────────────────────────────
+
+    async getMyCards(): Promise<ApiResult<Card[]>> {
+        const userId = state.currentUser?.id;
+        if (!userId) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        const cards = Array.from(state.cards.values()).filter((c) => c.authorUserId === userId);
+        return ok(cards);
+    }
+
+    async getAllCards(filters?: GetAllCardsFilters): Promise<ApiResult<Card[]>> {
+        if (!state.currentUser?.isAdmin) {
+            return fail("AUTHORIZATION_ERROR", "Admin access required.");
+        }
+        let cards = Array.from(state.cards.values());
+        if (filters?.search) {
+            const q = filters.search.toLowerCase();
+            cards = cards.filter((c) => c.currentVersion.title.toLowerCase().includes(q));
+        }
+        if (filters?.active !== undefined) {
+            cards = cards.filter((c) => c.active === filters.active);
+        }
+        if (filters?.isGlobal !== undefined) {
+            cards = cards.filter((c) => c.isGlobal === filters.isGlobal);
+        }
+        return ok(cards);
+    }
+
+    async updateCard(cardId: string, req: SubmitCardRequest): Promise<ApiResult<Card>> {
+        const card = state.cards.get(cardId);
+        if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
+        const versions = state.cardVersions.get(cardId) ?? [];
+        const newVersion: CardVersion = {
+            id: id(),
+            cardId,
+            versionNumber: versions.length + 1,
+            title: req.title,
+            description: req.description,
+            hiddenDescription: req.hiddenDescription,
+            imageUrl: req.imageUrl ?? null,
+            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
+            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
+            isFamilySafe: req.isFamilySafe,
+            isGameChanger: req.isGameChanger,
+            gameTags: req.gameTags,
+            authoredByUserId: state.currentUser?.id ?? "unknown",
+            createdAt: ts(),
+        };
+        versions.push(newVersion);
+        state.cardVersions.set(cardId, versions);
+        card.currentVersionId = newVersion.id;
+        card.currentVersion = newVersion;
+        return ok({ ...card });
+    }
+
+    async deactivateCard(cardId: string): Promise<ApiResult<Card>> {
+        const card = state.cards.get(cardId);
+        if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
+        card.active = false;
+        return ok({ ...card });
+    }
+
+    async reactivateCard(cardId: string): Promise<ApiResult<Card>> {
+        const card = state.cards.get(cardId);
+        if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
+        card.active = true;
+        return ok({ ...card });
+    }
+
+    async getCardVersions(cardId: string): Promise<ApiResult<CardVersion[]>> {
+        const versions = state.cardVersions.get(cardId);
+        if (!versions) return fail("NOT_FOUND_ERROR", "Card not found.");
+        return ok([...versions]);
+    }
+
+    async promoteToGlobal(cardId: string): Promise<ApiResult<Card>> {
+        if (!state.currentUser?.isAdmin) {
+            return fail("AUTHORIZATION_ERROR", "Admin access required.");
+        }
+        const card = state.cards.get(cardId);
+        if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
+        card.isGlobal = true;
+        return ok({ ...card });
+    }
+
+    async demoteFromGlobal(cardId: string): Promise<ApiResult<Card>> {
+        if (!state.currentUser?.isAdmin) {
+            return fail("AUTHORIZATION_ERROR", "Admin access required.");
+        }
+        const card = state.cards.get(cardId);
+        if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
+        card.isGlobal = false;
+        return ok({ ...card });
     }
 }
 

@@ -1,184 +1,66 @@
-// ─── Primitive entity types ─────────────────────────────────────────────────
+// Domain types and API contract types live in @chance/core.
+// This file re-exports them for backwards compatibility and defines
+// the mobile-specific ApiClient interface.
 
-export interface User {
-    id: string;
-    email: string;
-    displayName: string;
-    isAdmin: boolean;
-}
+export type {
+    // Domain entities
+    User,
+    Player,
+    FilterSettings,
+    Session,
+    CardVersion,
+    Card,
+    DrawEvent,
+    CardTransfer,
+    // API envelope
+    ApiSuccess,
+    ApiFailure,
+    ApiResult,
+    // Auth
+    LoginRequest,
+    RegisterRequest,
+    AuthResponse,
+    // Sessions
+    GuestJoinRequest,
+    GuestJoinResponse,
+    CreateSessionRequest,
+    JoinByCodeRequest,
+    JoinByCodeResponse,
+    SessionState,
+    // Cards
+    SubmitCardRequest,
+    // User management
+    UpdateUserRequest,
+    ChangePasswordRequest,
+} from "@chance/core";
 
-/** Ephemeral game identity scoped to one Game Session. */
-export interface Player {
-    id: string;
-    sessionId: string;
-    displayName: string;
-    /** Linked User account, if any. */
-    userId: string | null;
-    /** False when the host marks the player inactive. They can rejoin by re-entering the same name. */
-    active: boolean;
-    /**
-     * Controls how this registered player contributes cards to the session pool.
-     * - 'none'    — contributes nothing
-     * - 'mine'    — contributes own library cards
-     * - 'network' — contributes own cards + cards from players in their recent sessions (default)
-     * Null for guest players (no card library).
-     */
-    cardSharing: 'none' | 'mine' | 'network' | null;
-}
+import type {
+    User,
+    FilterSettings,
+    Session,
+    Card,
+    CardVersion,
+    DrawEvent,
+    CardTransfer,
+    ApiResult,
+    AuthResponse,
+    LoginRequest,
+    RegisterRequest,
+    CreateSessionRequest,
+    JoinByCodeRequest,
+    JoinByCodeResponse,
+    SessionState,
+    SubmitCardRequest,
+    UpdateUserRequest,
+    ChangePasswordRequest,
+} from "@chance/core";
 
-export interface FilterSettings {
-    ageAppropriate: boolean;
-    drinking: boolean;
-    /** One or more game names. Empty array = any game. */
-    gameTags: string[];
-}
+// ─── Local types ─────────────────────────────────────────────────────────────
 
-export interface Session {
-    id: string;
-    /** Player ID of the host — host leaving ends the game. */
-    hostPlayerId: string;
-    name: string;
-    joinCode: string;
-    filterSettings: FilterSettings;
-    status: "active" | "ended" | "expired";
-    createdAt: string;
-    /** Sessions expire automatically after 16 days. */
-    expiresAt: string;
-}
-
-/** Immutable snapshot of a card at a point in time. Saves never overwrite; they create a new version. */
-export interface CardVersion {
-    id: string;
-    cardId: string;
-    versionNumber: number;
-    title: string;
-    description: string;
-    /** If true, only the drawing player sees the description initially. They can choose to share it. */
-    hiddenDescription: boolean;
-    imageUrl: string | null;
-    isDrinking: boolean;
-    isFamilySafe: boolean;
-    /** Empty = universal (eligible for any session). */
-    gameTags: string[];
-    authoredByUserId: string;
-    createdAt: string;
-}
-
-export interface Card {
-    id: string;
-    authorUserId: string;
-    active: boolean;
-    /** Admin-promoted to the global pool; eligible for all sessions regardless of player presence. */
-    isGlobal: boolean;
-    /** The session in which this card was originally submitted. Null if created outside a session. */
-    createdInSessionId: string | null;
-    currentVersionId: string;
-    currentVersion: CardVersion;
-    createdAt: string;
-}
-
-export interface DrawEvent {
-    id: string;
-    sessionId: string;
-    playerId: string;
-    cardVersionId: string;
-    cardVersion: CardVersion;
-    drawnAt: string;
-    /** Set after REVEAL_DELAY — when all other players' clients show the card. */
-    revealedToAllAt: string | null;
-    /** Set by the drawing player if they choose to share a hidden description. */
-    descriptionShared: boolean;
-    resolved: boolean;
-}
-
-export interface CardTransfer {
-    id: string;
-    fromPlayerId: string;
-    toPlayerId: string;
-    drawEventId: string;
-    status: "pending" | "accepted" | "rejected";
-    createdAt: string;
-}
-
-// ─── API result envelope ─────────────────────────────────────────────────────
-
-export type ApiSuccess<T> = {
-    ok: true;
-    data: T;
-    serverTimestamp: string;
-};
-
-export type ApiFailure = {
-    ok: false;
-    error: { code: string; message: string; details?: unknown };
-    serverTimestamp: string;
-};
-
-export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
-
-// ─── Request / response shapes ───────────────────────────────────────────────
-
-export interface LoginRequest {
-    email: string;
-    password: string;
-}
-
-export interface RegisterRequest {
-    email: string;
-    password: string;
-    displayName: string;
-    invitationCode: string;
-}
-
-export interface AuthResponse {
-    user: User;
-    accessToken: string;
-    refreshToken: string;
-}
-
-export interface GuestJoinRequest {
-    sessionId: string;
-    displayName: string;
-}
-
-export interface GuestJoinResponse {
-    player: Player;
-    accessToken: string;
-}
-
-export interface CreateSessionRequest {
-    name: string;
-    filterSettings: FilterSettings;
-}
-
-export interface JoinByCodeRequest {
-    joinCode: string;
-    displayName: string;
-}
-
-export interface JoinByCodeResponse {
-    session: Session;
-    player: Player;
-    /** Guest access token, valid for the duration of this session only. */
-    accessToken: string;
-}
-
-export interface SessionState {
-    session: Session;
-    players: Player[];
-    drawEvents: DrawEvent[];
-    pendingTransfers: CardTransfer[];
-    serverTimestamp: string;
-}
-
-export interface SubmitCardRequest {
-    title: string;
-    description: string;
-    hiddenDescription: boolean;
-    imageUrl?: string;
-    isDrinking: boolean;
-    isFamilySafe: boolean;
-    gameTags: string[];
+export interface GetAllCardsFilters {
+    search?: string;
+    active?: boolean;
+    isGlobal?: boolean;
 }
 
 // ─── ApiClient interface ─────────────────────────────────────────────────────
@@ -188,7 +70,9 @@ export interface ApiClient {
     login(req: LoginRequest): Promise<ApiResult<AuthResponse>>;
     register(req: RegisterRequest): Promise<ApiResult<AuthResponse>>;
     logout(): Promise<ApiResult<void>>;
-    refreshTokens(refreshToken: string): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>>;
+    refreshTokens(
+        refreshToken: string
+    ): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>>;
 
     /**
      * Called when a guest player wants to log in or register mid-session.
@@ -196,29 +80,66 @@ export interface ApiClient {
      */
     claimAccount(
         guestAccessToken: string,
-        credentials: LoginRequest | RegisterRequest,
+        credentials: LoginRequest | RegisterRequest
     ): Promise<ApiResult<AuthResponse>>;
 
     // ── Sessions ─────────────────────────────────────────────────────────────
     createSession(req: CreateSessionRequest): Promise<ApiResult<Session>>;
     joinByCode(req: JoinByCodeRequest): Promise<ApiResult<JoinByCodeResponse>>;
     getSessionState(sessionId: string, since?: string): Promise<ApiResult<SessionState>>;
-    updateSessionFilters(sessionId: string, filterSettings: FilterSettings): Promise<ApiResult<Session>>;
+    updateSessionFilters(
+        sessionId: string,
+        filterSettings: FilterSettings
+    ): Promise<ApiResult<Session>>;
     endSession(sessionId: string): Promise<ApiResult<void>>;
     leaveSession(sessionId: string, playerId: string): Promise<ApiResult<void>>;
 
     // ── Cards ────────────────────────────────────────────────────────────────
     drawCard(sessionId: string, playerId: string): Promise<ApiResult<DrawEvent>>;
     submitCard(sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>>;
+    submitCardOutsideSession(req: SubmitCardRequest): Promise<ApiResult<Card>>;
     voteCard(cardId: string, direction: "up" | "down"): Promise<ApiResult<void>>;
     flagCard(cardId: string): Promise<ApiResult<void>>;
     shareDescription(drawEventId: string): Promise<ApiResult<DrawEvent>>;
     resolveCard(drawEventId: string): Promise<ApiResult<DrawEvent>>;
 
+    // ── My Cards management ───────────────────────────────────────────────────
+    /** Returns all cards authored by the current user. */
+    getMyCards(): Promise<ApiResult<Card[]>>;
+    /** Admin only — returns the full card pool with optional filters. */
+    getAllCards(filters?: GetAllCardsFilters): Promise<ApiResult<Card[]>>;
+    /** Creates a new CardVersion for the card. Returns the updated Card. */
+    updateCard(cardId: string, req: SubmitCardRequest): Promise<ApiResult<Card>>;
+    /** Sets card.active = false. Owner or admin. Returns the updated Card. */
+    deactivateCard(cardId: string): Promise<ApiResult<Card>>;
+    /** Sets card.active = true. Owner or admin. Returns the updated Card. */
+    reactivateCard(cardId: string): Promise<ApiResult<Card>>;
+    /** Returns all versions for a card, oldest first. */
+    getCardVersions(cardId: string): Promise<ApiResult<CardVersion[]>>;
+    /** Admin only — sets card.isGlobal = true. Returns the updated Card. */
+    promoteToGlobal(cardId: string): Promise<ApiResult<Card>>;
+    /** Admin only — sets card.isGlobal = false. Returns the updated Card. */
+    demoteFromGlobal(cardId: string): Promise<ApiResult<Card>>;
+
     // ── Transfers ────────────────────────────────────────────────────────────
     createTransfer(drawEventId: string, toPlayerId: string): Promise<ApiResult<CardTransfer>>;
     respondToTransfer(
         transferId: string,
-        status: "accepted" | "rejected",
+        status: "accepted" | "rejected"
     ): Promise<ApiResult<CardTransfer>>;
+
+    // ── Player management ────────────────────────────────────────────────────
+    /**
+     * Host-only: nulls session_players.player_token for a guest player.
+     * The original device's JWT becomes invalid on its next request (401).
+     * The name is freed for any device to claim.
+     * Rejected if the target player has a linked account (userId is set).
+     */
+    resetPlayerToken(sessionId: string, playerId: string): Promise<ApiResult<void>>;
+
+    // ── User management ──────────────────────────────────────────────────────
+    /** Update the current user's display name and/or email. Returns the updated User. */
+    updateUser(req: UpdateUserRequest): Promise<ApiResult<User>>;
+    /** Change the current user's password. Requires the current password for verification. */
+    changePassword(req: ChangePasswordRequest): Promise<ApiResult<void>>;
 }

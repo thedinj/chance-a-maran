@@ -1,36 +1,33 @@
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { useCallback, useState } from "react";
 import type { FilterSettings, Player, Session, SessionState } from "../lib/api";
-
-interface SessionContextValue {
-    session: Session | null;
-    players: Player[];
-    /** The player currently taking their turn on this device. */
-    activePlayerId: string | null;
-    /** This device's own player record (may differ from activePlayerId on shared-device mode). */
-    localPlayer: Player | null;
-    setSession(state: SessionState): void;
-    setActivePlayer(playerId: string): void;
-    clearSession(): void;
-    updateFilters(settings: FilterSettings): void;
-}
-
-const SessionContext = createContext<SessionContextValue | null>(null);
+import { SessionContext } from "./useSession";
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [session, setSessionData] = useState<Session | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
+    const [devicePlayerIds, setDevicePlayerIds] = useState<string[]>([]);
     const [localPlayer, setLocalPlayer] = useState<Player | null>(null);
+
+    const initSession = useCallback((state: SessionState, myPlayerId: string) => {
+        setSessionData(state.session);
+        setPlayers(state.players);
+        setDevicePlayerIds([myPlayerId]);
+        setLocalPlayer(state.players.find((p) => p.id === myPlayerId) ?? null);
+        setActivePlayerId(myPlayerId);
+    }, []);
+
+    const addDevicePlayer = useCallback((playerId: string) => {
+        setDevicePlayerIds((prev) => (prev.includes(playerId) ? prev : [...prev, playerId]));
+    }, []);
 
     const setSession = useCallback((state: SessionState) => {
         setSessionData(state.session);
         setPlayers(state.players);
-        // On first load, set the local player if we don't have one yet
-        setLocalPlayer((prev) => {
-            if (prev) return state.players.find((p) => p.id === prev.id) ?? prev;
-            return null;
-        });
-        setActivePlayerId((prev) => prev ?? (state.players[0]?.id ?? null));
+        // Keep localPlayer reference current without resetting device identity
+        setLocalPlayer((prev) =>
+            prev ? (state.players.find((p) => p.id === prev.id) ?? prev) : null
+        );
     }, []);
 
     const setActivePlayer = useCallback((playerId: string) => {
@@ -41,24 +38,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setSessionData(null);
         setPlayers([]);
         setActivePlayerId(null);
+        setDevicePlayerIds([]);
         setLocalPlayer(null);
     }, []);
 
     const updateFilters = useCallback((settings: FilterSettings) => {
-        setSessionData((prev) => prev ? { ...prev, filterSettings: settings } : null);
+        setSessionData((prev) => (prev ? { ...prev, filterSettings: settings } : null));
     }, []);
 
     return (
         <SessionContext.Provider
-            value={{ session, players, activePlayerId, localPlayer, setSession, setActivePlayer, clearSession, updateFilters }}
+            value={{
+                session,
+                players,
+                activePlayerId,
+                devicePlayerIds,
+                localPlayer,
+                initSession,
+                addDevicePlayer,
+                setSession,
+                setActivePlayer,
+                clearSession,
+                updateFilters,
+            }}
         >
             {children}
         </SessionContext.Provider>
     );
-}
-
-export function useSession(): SessionContextValue {
-    const ctx = useContext(SessionContext);
-    if (!ctx) throw new Error("useSession must be used within SessionProvider");
-    return ctx;
 }

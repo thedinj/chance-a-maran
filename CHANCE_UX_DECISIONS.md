@@ -48,13 +48,15 @@ Chance is a social party app that acts as a live companion layer on top of physi
 - Optional `userId` FK — links the Player to a User account
 - `active: boolean` — set to false when host marks player inactive ("kicks"); player can rejoin and be reactivated by re-entering with the same name
 - No concept of "kicked" — inactivation is a housekeeping convenience, not a punishment
+- `player_token` (UUID, **guest players only**) — device-binding token generated on first join; stored in the guest JWT and in Capacitor Preferences on the client; validated server-side on every authenticated guest request; null for registered players (whose identity is verified by account credentials instead); nulled by host via "Reset identity"
 
 ### Player ↔ User linking rules
 - Set on join if a remembered User exists on the device and they choose "play as [User]"
 - Set if a User logs in mid-game via the side menu while that Player is active
-- Can be unlinked via an advanced option (sets `player.userId = null`)
 - Never transferred — cannot relink a Player to a different User
 - The host role is a property of the Player record (`session.hostPlayerId`), not the User — if the host Player leaves, the game ends regardless of which User is logged in
+- Only one registered User per device at any time — secondary players (added via the player switcher) are guest-only and cannot be linked to accounts
+- In-session claiming is available only when no registered User exists on the device (a primary guest can log in or register mid-session to become the device's registered User); blocked if a registered User is already present; secondary players cannot claim
 
 ### Shared device model
 - Multiple Players can be registered to one device within a Game Session
@@ -92,8 +94,10 @@ Chance is a social party app that acts as a live companion layer on top of physi
 1. Any user enters join code or scans QR
 2. Enters display name
 3. Fuzzy name match (case-insensitive, trimmed) against existing Players in that Game Session
-   - Match found → silently resumes as that Player (reactivates if inactive)
-   - No match → joins as a new Player
+   - No match → joins as a new Player; server generates a `player_token` and returns it; client stores it in Capacitor Preferences
+   - Match found (registered player) → requires account login to resume; identity is verified by credentials, not name alone
+   - Match found (guest player), device holds the matching `player_token` → silently resumes as that Player (reactivates if inactive); zero friction
+   - Match found (guest player), no matching token → error: *"This name is already taken. Ask the host to free it up if you need to rejoin."* Joiner must pick a different name or wait for the host to reset the player's identity
 4. Lands **directly on the Game screen** — no waiting state, no lobby
 5. Full card history is visible immediately (late joiners see everything)
 
@@ -121,6 +125,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 |---|---|---|
 | `id` | uuid | Permanent card identifier |
 | `authorUserId` | FK → User | The registered User who submitted the card — **never null** (only registered users submit) |
+| `cardType` | enum: `chanceCard \| reparationsCard` | Card category. `chanceCard` = standard (default). `reparationsCard` = distinct visual treatment in the reveal. Property of the Card entity, not the version — admin-only to change post-creation. |
 | `active` | boolean | False = deactivated by owner or admin; excluded from all draw pools everywhere |
 | `isGlobal` | boolean | True = admin-promoted to the global pool; eligible for all sessions regardless of who is playing |
 | `createdInSessionId` | FK → Session (nullable) | The session in which this card was originally submitted; null = created outside a session |
@@ -136,12 +141,16 @@ Chance is a social party app that acts as a live companion layer on top of physi
 | `title` | string | Always visible to all players |
 | `description` | text | Visible per `hiddenDescription` logic |
 | `hiddenDescription` | boolean | If true, only the drawing Player sees it initially |
-| `imageUrl` | string | Uploaded image |
-| `isDrinking` | boolean | Excluded when session drinking filter is off |
+| `imageUrl` | string | Uploaded image URL (external hosting) |
+| `drinksPerHourThisPlayer` | number (default 0) | Estimated drinks per hour this card adds for the drawing Player. 0 = no drinking element. Excluded when session drinking filter is off (any value > 0 triggers exclusion). Reserved for future per-player rate enforcement. |
+| `avgDrinksPerHourAllPlayers` | number (default 0) | Estimated average drinks per hour this card distributes across all Players. 0 = no drinking element. Used alongside `drinksPerHourThisPlayer` for session drinking filter and future session-level rate tracking. |
 | `isFamilySafe` | boolean | Excluded when session age-appropriate filter is off |
+| `isGameChanger` | boolean | If true, triggers a dramatic reveal sequence (3500ms intro delay, special audio, Game Changer badge) before the standard overlay. Set by card author at submission or toggled by admin. |
 | `gameTags` | string[] | One or more game names, or empty = universal |
 | `authoredByUserId` | FK → User | May differ from card author if admin edited |
 | `createdAt` | timestamp | |
+
+> **Image storage:** `imageUrl` is an external URL. The old app stored images as binary blobs in a dedicated `Image` database table (max 500×500 px full, 128×128 px thumbnail). The new design uses external image hosting (e.g. CDN or object storage) and stores only the resulting URL. This removes binary blob handling from SQLite, improves load performance, and simplifies backup. The card submission UI handles the upload and submits the URL.
 
 ### Versioning rules
 - Edits always create a new `CardVersion` — previous versions are immutable
@@ -157,7 +166,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 
 ### Card draw algorithm (weighted random)
 
-The pool for a session is assembled from four tiers. A card must have `active = true` and pass session filters (drinking, age, game tag) to be eligible in any tier.
+The pool for a session is assembled from four tiers. A card must have `active = true` and pass session filters (drinking, age, game tag) to be eligible in any tier. The drinking filter excludes cards where `drinksPerHourThisPlayer > 0 OR avgDrinksPerHourAllPlayers > 0` when the session drinking toggle is off.
 
 | Tier | Eligible when | Base weight |
 |---|---|---|
@@ -176,20 +185,25 @@ Cards may qualify under multiple tiers; the highest base weight applies. Weight 
 - **My cards** — player's own library cards enter the pool (Tier 3)
 - **My network** — player's library cards + game-lineage cards from their recent sessions (Tiers 3 + 4)
 
+> **Global newness boost (removed from old design):** The old app applied time-based weight multipliers to all cards across the entire pool (10× for cards ≤14 days old; 5× for ≤31 days old). This was intentionally removed. New cards gain exposure via the this-session tier (3× boost) during the session where they were created, and via upvote momentum over time. A global newness boost would favor recency over quality and is not aligned with the pool assembly philosophy.
+
+> **Venue and element requirements (removed from old design):** The old app had `ChanceVenue` and `ChanceCardElement` records that specified per-card physical requirements (e.g., "needs alcohol," "needs a board game"). Sessions were associated with a venue; cards were excluded if the venue lacked a required element. This was intentionally replaced by the session-level drinking toggle (backed by per-card drink-rate fields) and the `isFamilySafe` toggle. The per-card element system added setup friction with limited benefit for most sessions.
+
 ---
 
 ## 8. Card reveal flow
 
 1. Any Player taps their Draw button
 2. Server runs weighted draw algorithm, creates a `DrawEvent` referencing the current `CardVersion`
-3. Full-screen card reveal overlay animates in — **only on the drawing Player's device**
-4. Card shows: image + title always visible
-5. If `hiddenDescription = true`: description is hidden behind a "Show description" tap
+3. If the drawn CardVersion has `isGameChanger = true`: before the standard reveal overlay, a full-screen dramatic intro plays for `GAME_CHANGER_DELAY` (default 3500ms). This intro shows the Game Changer badge and plays special audio (cymbal crash + drumroll buildup). Only the drawing Player's device shows this intro; other Players see the card enter history after `REVEAL_DELAY` as normal.
+4. Full-screen card reveal overlay animates in — **only on the drawing Player's device**
+5. Card shows: image + title always visible
+6. If `hiddenDescription = true`: description is hidden behind a "Show description" tap
    - Only the drawing Player (active Player whose name matches the drawer) can see it
    - Drawing Player can toggle "Share description" to make it visible to all Players
-6. Drawing Player taps to dismiss → overlay closes → card enters history
-7. After `REVEAL_DELAY` (default 3000ms): card appears in all other Players' history views
-8. If drawing Player shared description: it is visible to all in history; otherwise hidden for all others
+7. Drawing Player taps to dismiss → overlay closes → card enters history
+8. After `REVEAL_DELAY` (default 3000ms): card appears in all other Players' history views
+9. If drawing Player shared description: it is visible to all in history; otherwise hidden for all others
 
 ---
 
@@ -258,6 +272,9 @@ Game settings  ← host only, never shown to non-hosts
 │   ├── New: "Create game session" on Home (no record yet)
 │   └── Edit: side menu mid-game (record exists, changes apply to future draws only)
 ├── Fields: session name · drinking toggle · age-appropriate toggle · game tag(s) · card-sharing level (host's own setting)
+├── Player list (edit mode only) — shows all current Players
+│   └── [guest players only] "Reset identity" action — clears player_token; original device loses access on next request; name becomes claimable again
+│       Note: action is not shown for registered players or the host (their identity is account-bound and cannot be reset)
 ├── Save (new) → creates Game Session record → join code generated → → Game
 ├── Save (edit) → updates filter settings → [toast to all players] → → Game
 └── Cancel (new, unsaved) → → Home — no record created
@@ -272,7 +289,7 @@ Game
 ├── [modal] Add player to device
 │   └── Enter name → fuzzy match → silently resumes or joins fresh
 ├── [modal] Submit card (from side menu — registered players only)
-│   └── Image · title · description · hidden flag · game tags · drinking · family-safe
+│   └── Image · title · description · hidden flag · game tags · drinks/hr (this player) · avg drinks/hr (all players) · family-safe · isGameChanger
 │   └── Card auto-saved to submitter's library after session
 └── → Game session history (on host leaving/ending, or non-host leaving)
 
@@ -303,7 +320,7 @@ My cards (registered users only, side menu)
 │   └── Promote card to global pool (card.isGlobal = true) / Demote from global pool
 ├── [modal] Card detail — editable view (own cards, or any card if admin)
 │   ├── Full edit form pre-populated with current version
-│   │   └── Image · title · description · hidden flag · game tags · drinking · family-safe
+│   │   └── Image · title · description · hidden flag · game tags · drinks/hr (this player) · avg drinks/hr (all players) · family-safe · isGameChanger
 │   ├── Save → creates new CardVersion (previous versions immutable)
 │   ├── Deactivate card → card.active = false (owner or admin)
 │   └── Version history — read-only list of past versions with timestamps
@@ -317,9 +334,8 @@ My cards (registered users only, side menu)
 Player switcher (tap)
 ├── List of players on this device
 ├── → Switch active player (no friction)
-├── → Add player to device [modal]
-│   └── Enter name → fuzzy match → silently resumes or joins fresh
-└── [advanced] Unlink player from User account
+└── → Add player to device [modal]
+    └── Enter name → guest only; no account linking; fuzzy match → silently resumes or joins fresh
 ```
 
 ---
@@ -390,7 +406,16 @@ All mutations are written locally first and synced to the server opportunistical
 | Player normalized name is the session key | Not device, not account |
 | Hidden description visible only to drawer | Only drawer can share it; no one else can reveal it |
 | Voting and flagging in history only | Not on the full-screen card reveal |
-| Fuzzy name match on rejoin | Case-insensitive, trimmed — no auth required |
-| One logged-in User per device at a time | But multiple Players can be active on one device |
+| Fuzzy name match on rejoin | Case-insensitive, trimmed — but gated by player_token for guest players |
+| One registered User per device — secondary player slots are guest-only | Multiple Players can be active on one device, but only the primary registered User (if any) can have an account link; additional players added via the switcher join as guests only |
+| In-session claiming restricted to no-registered-user state | The claim flow is only available when no registered User exists on the device; a primary guest may claim to become the device's registered User; secondary players cannot claim |
 | Admin card management lives in the app | "All cards" tab in My cards, admin-scoped Users only |
 | Admin portal is user management + invite codes only | No card management in the portal |
+| Guest player identity is device-bound via player_token | A guest player's session identity is active on exactly one device at a time; attempting to join under the same name from a second device is blocked |
+| Token reset kicks the original device | Host clearing a guest's player_token invalidates their JWT on the next request; they are navigated back to the join screen |
+| "Reset identity" only applies to guest players | Never shown for registered players or the host; their identity is account-bound (Secure Storage) and cannot be reset |
+| Host identity is permanently device-bound | The host is a registered user; their identity is verified by account credentials in Secure Storage, not a player_token; they cannot be impersonated via name entry |
+| Host leaving = game ends | The host cannot transfer the host role; if the host player leaves, the session ends for everyone regardless of which User is logged in |
+| `cardType` is Card-level identity | Card type (`chanceCard` / `reparationsCard`) is set at creation and is a property of the Card entity, not the version. Only admins can change it post-creation. |
+| `isGameChanger` is CardVersion-level | Set by the author at submission or any version edit, or toggled by admin. Controls the dramatic reveal sequence (`GAME_CHANGER_DELAY` intro before `REVEAL_DELAY`). |
+| Drinking filter uses rate fields, not a boolean | A card is excluded by the drinking filter when `drinksPerHourThisPlayer > 0 OR avgDrinksPerHourAllPlayers > 0`. Cards with both values at 0 pass the drinking filter regardless of the session toggle. |

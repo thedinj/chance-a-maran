@@ -1,17 +1,20 @@
-import {
-    IonButton,
-    IonContent,
-    IonInput,
-    IonPage,
-    IonSpinner,
-} from "@ionic/react";
-import React, { useState, useTransition } from "react";
+import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
+import React, { useEffect, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
+import { AppHeader } from "../components/AppHeader";
+import { useAppHeader } from "../hooks/useAppHeader";
+import { apiClient } from "../lib/api";
 
 export default function Login() {
-    const { login } = useAuth();
+    const { login, isGuest, accessToken, upgradeFromGuest } = useAuth();
     const history = useHistory();
+    const { setShowBack } = useAppHeader();
+
+    useEffect(() => {
+        setShowBack(true);
+        return () => setShowBack(false);
+    }, [setShowBack]);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -26,6 +29,21 @@ export default function Login() {
         }
         setError(null);
         startTransition(async () => {
+            // When a guest session is active, route through the claim flow so prior
+            // draws/votes are preserved and merged into the registered account.
+            if (isGuest && accessToken) {
+                const result = await apiClient.claimAccount(accessToken, {
+                    email: trimmedEmail,
+                    password,
+                });
+                if (result.ok) {
+                    upgradeFromGuest(result.data);
+                    history.replace("/");
+                } else {
+                    setError(result.error.message);
+                }
+                return;
+            }
             const result = await login(trimmedEmail, password);
             if (result.ok) {
                 history.replace("/");
@@ -37,12 +55,9 @@ export default function Login() {
 
     return (
         <IonPage>
-            <IonContent fullscreen scrollY={false}>
+            <AppHeader />
+            <IonContent scrollY={false}>
                 <div style={styles.root}>
-                    <button style={styles.back} onClick={() => history.goBack()}>
-                        ← Back
-                    </button>
-
                     <div style={styles.header}>
                         <h1 style={styles.title}>Sign in</h1>
                     </div>
@@ -85,7 +100,10 @@ export default function Login() {
 
                     <p style={styles.nudge}>
                         Have an invite?{" "}
-                        <button style={styles.textLink} onClick={() => history.replace("/register")}>
+                        <button
+                            style={styles.textLink}
+                            onClick={() => history.replace("/register")}
+                        >
                             Create an account
                         </button>
                     </p>
@@ -102,18 +120,7 @@ const styles: Record<string, React.CSSProperties> = {
         height: "100%",
         backgroundColor: "var(--color-bg)",
         padding: "var(--space-5)",
-        paddingTop: "calc(var(--space-5) + env(safe-area-inset-top))",
         paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
-    },
-    back: {
-        background: "none",
-        border: "none",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        cursor: "pointer",
-        padding: 0,
-        alignSelf: "flex-start",
     },
     header: {
         flex: 1,

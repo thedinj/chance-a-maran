@@ -1,0 +1,7 @@
+/**
+ * Home page CSS.
+ * Note: the amber rule glow is handled entirely by Framer Motion (animate prop)
+ * to avoid the CSS-vs-inline-style specificity conflict.
+ */
+
+/* Reduced motion handled per-element in Home.tsx via useReducedMotion() */

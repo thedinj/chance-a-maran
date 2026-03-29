@@ -4,9 +4,12 @@ import type {
     AuthResponse,
     Card,
     CardTransfer,
+    CardVersion,
+    ChangePasswordRequest,
     CreateSessionRequest,
     DrawEvent,
     FilterSettings,
+    GetAllCardsFilters,
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
@@ -14,6 +17,8 @@ import type {
     Session,
     SessionState,
     SubmitCardRequest,
+    UpdateUserRequest,
+    User,
 } from "./types";
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -34,11 +39,7 @@ export class RealApiClient implements ApiClient {
         this.accessToken = token;
     }
 
-    private async request<T>(
-        method: string,
-        path: string,
-        body?: unknown,
-    ): Promise<ApiResult<T>> {
+    private async request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -63,9 +64,10 @@ export class RealApiClient implements ApiClient {
                 ok: false,
                 error: {
                     code: "NETWORK_ERROR",
-                    message: err instanceof Error && err.name === "AbortError"
-                        ? "Request timed out."
-                        : "A network error occurred.",
+                    message:
+                        err instanceof Error && err.name === "AbortError"
+                            ? "Request timed out."
+                            : "A network error occurred.",
                 },
                 serverTimestamp: new Date().toISOString(),
             };
@@ -92,7 +94,7 @@ export class RealApiClient implements ApiClient {
         return this.request<Pick<AuthResponse, "accessToken" | "refreshToken">>(
             "POST",
             "/api/auth/refresh",
-            { refreshToken },
+            { refreshToken }
         );
     }
 
@@ -119,7 +121,9 @@ export class RealApiClient implements ApiClient {
     }
 
     updateSessionFilters(sessionId: string, filterSettings: FilterSettings) {
-        return this.request<Session>("PATCH", `/api/sessions/${sessionId}/filters`, { filterSettings });
+        return this.request<Session>("PATCH", `/api/sessions/${sessionId}/filters`, {
+            filterSettings,
+        });
     }
 
     endSession(sessionId: string) {
@@ -138,6 +142,10 @@ export class RealApiClient implements ApiClient {
 
     submitCard(sessionId: string, req: SubmitCardRequest) {
         return this.request<Card>("POST", `/api/sessions/${sessionId}/cards`, req);
+    }
+
+    submitCardOutsideSession(req: SubmitCardRequest) {
+        return this.request<Card>("POST", "/api/cards", req);
     }
 
     voteCard(cardId: string, direction: "up" | "down") {
@@ -164,5 +172,62 @@ export class RealApiClient implements ApiClient {
 
     respondToTransfer(transferId: string, status: "accepted" | "rejected") {
         return this.request<CardTransfer>("PATCH", `/api/transfers/${transferId}`, { status });
+    }
+
+    // ── Player management ─────────────────────────────────────────────────────
+
+    resetPlayerToken(sessionId: string, playerId: string) {
+        return this.request<void>("PATCH", `/api/sessions/${sessionId}/players/${playerId}`, {
+            resetToken: true,
+        });
+    }
+
+    // ── User management ───────────────────────────────────────────────────────
+
+    updateUser(req: UpdateUserRequest) {
+        return this.request<User>("PATCH", "/api/users/me", req);
+    }
+
+    changePassword(req: ChangePasswordRequest) {
+        return this.request<void>("POST", "/api/users/me/change-password", req);
+    }
+
+    // ── My Cards management ───────────────────────────────────────────────────
+
+    getMyCards() {
+        return this.request<Card[]>("GET", "/api/cards/mine");
+    }
+
+    getAllCards(filters?: GetAllCardsFilters) {
+        const params = new URLSearchParams();
+        if (filters?.search) params.set("search", filters.search);
+        if (filters?.active !== undefined) params.set("active", String(filters.active));
+        if (filters?.isGlobal !== undefined) params.set("isGlobal", String(filters.isGlobal));
+        const query = params.size ? `?${params}` : "";
+        return this.request<Card[]>("GET", `/api/cards${query}`);
+    }
+
+    updateCard(cardId: string, req: SubmitCardRequest) {
+        return this.request<Card>("PATCH", `/api/cards/${cardId}`, req);
+    }
+
+    deactivateCard(cardId: string) {
+        return this.request<Card>("PATCH", `/api/cards/${cardId}/deactivate`);
+    }
+
+    reactivateCard(cardId: string) {
+        return this.request<Card>("PATCH", `/api/cards/${cardId}/reactivate`);
+    }
+
+    getCardVersions(cardId: string) {
+        return this.request<CardVersion[]>("GET", `/api/cards/${cardId}/versions`);
+    }
+
+    promoteToGlobal(cardId: string) {
+        return this.request<Card>("POST", `/api/cards/${cardId}/promote`);
+    }
+
+    demoteFromGlobal(cardId: string) {
+        return this.request<Card>("POST", `/api/cards/${cardId}/demote`);
     }
 }

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { useAppHeader } from "../hooks/useAppHeader";
 
-export default function GameHistory() {
+export default function About() {
     const { setShowBack } = useAppHeader();
 
     useEffect(() => {
@@ -22,7 +22,7 @@ export default function GameHistory() {
                         fontFamily: "var(--font-ui)",
                     }}
                 >
-                    Game History — coming soon
+                    What is Chance — coming soon
                 </p>
             </IonContent>
         </IonPage>
