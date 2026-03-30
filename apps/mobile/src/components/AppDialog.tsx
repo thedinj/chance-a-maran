@@ -23,13 +23,20 @@ export interface AppDialogProps {
     onDismiss?: () => void;
 }
 
-export function AppDialog({ title, message, buttons, accent = "amber", onDismiss }: AppDialogProps) {
+export function AppDialog({
+    title,
+    message,
+    buttons,
+    accent = "amber",
+    onDismiss,
+}: AppDialogProps) {
     const anyPending = buttons.some((b) => b.isPending);
 
     const accentGradient: Record<string, string> = {
         amber: "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-amber) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-amber) 20%, transparent) 100%)",
         danger: "linear-gradient(90deg, var(--color-danger) 0%, color-mix(in srgb, var(--color-danger) 30%, transparent) 100%)",
-        primary: "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-primary) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-primary) 20%, transparent) 100%)",
+        primary:
+            "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-primary) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-primary) 20%, transparent) 100%)",
     };
 
     const variantColor: Record<DialogButtonVariant, string> = {
@@ -56,8 +63,16 @@ export function AppDialog({ title, message, buttons, accent = "amber", onDismiss
                             style={{
                                 ...styles.actionBtn,
                                 color: variantColor[btn.variant ?? "default"],
-                                fontWeight: btn.variant && btn.variant !== "ghost" && btn.variant !== "default" ? 600 : 500,
-                                borderRight: i < buttons.length - 1 ? "1px solid var(--color-border)" : "none",
+                                fontWeight:
+                                    btn.variant &&
+                                    btn.variant !== "ghost" &&
+                                    btn.variant !== "default"
+                                        ? 600
+                                        : 500,
+                                borderRight:
+                                    i < buttons.length - 1
+                                        ? "1px solid var(--color-border)"
+                                        : "none",
                                 opacity: anyPending || btn.disabled ? 0.5 : 1,
                             }}
                             onClick={btn.onClick}
