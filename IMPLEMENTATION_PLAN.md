@@ -98,7 +98,7 @@
 | Hidden description toggle / Share description      | ✅     |                                                          |
 | Game Changer dramatic intro sequence               | ✅     | Badge + delayed slow flip implemented; audio cue pending |
 | Join code / QR share (in-game)                     | ✅     | Join code only — QR deferred                             |
-| Add player to device modal                         | ⬜     | + button stub exists                                     |
+| Add player to device modal                         | ✅     | joinByCode flow; playerToken saved; switches active player |
 | Background sync indicator (draw loading state)     | ⬜     |                                                          |
 
 ### Card submission

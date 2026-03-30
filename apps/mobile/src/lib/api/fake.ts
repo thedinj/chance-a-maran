@@ -29,6 +29,19 @@ import type {
 const ts = () => new Date().toISOString();
 const id = () => Math.random().toString(36).slice(2, 10);
 
+const JOIN_CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const JOIN_CODE_DIGITS = "23456789";
+
+function randomChar(chars: string): string {
+    return chars[Math.floor(Math.random() * chars.length)]!;
+}
+
+function createJoinCode(length = 6): string {
+    return Array.from({ length }, (_, index) =>
+        index % 2 === 0 ? randomChar(JOIN_CODE_LETTERS) : randomChar(JOIN_CODE_DIGITS)
+    ).join("");
+}
+
 function ok<T>(data: T): ApiSuccess<T> {
     return { ok: true, data, serverTimestamp: ts() };
 }
@@ -140,6 +153,49 @@ const DEMO_CARD_3: Card = {
     createdAt: "2026-01-03T00:00:00.000Z",
 };
 
+// ─── Demo Game Session & Players ─────────────────────────────────────────────
+
+const DEMO_SESSION_ID = "session-demo-1";
+const DEMO_HOST_PLAYER: Player = {
+    id: "player-demo-host",
+    sessionId: DEMO_SESSION_ID,
+    displayName: "Demo Host",
+    userId: DEMO_USER.id,
+    active: true,
+    cardSharing: "network",
+};
+const DEMO_GUEST_PLAYER_1: Player = {
+    id: "player-demo-guest-1",
+    sessionId: DEMO_SESSION_ID,
+    displayName: "Alex",
+    userId: null,
+    active: true,
+    cardSharing: null,
+};
+const DEMO_GUEST_PLAYER_2: Player = {
+    id: "player-demo-guest-2",
+    sessionId: DEMO_SESSION_ID,
+    displayName: "Jordan",
+    userId: null,
+    active: true,
+    cardSharing: null,
+};
+
+const DEMO_SESSION: Session = {
+    id: DEMO_SESSION_ID,
+    hostPlayerId: DEMO_HOST_PLAYER.id,
+    name: "Game Night",
+    joinCode: "AB23CD",
+    filterSettings: {
+        ageAppropriate: true,
+        drinking: true,
+        gameTags: [],
+    },
+    status: "active",
+    createdAt: "2026-02-15T18:30:00.000Z",
+    expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+};
+
 // ─── In-memory state ─────────────────────────────────────────────────────────
 
 interface FakeState {
@@ -157,11 +213,16 @@ interface FakeState {
 
 const state: FakeState = {
     currentUser: null,
-    sessions: new Map(),
-    players: new Map(),
-    playerTokens: new Map(),
-    drawEvents: new Map(),
-    transfers: new Map(),
+    sessions: new Map([[DEMO_SESSION.id, DEMO_SESSION]]),
+    players: new Map([
+        [DEMO_SESSION_ID, [DEMO_HOST_PLAYER, DEMO_GUEST_PLAYER_1, DEMO_GUEST_PLAYER_2]],
+    ]),
+    playerTokens: new Map([
+        [DEMO_GUEST_PLAYER_1.id, "token-guest-1"],
+        [DEMO_GUEST_PLAYER_2.id, "token-guest-2"],
+    ]),
+    drawEvents: new Map([[DEMO_SESSION_ID, []]]),
+    transfers: new Map([[DEMO_SESSION_ID, []]]),
     cards: new Map([
         [DEMO_CARD.id, DEMO_CARD],
         [DEMO_CARD_2.id, DEMO_CARD_2],
@@ -260,7 +321,7 @@ export class FakeApiClient implements ApiClient {
             id: sessionId,
             hostPlayerId: hostPlayer.id,
             name: req.name,
-            joinCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+            joinCode: createJoinCode(),
             filterSettings: req.filterSettings,
             status: "active",
             createdAt: ts(),

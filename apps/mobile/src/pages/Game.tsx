@@ -1,24 +1,36 @@
 import { IonContent, IonFooter, IonHeader, IonMenuButton, IonPage, IonToolbar } from "@ionic/react";
+import { Carousel } from "@mantine/carousel";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useCards } from "../cards/useCards";
-import type { DrawEvent, Player } from "../lib/api";
+import type { DrawEvent, Player, Session } from "../lib/api";
 import { apiClient } from "../lib/api";
 import { hapticLight, hapticMedium } from "../lib/haptics";
+import { playerTokenStore } from "../lib/playerTokenStore";
+import { SCROLLBAR_CSS, SCROLLBAR_CLASS, SCROLLBAR_FIREFOX_STYLES } from "../lib/scrollbars";
 import { useSession } from "../session/useSession";
-import { FlippingCard } from "../components/GameCard";
+import { CardFront, FlippingCard } from "../components/GameCard";
 
-// ─── Fan layout constants ────────────────────────────────────────────────────
+// ─── Hooks ───────────────────────────────────────────────────────────────────
 
-const CARD_HEIGHT = 260; // px — 3:4 ratio at mobile width
-const PEEK_HEIGHT = 72; // px — title + player chip visible below each card
+function useIsLandscape(): boolean {
+    const get = () => typeof window !== "undefined" && window.innerWidth > window.innerHeight;
+    const [landscape, setLandscape] = useState(get);
+    useEffect(() => {
+        const handler = () => setLandscape(get());
+        window.addEventListener("resize", handler);
+        return () => window.removeEventListener("resize", handler);
+    }, []);
+    return landscape;
+}
+
+function getInitials(name: string): string {
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) return (words[0]![0]! + words[1]![0]!).toUpperCase();
+    return name.trim()[0]!.toUpperCase();
+}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
-
-interface GameHeaderProps {
-    sessionName: string;
-    onJoinCode: () => void;
-}
 
 interface GameHeaderProps {
     sessionName: string;
@@ -27,6 +39,7 @@ interface GameHeaderProps {
     devicePlayerIds: string[];
     activePlayerId: string | null;
     onSwitchPlayer: (playerId: string) => void;
+    onAddPlayer: () => void;
 }
 
 function GameHeader({
@@ -36,169 +49,295 @@ function GameHeader({
     devicePlayerIds,
     activePlayerId,
     onSwitchPlayer,
+    onAddPlayer,
 }: GameHeaderProps) {
     const devicePlayers = players.filter((p) => devicePlayerIds.includes(p.id));
+
     return (
-        <IonHeader>
-            <IonToolbar style={styles.toolbar as React.CSSProperties}>
-                <div style={styles.headerInner}>
-                    <IonMenuButton style={styles.menuButton as React.CSSProperties} />
-                    <h1 style={styles.sessionName}>{sessionName}</h1>
-                    <button
-                        style={styles.joinCodeButton}
-                        onClick={onJoinCode}
-                        aria-label="Show join code"
+        <>
+            <style>{SCROLLBAR_CSS}</style>
+            <style>{`
+                .pill-inactive:not(:disabled):hover {
+                    border-color: color-mix(in srgb, var(--color-accent-primary) 70%, transparent) !important;
+                    color: var(--color-text-primary) !important;
+                    opacity: 1 !important;
+                }
+                .pill-add:not(:disabled):hover {
+                    background: color-mix(in srgb, var(--color-accent-primary) 15%, transparent) !important;
+                    border-color: var(--color-accent-primary) !important;
+                    border-style: solid !important;
+                    opacity: 1 !important;
+                }
+                .pill-non-device:not(:disabled):hover {
+                    opacity: 0.9 !important;
+                    border-style: solid !important;
+                }
+                .pill-inactive:active, .pill-non-device:active {
+                    transform: scale(0.94) !important;
+                }
+                .pill-add:active {
+                    transform: scale(0.92) !important;
+                }
+            `}</style>
+            <IonHeader>
+                <IonToolbar style={styles.toolbar as React.CSSProperties}>
+                    <div style={styles.headerInner}>
+                        <IonMenuButton style={styles.menuButton as React.CSSProperties} />
+                        <h1 style={styles.sessionName}>{sessionName}</h1>
+                        <button
+                            style={styles.joinCodeButton}
+                            onClick={onJoinCode}
+                            aria-label="Show join code"
+                        >
+                            <span style={styles.joinCodeIcon}>⊞</span>
+                        </button>
+                    </div>
+                </IonToolbar>
+                {/* Player switcher lives inside IonHeader so it never scrolls away */}
+                <div style={styles.switcherWrap}>
+                    <div
+                        style={{ ...styles.switcherStrip, ...SCROLLBAR_FIREFOX_STYLES }}
+                        className={SCROLLBAR_CLASS}
                     >
-                        <span style={styles.joinCodeIcon}>⊞</span>
-                    </button>
+                        {/* Device players (local to this device) */}
+                        {devicePlayers.map((p) => {
+                            const isActive = p.id === activePlayerId;
+                            return (
+                                <button
+                                    key={p.id}
+                                    style={isActive ? styles.pillActive : styles.pillInactive}
+                                    className={isActive ? undefined : "pill-inactive"}
+                                    onClick={() => {
+                                        hapticLight();
+                                        onSwitchPlayer(p.id);
+                                    }}
+                                    aria-pressed={isActive}
+                                >
+                                    <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
+                                        {getInitials(p.displayName)}
+                                    </span>
+                                    <span style={styles.pillName}>{p.displayName}</span>
+                                </button>
+                            );
+                        })}
+
+                        {/* Add player button */}
+                        <button
+                            style={styles.pillAdd}
+                            className="pill-add"
+                            onClick={() => {
+                                hapticLight();
+                                onAddPlayer();
+                            }}
+                            aria-label="Add player to this device"
+                        >
+                            +
+                        </button>
+
+                        {/* Non-device players (on other phones) */}
+                        {players
+                            .filter((p) => !devicePlayerIds.includes(p.id))
+                            .map((p) => {
+                                const isActive = p.id === activePlayerId;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        style={isActive ? styles.pillNonDeviceActive : styles.pillNonDevice}
+                                        className={isActive ? undefined : "pill-non-device"}
+                                        onClick={() => {
+                                            hapticLight();
+                                            onSwitchPlayer(p.id);
+                                        }}
+                                        aria-pressed={isActive}
+                                    >
+                                        <span style={isActive ? styles.avatarNonDeviceActive : styles.avatarNonDevice}>
+                                            {getInitials(p.displayName)}
+                                        </span>
+                                        <span style={styles.pillName}>{p.displayName}</span>
+                                    </button>
+                                );
+                            })}
+                    </div>
                 </div>
-            </IonToolbar>
-            {/* Player switcher lives inside IonHeader so it never scrolls away */}
-            <div style={styles.switcherWrap}>
-                <div style={styles.switcherStrip}>
-                    {devicePlayers.map((p) => {
-                        const isActive = p.id === activePlayerId;
-                        return (
-                            <button
-                                key={p.id}
-                                style={isActive ? styles.pillActive : styles.pillInactive}
-                                onClick={() => {
-                                    hapticLight();
-                                    onSwitchPlayer(p.id);
-                                }}
-                            >
-                                {p.displayName}
-                            </button>
-                        );
-                    })}
-                    <button style={styles.pillAdd} disabled>
-                        +
-                    </button>
-                </div>
-            </div>
-        </IonHeader>
+                {/* Viewing banner — shown when active player is on another device */}
+                {(() => {
+                    const viewingPlayer = !devicePlayerIds.includes(activePlayerId ?? "")
+                        ? players.find((p) => p.id === activePlayerId)
+                        : null;
+                    return viewingPlayer ? (
+                        <div style={styles.viewingBanner}>
+                            Viewing {viewingPlayer.displayName}'s hand
+                        </div>
+                    ) : null;
+                })()}
+            </IonHeader>
+        </>
     );
 }
 
-// ── CardFanItem ───────────────────────────────────────────────────────────────
+// ── AddPlayerModal ────────────────────────────────────────────────────────────
 
-interface CardFanItemProps {
-    event: DrawEvent;
-    index: number;
-    players: Player[];
-    activePlayerId: string | null;
-    onTap: (event: DrawEvent) => void;
+interface AddPlayerModalProps {
+    session: Session;
+    onClose: () => void;
+    onSuccess: (playerId: string) => void;
 }
 
-function CardFanItem({ event, index, players, activePlayerId, onTap }: CardFanItemProps) {
-    const isTop = index === 0;
-    const isPeek = !isTop;
-    const cv = event.cardVersion;
-    const isResolved = event.resolved;
-    const player = players.find((p) => p.id === event.playerId);
-    const isDrawer = event.playerId === activePlayerId;
+function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
+    const [name, setName] = useState("");
+    const [error, setError] = useState<string | null>(null);
+    const [pending, startTransition] = useTransition();
 
-    const showHiddenBadge = cv.hiddenDescription && !event.descriptionShared && isTop && !isDrawer;
+    const trimmed = name.trim();
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!trimmed || pending) return;
+        setError(null);
+        startTransition(async () => {
+            const savedToken = playerTokenStore.get(session.joinCode, trimmed);
+            const result = await apiClient.joinByCode({
+                joinCode: session.joinCode,
+                displayName: trimmed,
+                playerToken: savedToken,
+            });
+            if (!result.ok) {
+                const code = result.error.code;
+                if (code === "CONFLICT_ERROR") {
+                    setError("That name is in use on another device.");
+                } else if (code === "AUTHENTICATION_ERROR") {
+                    setError(
+                        "This name belongs to a registered player. Ask them to join from their own device."
+                    );
+                } else {
+                    setError(result.error.message);
+                }
+                return;
+            }
+            const { player, playerToken } = result.data;
+            if (playerToken) {
+                playerTokenStore.set(session.joinCode, trimmed, playerToken);
+            }
+            onSuccess(player.id);
+        });
+    }
 
     return (
-        <div
-            style={{
-                ...styles.cardWrapper,
-                // Peek cards: wrapper is clipped to PEEK_HEIGHT, showing only the top
-                // of the card (title + chip). No negative margins — cards stack downward.
-                height: isPeek ? PEEK_HEIGHT : CARD_HEIGHT,
-                overflow: "hidden",
-            }}
-            onClick={() => onTap(event)}
-        >
-            <div
-                style={{
-                    ...styles.card,
-                    height: CARD_HEIGHT,
-                    boxShadow: isTop
-                        ? "inset 0 0 0 1px var(--color-border), 0 0 20px 2px color-mix(in srgb, var(--color-accent-primary) 25%, transparent)"
-                        : "inset 0 0 0 1px var(--color-border)",
-                }}
-            >
-                {/* Resolved amber overlay */}
-                {isResolved && <div style={styles.resolvedOverlay} />}
-
-                {/* Corner ornaments */}
-                <span style={{ ...styles.cornerDiamond, top: 10, left: 10 }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, top: 10, right: 10 }}>◆</span>
-
-                {/* Resolved badge */}
-                {isResolved && <div style={styles.resolvedBadge}>RESOLVED</div>}
-
-                {/* Card content */}
-                <div style={styles.cardContent}>
-                    <p style={styles.cardTitle}>{cv.title}</p>
-                    <p style={styles.cardPlayerChip}>
-                        {player?.displayName ?? "Unknown"} ◆{" "}
-                        {new Date(event.drawnAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        })}
-                    </p>
-                </div>
-
-                {/* Hidden badge (top card only, not the drawer) */}
-                {showHiddenBadge && <div style={styles.hiddenBadge}>HIDDEN</div>}
+        <div style={styles.overlayBackdrop} onClick={onClose}>
+            <div style={styles.addPlayerSheet} onClick={(e) => e.stopPropagation()}>
+                <p style={styles.addPlayerTitle}>Add player to this device</p>
+                <p style={styles.addPlayerHint}>
+                    Enter a display name. They'll take turns on this device.
+                </p>
+                <form onSubmit={handleSubmit} style={styles.addPlayerForm}>
+                    <input
+                        style={styles.addPlayerInput}
+                        type="text"
+                        placeholder="Display name"
+                        value={name}
+                        onChange={(e) => {
+                            setName(e.target.value);
+                            setError(null);
+                        }}
+                        autoFocus
+                        maxLength={32}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="words"
+                        spellCheck={false}
+                    />
+                    {error && <p style={styles.addPlayerError}>{error}</p>}
+                    <div style={styles.addPlayerActions}>
+                        <button type="button" style={styles.addPlayerCancel} onClick={onClose}>
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            style={{
+                                ...styles.addPlayerJoin,
+                                opacity: trimmed && !pending ? 1 : 0.45,
+                            }}
+                            disabled={!trimmed || pending}
+                        >
+                            {pending ? "Joining…" : "Join"}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
 }
 
-// ── CardStack ─────────────────────────────────────────────────────────────────
+// ── CardCarousel ──────────────────────────────────────────────────────────────
 
-interface CardStackProps {
+interface CardCarouselProps {
     events: DrawEvent[];
-    players: Player[];
-    activePlayerId: string | null;
+    resolvedCount: number;
     showResolved: boolean;
     onCardTap: (event: DrawEvent) => void;
     onToggleResolved: () => void;
-    resolvedCount: number;
+    viewingPlayerName?: string | null;
 }
 
-function CardStack({
+function CardCarousel({
     events,
-    players,
-    activePlayerId,
+    resolvedCount,
     showResolved,
     onCardTap,
     onToggleResolved,
-    resolvedCount,
-}: CardStackProps) {
+    viewingPlayerName,
+}: CardCarouselProps) {
+    const isLandscape = useIsLandscape();
+
     if (events.length === 0) {
         return (
             <div style={styles.emptyState}>
                 <div style={styles.emptyLogo}>C</div>
                 <p style={styles.emptyTitle}>No cards drawn yet.</p>
-                <p style={styles.emptyHint}>Tap Draw when it's your turn.</p>
+                <p style={styles.emptyHint}>
+                    {viewingPlayerName
+                        ? `${viewingPlayerName} hasn't drawn yet.`
+                        : "Tap Draw when it's your turn."}
+                </p>
             </div>
         );
     }
 
     return (
-        <div style={styles.stackOuter}>
+        <div style={styles.carouselOuter}>
             {resolvedCount > 0 && (
                 <button style={styles.showResolvedToggle} onClick={onToggleResolved}>
                     {showResolved ? "Hide resolved" : `Show ${resolvedCount} resolved`}
                 </button>
             )}
-            <div style={styles.stack}>
-                {events.map((event, i) => (
-                    <CardFanItem
-                        key={event.id}
-                        event={event}
-                        index={i}
-                        players={players}
-                        activePlayerId={activePlayerId}
-                        onTap={onCardTap}
-                    />
+            <Carousel
+                key={isLandscape ? "landscape" : "portrait"}
+                withControls={false}
+                withIndicators={events.length > 1}
+                slideSize={isLandscape ? "25%" : "100%"}
+                slideGap="12px"
+                styles={{
+                    indicators: { bottom: -20, gap: "6px" },
+                }}
+            >
+                {events.map((event) => (
+                    <Carousel.Slide key={event.id}>
+                        <div
+                            style={{
+                                // Cap width so card height never exceeds 65dvh (portrait or landscape).
+                                // 412/581 is the card aspect ratio; at max height, width = 65dvh * (412/581).
+                                maxWidth: "calc(65dvh * 412 / 581)",
+                                margin: "0 auto",
+                                opacity: event.resolved ? 0.55 : undefined,
+                                cursor: "pointer",
+                            }}
+                            onClick={() => onCardTap(event)}
+                        >
+                            <CardFront event={event} readOnly />
+                        </div>
+                    </Carousel.Slide>
                 ))}
-            </div>
+            </Carousel>
         </div>
     );
 }
@@ -288,7 +427,7 @@ interface CardDetailOverlayProps {
 
 function CardDetailOverlay({
     event,
-    players,
+    players: _players,
     activePlayerId,
     onDismiss,
     onVote,
@@ -299,19 +438,14 @@ function CardDetailOverlay({
 }: CardDetailOverlayProps) {
     const cv = event.cardVersion;
     const isDrawer = event.playerId === activePlayerId;
-    const [descrRevealed, setDescrRevealed] = useState(
-        !cv.hiddenDescription || event.descriptionShared
-    );
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
     const [resolveRequested, setResolveRequested] = useState(event.resolved);
     const [showTransferPicker, setShowTransferPicker] = useState(false);
     const [transferDone, setTransferDone] = useState(false);
     const [sharing, setSharing] = useState(false);
+    const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
 
-    const showHiddenToggle =
-        cv.hiddenDescription && !event.descriptionShared && isDrawer && !descrRevealed;
-    const showShareBtn =
-        cv.hiddenDescription && !event.descriptionShared && isDrawer && descrRevealed;
+    const showActionBarShareBtn = cv.hiddenDescription && !sharedViaActionBar && isDrawer;
 
     async function handleVote(dir: "up" | "down") {
         const next = voteDir === dir ? null : dir;
@@ -339,212 +473,130 @@ function CardDetailOverlay({
         setSharing(true);
         hapticLight();
         await onShareDescription(event.id);
+        setSharedViaActionBar(true);
         setSharing(false);
     }
 
     const transferablePlayers = allPlayers.filter((p) => p.id !== event.playerId && p.active);
 
     return (
-        <>
-            <style>{`
-                .reveal-description::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .reveal-description::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .reveal-description::-webkit-scrollbar-thumb {
-                    background: var(--color-accent-amber);
-                    border-radius: 3px;
-                    opacity: 0.6;
-                }
-                .reveal-description::-webkit-scrollbar-thumb:hover {
-                    opacity: 0.8;
-                }
-            `}</style>
-            <div style={styles.overlayBackdrop} onClick={onDismiss}>
-                <div style={styles.detailWrap} onClick={(e) => e.stopPropagation()}>
-                    {/* Back arrow */}
-                    <button style={styles.detailBack} onClick={onDismiss}>
-                        ←
-                    </button>
+        <div style={styles.detailWrap}>
+            {/* Back arrow */}
+            <button style={styles.detailBack} onClick={onDismiss}>
+                ←
+            </button>
 
-                    {/* Card content */}
-                    <div style={styles.detailScroll}>
-                        <div style={styles.detailCard}>
-                            {/* Ornaments */}
-                            <span
-                                style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 14 }}
-                            >
-                                ◆
-                            </span>
-                            <span
-                                style={{
-                                    ...styles.cornerDiamond,
-                                    top: 12,
-                                    right: 12,
-                                    fontSize: 14,
-                                }}
-                            >
-                                ◆
-                            </span>
-
-                            {event.resolved && <div style={styles.resolvedOverlay} />}
-                            {event.resolved && <div style={styles.resolvedBadge}>RESOLVED</div>}
-
-                            <div style={styles.detailCardContent}>
-                                <p style={styles.revealTitle}>{cv.title}</p>
-                                <p style={styles.revealPlayerChip}>
-                                    {players.find((p) => p.id === event.playerId)?.displayName ??
-                                        "Unknown"}{" "}
-                                    ◆{" "}
-                                    {new Date(event.drawnAt).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                    })}
-                                </p>
-
-                                {descrRevealed ? (
-                                    <p
-                                        style={styles.revealDescription}
-                                        className="reveal-description"
-                                    >
-                                        {cv.description}
-                                    </p>
-                                ) : showHiddenToggle ? (
-                                    <button
-                                        style={styles.hiddenDescArea}
-                                        onClick={() => setDescrRevealed(true)}
-                                    >
-                                        <span style={styles.hiddenDescLabel}>
-                                            Tap to reveal description
-                                        </span>
-                                    </button>
-                                ) : null}
-
-                                {showShareBtn && (
-                                    <button
-                                        style={styles.shareDescBtn}
-                                        onClick={handleShare}
-                                        disabled={sharing}
-                                    >
-                                        {sharing ? "Sharing..." : "Share with everyone"}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Transfer player picker */}
-                        {showTransferPicker && (
-                            <div style={styles.transferPicker}>
-                                <p style={styles.transferPickerLabel}>TRANSFER TO</p>
-                                {transferablePlayers.map((p) => (
-                                    <button
-                                        key={p.id}
-                                        style={styles.transferPlayerBtn}
-                                        onClick={() => handleTransfer(p.id)}
-                                    >
-                                        {p.displayName}
-                                    </button>
-                                ))}
-                                <button
-                                    style={styles.transferCancelBtn}
-                                    onClick={() => setShowTransferPicker(false)}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Action bar */}
-                    <div style={styles.actionBar}>
-                        {/* Vote */}
-                        <button
-                            style={styles.actionBtn}
-                            onClick={() => handleVote(voteDir === "up" ? "down" : "up")}
-                        >
-                            <span
-                                style={{
-                                    ...styles.actionIcon,
-                                    color:
-                                        voteDir === "up"
-                                            ? "var(--color-accent-amber)"
-                                            : voteDir === "down"
-                                              ? "var(--color-danger)"
-                                              : "var(--color-text-secondary)",
-                                }}
-                            >
-                                {voteDir === "down" ? "↓" : "↑"}
-                            </span>
-                            <span style={styles.actionLabel}>
-                                {voteDir === "down" ? "Down" : "Up"}
-                            </span>
-                        </button>
-
-                        {/* Resolve */}
-                        {!event.resolved && (
-                            <button
-                                style={styles.actionBtn}
-                                onClick={handleResolve}
-                                disabled={resolveRequested}
-                            >
-                                <span
-                                    style={{
-                                        ...styles.actionIcon,
-                                        color: resolveRequested
-                                            ? "var(--color-success)"
-                                            : "var(--color-text-secondary)",
-                                    }}
-                                >
-                                    ✓
-                                </span>
-                                <span style={styles.actionLabel}>
-                                    {resolveRequested ? "Requested" : "Resolve"}
-                                </span>
-                            </button>
-                        )}
-
-                        {/* Transfer */}
-                        {!transferDone && (
-                            <button
-                                style={styles.actionBtn}
-                                onClick={() => setShowTransferPicker((v) => !v)}
-                            >
-                                <span
-                                    style={{
-                                        ...styles.actionIcon,
-                                        color: "var(--color-text-secondary)",
-                                    }}
-                                >
-                                    ⇄
-                                </span>
-                                <span style={styles.actionLabel}>Transfer</span>
-                            </button>
-                        )}
-
-                        {/* Share desc */}
-                        {showShareBtn && (
-                            <button
-                                style={styles.actionBtn}
-                                onClick={handleShare}
-                                disabled={sharing}
-                            >
-                                <span
-                                    style={{
-                                        ...styles.actionIcon,
-                                        color: "var(--color-text-secondary)",
-                                    }}
-                                >
-                                    ↗
-                                </span>
-                                <span style={styles.actionLabel}>Share desc</span>
-                            </button>
-                        )}
-                    </div>
+            {/* Card with fast flip */}
+            <div style={styles.detailCardArea}>
+                <div style={{ maxWidth: "430px", width: "100%" }}>
+                    <FlippingCard event={event} overrideDuration={480} />
                 </div>
             </div>
-        </>
+
+            {/* Transfer player picker */}
+            {showTransferPicker && (
+                <div style={styles.transferPicker}>
+                    <p style={styles.transferPickerLabel}>TRANSFER TO</p>
+                    {transferablePlayers.map((p) => (
+                        <button
+                            key={p.id}
+                            style={styles.transferPlayerBtn}
+                            onClick={() => handleTransfer(p.id)}
+                        >
+                            {p.displayName}
+                        </button>
+                    ))}
+                    <button
+                        style={styles.transferCancelBtn}
+                        onClick={() => setShowTransferPicker(false)}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            )}
+
+            {/* Action bar */}
+            <div style={styles.actionBar}>
+                {/* Vote */}
+                <button
+                    style={styles.actionBtn}
+                    onClick={() => handleVote(voteDir === "up" ? "down" : "up")}
+                >
+                    <span
+                        style={{
+                            ...styles.actionIcon,
+                            color:
+                                voteDir === "up"
+                                    ? "var(--color-accent-amber)"
+                                    : voteDir === "down"
+                                      ? "var(--color-danger)"
+                                      : "var(--color-text-secondary)",
+                        }}
+                    >
+                        {voteDir === "down" ? "↓" : "↑"}
+                    </span>
+                    <span style={styles.actionLabel}>{voteDir === "down" ? "Down" : "Up"}</span>
+                </button>
+
+                {/* Resolve */}
+                {!event.resolved && (
+                    <button
+                        style={styles.actionBtn}
+                        onClick={handleResolve}
+                        disabled={resolveRequested}
+                    >
+                        <span
+                            style={{
+                                ...styles.actionIcon,
+                                color: resolveRequested
+                                    ? "var(--color-success)"
+                                    : "var(--color-text-secondary)",
+                            }}
+                        >
+                            ✓
+                        </span>
+                        <span style={styles.actionLabel}>
+                            {resolveRequested ? "Requested" : "Resolve"}
+                        </span>
+                    </button>
+                )}
+
+                {/* Transfer */}
+                {!transferDone && (
+                    <button
+                        style={styles.actionBtn}
+                        onClick={() => setShowTransferPicker((v) => !v)}
+                    >
+                        <span
+                            style={{
+                                ...styles.actionIcon,
+                                color: "var(--color-text-secondary)",
+                            }}
+                        >
+                            ⇄
+                        </span>
+                        <span style={styles.actionLabel}>Transfer</span>
+                    </button>
+                )}
+
+                {/* Share desc */}
+                {showActionBarShareBtn && (
+                    <button style={styles.actionBtn} onClick={handleShare} disabled={sharing}>
+                        <span
+                            style={{
+                                ...styles.actionIcon,
+                                color: "var(--color-text-secondary)",
+                            }}
+                        >
+                            ↗
+                        </span>
+                        <span style={styles.actionLabel}>
+                            {sharing ? "Sharing..." : "Share desc"}
+                        </span>
+                    </button>
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -585,6 +637,7 @@ export default function Game() {
         devicePlayerIds,
         localPlayer,
         setActivePlayer,
+        addDevicePlayer,
         setSession,
     } = useSession();
     const { drawHistory, addDrawEvent, updateDrawEvent } = useCards();
@@ -592,6 +645,7 @@ export default function Game() {
     const [selectedCard, setSelectedCard] = useState<DrawEvent | null>(null);
     const [revealCard, setRevealCard] = useState<DrawEvent | null>(null);
     const [showJoinCode, setShowJoinCode] = useState(false);
+    const [showAddPlayer, setShowAddPlayer] = useState(false);
     const [showResolved, setShowResolved] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [drawPending, startDrawTransition] = useTransition();
@@ -635,7 +689,6 @@ export default function Game() {
     }, [session?.id]);
 
     // Active player derivation
-    const activePlayer = players.find((p) => p.id === activePlayerId) ?? null;
     const isActivePlayerOnDevice = devicePlayerIds.includes(activePlayerId ?? "");
 
     // Card stack derivation
@@ -697,32 +750,27 @@ export default function Game() {
                 devicePlayerIds={devicePlayerIds}
                 activePlayerId={activePlayerId}
                 onSwitchPlayer={setActivePlayer}
+                onAddPlayer={() => setShowAddPlayer(true)}
             />
 
-            <IonContent scrollY>
+            <IonContent scrollY className="game-content">
                 {/* Card stack */}
                 <div style={styles.contentArea}>
-                    <CardStack
+                    <CardCarousel
                         events={displayCards}
-                        players={players}
-                        activePlayerId={activePlayerId}
+                        resolvedCount={resolvedCards.length}
                         showResolved={showResolved}
                         onCardTap={(event) => {
                             hapticLight();
                             setSelectedCard(event);
                         }}
                         onToggleResolved={() => setShowResolved((v) => !v)}
-                        resolvedCount={resolvedCards.length}
+                        viewingPlayerName={
+                            !isActivePlayerOnDevice
+                                ? players.find((p) => p.id === activePlayerId)?.displayName
+                                : null
+                        }
                     />
-
-                    {/* Active player name when not own cards */}
-                    {activePlayer && (
-                        <p style={styles.viewingLabel}>
-                            {activePlayer.id === localPlayer?.id
-                                ? "Your cards"
-                                : `${activePlayer.displayName}'s cards`}
-                        </p>
-                    )}
 
                     {error && (
                         <p style={styles.error}>
@@ -748,10 +796,7 @@ export default function Game() {
 
             {/* Overlays */}
             {revealCard && (
-                <CardRevealOverlay
-                    event={revealCard}
-                    onDismiss={() => setRevealCard(null)}
-                />
+                <CardRevealOverlay event={revealCard} onDismiss={() => setRevealCard(null)} />
             )}
 
             {selectedCard && !revealCard && (
@@ -765,6 +810,18 @@ export default function Game() {
                     onTransfer={handleTransfer}
                     onShareDescription={handleShareDescription}
                     allPlayers={players}
+                />
+            )}
+
+            {showAddPlayer && (
+                <AddPlayerModal
+                    session={session}
+                    onClose={() => setShowAddPlayer(false)}
+                    onSuccess={(playerId) => {
+                        addDevicePlayer(playerId);
+                        setActivePlayer(playerId);
+                        setShowAddPlayer(false);
+                    }}
                 />
             )}
 
@@ -829,65 +886,280 @@ const styles: Record<string, React.CSSProperties> = {
     // Player switcher (rendered inside IonHeader — never scrolls)
     switcherWrap: {
         backgroundColor: "var(--color-surface)",
-        borderBottom: "1px solid var(--color-border)",
+        borderBottom: "1.5px solid var(--color-border)",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
     },
     switcherStrip: {
         display: "flex",
         flexDirection: "row",
         overflowX: "auto",
-        gap: "var(--space-2)",
+        gap: "var(--space-3)",
         padding: "var(--space-3) var(--space-4)",
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
         WebkitOverflowScrolling: "touch",
     },
+    // ── Shared pill base ──────────────────────────────────────────────────────
     pillActive: {
         background: "var(--color-accent-primary)",
-        border: "none",
+        border: "1.5px solid var(--color-accent-amber)",
         color: "var(--color-text-primary)",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        fontWeight: 500,
-        padding: "var(--space-2) var(--space-3)",
-        height: "40px",
+        fontSize: "var(--text-subheading)",
+        fontWeight: 600,
+        letterSpacing: "0.01em",
+        padding: "0 var(--space-4) 0 var(--space-2)",
+        height: "44px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
-        transition: "all 180ms var(--ease)",
-        minWidth: "44px",
+        animation: "playerTokenGlow 2.4s ease-in-out infinite",
+        transition: "all 200ms var(--ease)",
+        minWidth: "64px",
+        borderRadius: "6px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
     },
     pillInactive: {
         background: "var(--color-surface-elevated)",
-        border: "none",
+        border: "1px solid color-mix(in srgb, var(--color-accent-primary) 35%, transparent)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 400,
-        padding: "var(--space-2) var(--space-3)",
-        height: "32px",
+        padding: "0 var(--space-3) 0 var(--space-2)",
+        height: "40px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
-        transition: "all 180ms var(--ease)",
-        minWidth: "44px",
+        opacity: 0.85,
+        transition: "all 200ms var(--ease)",
+        minWidth: "52px",
+        borderRadius: "5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
     },
-    pillAdd: {
-        background: "var(--color-surface-elevated)",
-        border: "1px dashed var(--color-border)",
-        color: "var(--color-text-secondary)",
+    pillNonDevice: {
+        background: "color-mix(in srgb, var(--color-accent-amber) 7%, var(--color-surface-elevated))",
+        border: "1px dashed color-mix(in srgb, var(--color-accent-amber) 70%, transparent)",
+        color: "var(--color-accent-amber)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 400,
+        padding: "0 var(--space-3) 0 var(--space-2)",
+        height: "40px",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        flexShrink: 0,
+        opacity: 0.65,
+        transition: "all 200ms var(--ease)",
+        minWidth: "52px",
+        borderRadius: "5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+    },
+    pillNonDeviceActive: {
+        background: "color-mix(in srgb, var(--color-accent-amber) 15%, var(--color-surface-elevated))",
+        border: "1.5px solid var(--color-accent-amber)",
+        color: "var(--color-accent-amber)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-subheading)",
-        width: "32px",
-        height: "32px",
+        fontWeight: 600,
+        letterSpacing: "0.01em",
+        padding: "0 var(--space-4) 0 var(--space-2)",
+        height: "44px",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        flexShrink: 0,
+        opacity: 1,
+        transition: "all 200ms var(--ease)",
+        minWidth: "64px",
+        borderRadius: "6px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        boxShadow: "0 0 14px 3px rgba(212, 168, 71, 0.3), 0 2px 6px rgba(0,0,0,0.35)",
+    },
+    pillName: {
+        fontFamily: '"Playfair Display", Georgia, serif',
+    },
+    // Avatar initials badges
+    avatarActive: {
+        width: "26px",
+        height: "26px",
+        borderRadius: "50%",
+        background: "var(--color-accent-amber)",
+        color: "var(--color-bg)",
+        fontSize: "11px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        cursor: "default",
         flexShrink: 0,
-        opacity: 0.5,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
+    avatarInactive: {
+        width: "22px",
+        height: "22px",
+        borderRadius: "50%",
+        background: "color-mix(in srgb, var(--color-accent-primary) 28%, var(--color-surface))",
+        color: "var(--color-text-secondary)",
+        fontSize: "10px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
+    avatarNonDevice: {
+        width: "22px",
+        height: "22px",
+        borderRadius: "50%",
+        background: "color-mix(in srgb, var(--color-accent-amber) 22%, var(--color-surface))",
+        color: "var(--color-accent-amber)",
+        fontSize: "10px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
+    avatarNonDeviceActive: {
+        width: "26px",
+        height: "26px",
+        borderRadius: "50%",
+        background: "var(--color-accent-amber)",
+        color: "var(--color-bg)",
+        fontSize: "11px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
+    viewingBanner: {
+        textAlign: "center",
+        fontSize: "var(--text-caption)",
+        fontFamily: "var(--font-ui)",
+        color: "var(--color-accent-amber)",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        padding: "var(--space-1) var(--space-4)",
+        borderBottom: "1px solid color-mix(in srgb, var(--color-accent-amber) 20%, transparent)",
+        backgroundColor: "color-mix(in srgb, var(--color-accent-amber) 6%, transparent)",
+    },
+    pillAdd: {
+        background: "transparent",
+        border: "1.5px dashed color-mix(in srgb, var(--color-accent-primary) 55%, transparent)",
+        color: "color-mix(in srgb, var(--color-accent-primary) 70%, transparent)",
+        fontSize: "22px",
+        fontWeight: 300,
+        lineHeight: 1,
+        width: "40px",
+        height: "40px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flexShrink: 0,
+        borderRadius: "5px",
+        transition: "all 200ms var(--ease)",
     },
 
-    // Card stack
+    // AddPlayerModal
+    addPlayerSheet: {
+        backgroundColor: "var(--color-surface)",
+        clipPath:
+            "polygon(10px 0%, calc(100% - 10px) 0%, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0% calc(100% - 10px), 0% 10px)",
+        boxShadow: "inset 0 0 0 1px var(--color-border)",
+        width: "calc(100% - 2 * var(--space-5))",
+        maxWidth: "380px",
+        padding: "var(--space-6) var(--space-5) var(--space-5)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+    },
+    addPlayerTitle: {
+        fontFamily: "var(--font-display)",
+        fontSize: "var(--text-heading)",
+        fontWeight: 600,
+        color: "var(--color-text-primary)",
+        margin: 0,
+        letterSpacing: "-0.02em",
+    },
+    addPlayerHint: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-secondary)",
+        margin: 0,
+        lineHeight: 1.4,
+    },
+    addPlayerForm: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+    },
+    addPlayerInput: {
+        background: "var(--color-bg)",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        padding: "var(--space-3) var(--space-4)",
+        width: "100%",
+        outline: "none",
+        boxSizing: "border-box" as const,
+    },
+    addPlayerError: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        margin: 0,
+    },
+    addPlayerActions: {
+        display: "flex",
+        flexDirection: "row",
+        gap: "var(--space-3)",
+        marginTop: "var(--space-1)",
+    },
+    addPlayerCancel: {
+        flex: 1,
+        background: "none",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        padding: "var(--space-3)",
+        cursor: "pointer",
+        minHeight: "44px",
+    },
+    addPlayerJoin: {
+        flex: 1,
+        background: "var(--color-accent-amber)",
+        border: "none",
+        color: "var(--color-bg)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        fontWeight: 600,
+        padding: "var(--space-3)",
+        cursor: "pointer",
+        minHeight: "44px",
+        transition: "opacity 150ms var(--ease)",
+    },
+
+    // Card carousel
     contentArea: {
         padding: "var(--space-5)",
         paddingBottom: "var(--space-8)",
@@ -895,10 +1167,11 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: "column",
         gap: "var(--space-4)",
     },
-    stackOuter: {
+    carouselOuter: {
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-3)",
+        paddingBottom: "var(--space-6)",
     },
     showResolvedToggle: {
         background: "none",
@@ -910,45 +1183,6 @@ const styles: Record<string, React.CSSProperties> = {
         padding: "var(--space-1) 0",
         textAlign: "left",
         minHeight: "44px",
-    },
-    stack: {
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-    },
-
-    // Card wrapper
-    cardWrapper: {
-        cursor: "pointer",
-        position: "relative",
-    },
-    card: {
-        background: "var(--color-surface)",
-        clipPath:
-            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
-        position: "relative",
-        overflow: "hidden",
-    },
-    cardContent: {
-        padding: "var(--space-4)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-2)",
-    },
-    cardTitle: {
-        fontFamily: "var(--font-display)",
-        fontSize: "var(--text-heading)",
-        fontWeight: 600,
-        color: "var(--color-text-primary)",
-        letterSpacing: "-0.02em",
-        lineHeight: 1.2,
-        margin: 0,
-    },
-    cardPlayerChip: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        margin: 0,
     },
     cornerDiamond: {
         position: "absolute",
@@ -975,19 +1209,6 @@ const styles: Record<string, React.CSSProperties> = {
         letterSpacing: "0.15em",
         zIndex: 2,
     },
-    hiddenBadge: {
-        position: "absolute",
-        bottom: "var(--space-3)",
-        right: "var(--space-4)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        color: "var(--color-text-secondary)",
-        letterSpacing: "0.15em",
-        background: "var(--color-surface-elevated)",
-        padding: "2px var(--space-2)",
-    },
-
     // Empty state
     emptyState: {
         display: "flex",
@@ -1038,16 +1259,6 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 700,
         letterSpacing: "0.15em",
         transition: "border-color 220ms var(--ease), color 220ms var(--ease)",
-    },
-
-    // Viewing label
-    viewingLabel: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        margin: 0,
-        textAlign: "center",
-        letterSpacing: "0.05em",
     },
 
     // Error
@@ -1172,10 +1383,11 @@ const styles: Record<string, React.CSSProperties> = {
     detailWrap: {
         position: "fixed",
         inset: 0,
-        zIndex: 101,
+        zIndex: 100,
         backgroundColor: "var(--color-bg)",
         display: "flex",
         flexDirection: "column",
+        paddingBottom: "env(safe-area-inset-bottom)",
     },
     detailBack: {
         background: "none",
@@ -1184,33 +1396,18 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-subheading)",
         color: "var(--color-accent-primary)",
         cursor: "pointer",
-        padding: "var(--space-4) var(--space-5)",
-        paddingTop: "calc(var(--space-4) + env(safe-area-inset-top))",
+        padding: "calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5) var(--space-4)",
         textAlign: "left",
         minHeight: "44px",
         alignSelf: "flex-start",
     },
-    detailScroll: {
+    detailCardArea: {
         flex: 1,
-        overflowY: "auto",
-        padding: "0 var(--space-5) var(--space-5)",
         display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-    },
-    detailCard: {
-        background: "var(--color-surface)",
-        clipPath:
-            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
-        boxShadow: "inset 0 0 0 1px var(--color-border)",
-        position: "relative",
-        overflow: "hidden",
-    },
-    detailCardContent: {
-        padding: "var(--space-5)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "var(--space-3) var(--space-5)",
+        minHeight: 0,
     },
 
     // Transfer picker

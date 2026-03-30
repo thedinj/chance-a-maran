@@ -3,6 +3,7 @@ import { apiClient } from "../lib/api";
 import type { DrawEvent } from "../lib/api";
 import { useCards } from "../cards/useCards";
 import { useSession } from "../session/useSession";
+import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
 
 // ── CardBack ──────────────────────────────────────────────────────────────────
 // Static card back face. Size the container; this fills it at 412:581 aspect ratio.
@@ -29,9 +30,11 @@ interface CardFrontProps {
     event: DrawEvent;
     /** Pass true while a flip animation is in flight to animate the sheen effect. */
     flipInFlight?: boolean;
+    /** When true: disables interactive description reveal/share. Used in carousel slots. */
+    readOnly?: boolean;
 }
 
-export function CardFront({ event, flipInFlight = false }: CardFrontProps): JSX.Element {
+export function CardFront({ event, flipInFlight = false, readOnly = false }: CardFrontProps): JSX.Element {
     const cv = event.cardVersion;
     const { players, activePlayerId } = useSession();
     const { updateDrawEvent } = useCards();
@@ -43,8 +46,8 @@ export function CardFront({ event, flipInFlight = false }: CardFrontProps): JSX.
     );
     const [sharing, setSharing] = useState(false);
 
-    const showHiddenToggle = cv.hiddenDescription && !descriptionShared && isDrawer && !descrRevealed;
-    const showShareBtn = cv.hiddenDescription && !descriptionShared && isDrawer && descrRevealed;
+    const showHiddenToggle = !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && !descrRevealed;
+    const showShareBtn = !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && descrRevealed;
 
     async function handleShare() {
         setSharing(true);
@@ -58,16 +61,7 @@ export function CardFront({ event, flipInFlight = false }: CardFrontProps): JSX.
 
     return (
         <>
-            <style>{`
-                .reveal-description::-webkit-scrollbar { width: 6px; }
-                .reveal-description::-webkit-scrollbar-track { background: transparent; }
-                .reveal-description::-webkit-scrollbar-thumb {
-                    background: var(--color-accent-amber);
-                    border-radius: 3px;
-                    opacity: 0.6;
-                }
-                .reveal-description::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
-            `}</style>
+            <style>{SCROLLBAR_CSS}</style>
             <div style={styles.revealCard}>
                 <div style={styles.revealFrontFrame} />
                 <div style={styles.revealFrontTopRule} />
@@ -113,7 +107,13 @@ export function CardFront({ event, flipInFlight = false }: CardFrontProps): JSX.
                         </p>
 
                         {descrRevealed ? (
-                            <p style={styles.revealDescription} className="reveal-description">
+                            <p
+                                style={{
+                                    ...styles.revealDescription,
+                                    ...(readOnly ? styles.revealDescriptionReadOnly : undefined),
+                                }}
+                                className={readOnly ? undefined : SCROLLBAR_CLASS}
+                            >
                                 {cv.description}
                             </p>
                         ) : showHiddenToggle ? (
@@ -125,6 +125,10 @@ export function CardFront({ event, flipInFlight = false }: CardFrontProps): JSX.
                                     Tap to reveal description
                                 </span>
                             </button>
+                        ) : readOnly && cv.hiddenDescription && !descriptionShared ? (
+                            <div style={styles.hiddenDescArea}>
+                                <span style={styles.hiddenDescLabel}>HIDDEN</span>
+                            </div>
                         ) : null}
 
                         {showShareBtn && (
@@ -150,17 +154,19 @@ interface FlippingCardProps {
     event: DrawEvent;
     /** Fires once when the flip animation completes. */
     onFlipComplete?: () => void;
+    /** Override flip duration in ms — bypasses isGameChanger timing and sets delay to 0. */
+    overrideDuration?: number;
 }
 
-export function FlippingCard({ event, onFlipComplete }: FlippingCardProps): JSX.Element {
+export function FlippingCard({ event, onFlipComplete, overrideDuration }: FlippingCardProps): JSX.Element {
     const cv = event.cardVersion;
     const isGameChanger = Boolean(cv.isGameChanger);
     const prefersReducedMotion =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const flipDelayMs = prefersReducedMotion ? 0 : isGameChanger ? 1100 : 120;
-    const flipDurationMs = prefersReducedMotion ? 170 : isGameChanger ? 2400 : 1180;
+    const flipDelayMs = prefersReducedMotion ? 0 : overrideDuration != null ? 0 : isGameChanger ? 1100 : 120;
+    const flipDurationMs = prefersReducedMotion ? 170 : overrideDuration ?? (isGameChanger ? 2400 : 1180);
     const flipEasing = prefersReducedMotion
         ? "linear"
         : isGameChanger
@@ -409,6 +415,13 @@ const styles: Record<string, React.CSSProperties> = {
         WebkitOverflowScrolling: "touch",
         display: "block",
     } as React.CSSProperties & { scrollbarWidth?: string; scrollbarColor?: string },
+    revealDescriptionReadOnly: {
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical" as const,
+        WebkitLineClamp: 4,
+        paddingRight: 0,
+    } as React.CSSProperties,
     hiddenDescArea: {
         background:
             "repeating-linear-gradient(45deg, color-mix(in srgb, var(--color-border) 30%, transparent) 0px, color-mix(in srgb, var(--color-border) 30%, transparent) 1px, transparent 1px, transparent 8px)",
