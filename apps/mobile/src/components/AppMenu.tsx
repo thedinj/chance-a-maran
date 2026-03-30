@@ -49,12 +49,15 @@ export function AppMenu() {
     const playNav: NavItem[] = useMemo(
         () => [
             ...(session ? [{ label: "Return to game", path: `/game/${session.id}` }] : []),
+            ...(session && isHost
+                ? [{ label: "Game settings", path: `/game-settings/${session.id}` }]
+                : []),
             { label: "Create game", path: "/game-settings", disabled: !!session },
             { label: "Submit card", path: "/submit-card" },
             { label: "My cards", path: "/cards" },
             { label: "My games", path: "/my-games", soon: true },
         ],
-        [session]
+        [isHost, session]
     );
 
     const isActive = (path: string) =>

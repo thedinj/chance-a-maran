@@ -14,7 +14,7 @@ pnpm workspaces + Turborepo.
 root/
 ├── apps/
 │   ├── backend/        # Next.js 15 App Router — API + admin portal
-│   └── mobile/         # Ionic 8 / Capacitor 8 / React 19 / Vite 6
+│   └── mobile/         # Ionic 8 / Capacitor 8 / React 19 / Vite 6 — targets web + native equally
 ├── packages/
 │   └── core/           # Shared Zod schemas, AppError types, constants
 ├── turbo.json
@@ -90,7 +90,9 @@ Single source of truth for:
 
 **Admin portal** (`app/admin/`): Mantine UI, protected by a separate admin session (not user JWT), at `/admin`.
 
-## Mobile Architecture (`apps/mobile`)
+## Frontend Architecture (`apps/mobile`)
+
+The frontend targets **web browsers and native (iOS/Android) equally**. The web build is a first-class platform — low-friction, no install required. Native Capacitor features (secure storage, network plugin, App state events, keep-awake, QR scanner) are **optional enhancements** with web fallbacks; the app must work in a plain browser without any Capacitor plugin.
 
 **Stack:** Ionic 8, Capacitor 8, React 19, Vite 6, React Router v5, TanStack React Query.
 
@@ -115,13 +117,14 @@ Single source of truth for:
 
 **Error handling:** mutations fire directly; on failure the error is shown inline. No retry queue, no optimistic writes. `ApiClient` returns `ApiResult<T>` — never throws. `NetworkStatusBanner` shows when the Capacitor Network plugin reports offline; interactive elements are disabled until reconnected.
 
-**Session polling:** React Query `refetchInterval` — 5s foreground, 30s backgrounded (Capacitor App state events). Paused while offline; resumes on reconnect. Poll endpoint accepts `?since=<ISO>` to return only changes since last known timestamp.
+**Session polling:** React Query `refetchInterval` — 5s foreground, 30s backgrounded. Background detection uses Capacitor App state events (native) or the Page Visibility API (web). Network status uses Capacitor Network plugin (native) or `navigator.onLine` / `online`/`offline` events (web). Paused while offline; resumes on reconnect. Poll endpoint accepts `?since=<ISO>` to return only changes since last known timestamp.
 
-**Local storage:**
+**Local storage** (all storage paths are abstracted; native uses Capacitor plugins, web uses browser APIs):
 
-- Registered JWT tokens → Capacitor Secure Storage (native encrypted keychain)
-- Guest JWTs → in-memory only; not persisted
-- API URL override → Capacitor Preferences
+- Registered JWT tokens → Capacitor Secure Storage (native) / `sessionStorage` (web)
+- Guest JWTs → in-memory only; not persisted on any platform
+- Guest player tokens → Capacitor Preferences (native) / `localStorage` (web)
+- API URL override → Capacitor Preferences (native) / `localStorage` (web)
 
 **ApiClient** (`lib/api/client.ts`): singleton, 15s timeout via `AbortController`, auto-refreshes tokens on `401`/`X-Token-Status: invalid` and replays once. Returns typed `ApiResult<T>` discriminated union — never throws.
 

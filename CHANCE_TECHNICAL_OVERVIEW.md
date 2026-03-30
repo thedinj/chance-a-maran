@@ -16,7 +16,7 @@ Chance is a social party app that acts as a live companion layer on top of physi
 2. [Monorepo Structure](#2-monorepo-structure)
 3. [Shared Core Package](#3-shared-core-package)
 4. [Backend](#4-backend)
-5. [Mobile App](#5-mobile-app)
+5. [Frontend App (Web + Native)](#5-frontend-app-web--native)
 6. [API Design: Offline-First & Connection Awareness](#6-api-design-offline-first--connection-awareness)
 7. [Cross-Cutting Patterns](#7-cross-cutting-patterns)
 8. [Environment & Configuration](#8-environment--configuration)
@@ -58,10 +58,11 @@ The card pool is the heart of the app. It is seeded from a global community data
 
 ### 1.4 Platform
 
-- Android and iOS (Ionic/Capacitor)
+- **Web browser** (responsive, PWA-ready) — first-class target; no install required, lowest friction to start playing
+- **Android and iOS** (Ionic/Capacitor) — native builds via Capacitor; native APIs (secure storage, keep-awake, QR camera) are optional enhancements layered on top of the web build
 - Backend: Next.js API + admin portal (SQLite via better-sqlite3)
 - Guest and registered user modes; registered-only session hosting
-- Single-device play is the primary use case: one phone shared by the whole group, passed to the active player on each turn
+- Single-device play is the primary use case: one phone (or browser tab) shared by the whole group, passed to the active player on each turn
 
 ---
 
@@ -393,11 +394,15 @@ Card management (global pool curation, card deactivation, flag review) lives in 
 
 ---
 
-## 5. Mobile App
+## 5. Frontend App (Web + Native)
+
+The frontend targets **web browsers first** — a responsive build that works in any modern browser with no install. The same codebase is also packaged as a native Android/iOS app via Capacitor. Capacitor plugins (secure storage, network status, app state events, keep-awake, QR scanner) are **optional enhancements**: every feature must have a working web fallback when a plugin is unavailable.
 
 **Stack:** Ionic 8, Capacitor 8, React 19, Vite 6, TypeScript
 
 ### 5.1 Directory Layout
+
+The app lives in `apps/mobile/` (the directory name is historical; it targets web browsers and native equally).
 
 ```
 apps/mobile/src/
@@ -406,7 +411,7 @@ apps/mobile/src/
 ├── session/                   # SessionContext, provider, useSession hook
 ├── cards/                     # CardContext, draw logic, card display
 ├── transfers/                 # TransferContext, pending transfer handling
-├── db/                        # DatabaseContext (SQLite), React Query client
+├── db/                        # DatabaseContext (API connection config + React Query client setup)
 ├── lib/
 │   ├── api/
 │   │   ├── client.ts          # ApiClient singleton
@@ -438,9 +443,11 @@ apps/mobile/src/
 
 ### 5.2 Provider Stack
 
+`DatabaseProvider` configures the HTTP connection to the backend (API base URL, connection state) and initialises the React Query client. There is no local database or SQLite in the frontend — the backend is the sole source of truth for all data.
+
 ```
 AuthProvider
-  DatabaseProvider       (SQLite + React Query client)
+  DatabaseProvider       (API connection config + React Query client)
     SessionProvider
       CardProvider
         TransferProvider
@@ -494,7 +501,11 @@ Mutations are sent directly to the server with no local write-ahead or retry que
 
 ### 5.6 Network Awareness
 
-Online/offline state is tracked via the Capacitor Network plugin in `useNetworkStatus`. No connection probe is run.
+Online/offline state is tracked in `useNetworkStatus` with a two-layer strategy:
+- **Native (Capacitor):** Capacitor Network plugin — accurate radio-level detection
+- **Web fallback:** `navigator.onLine` value + `window` `online`/`offline` events
+
+Both paths expose the same `isOnline: boolean` interface to the rest of the app. No connection probe is run beyond this.
 
 `ApiError` fields:
 
@@ -509,10 +520,12 @@ Online/offline state is tracked via the Capacitor Network plugin in `useNetworkS
 ### 5.7 Session Polling
 
 - Active game screen polls the session endpoint every 5 seconds (driven by React Query `refetchInterval`)
-- Poll interval backs off to 30 seconds when the app is backgrounded (Capacitor App state events)
+- Poll interval backs off to 30 seconds when the app is backgrounded:
+  - **Native:** Capacitor App state events (`appStateChange`)
+  - **Web fallback:** Page Visibility API (`document.visibilitychange`, `document.hidden`)
 - Draw events become visible to all players after `REVEAL_DELAY` (default `3000ms`, constant in `core`)
 - Transfer notifications are surfaced from the polling response
-- Polls are paused while the device is offline (per `useNetworkStatus`) and resume automatically on reconnect
+- Polls are paused while the device/browser is offline (per `useNetworkStatus`) and resume automatically on reconnect
 
 ### 5.8 Card Draw Flow
 
@@ -564,13 +577,17 @@ Only registered players in an active session can submit a card. Guests draw from
 
 ### 5.12 Local Storage Strategy
 
-| Data                                           | Storage                                                                                          |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| JWT access + refresh tokens (registered users) | Capacitor Secure Storage (encrypted native keychain)                                             |
-| Guest JWTs                                     | In-memory only — ephemeral, not persisted; cleared when the session ends or the app is restarted |
-| Guest player tokens                            | Capacitor Preferences — key: `player_token_${sessionId}_${normalizedName}`, value: `{ token: string, joinedAt: ISO }` |
-| API URL override                               | Capacitor Preferences                                                                            |
+All storage APIs are abstracted behind a thin platform-detection layer so the same app code runs on both web and native.
+
+| Data                                           | Native (Capacitor)                              | Web fallback                                   |
+| ---------------------------------------------- | ----------------------------------------------- | ---------------------------------------------- |
+| JWT access + refresh tokens (registered users) | Capacitor Secure Storage (encrypted keychain)   | `sessionStorage` (cleared on tab close)        |
+| Guest JWTs                                     | In-memory only — never persisted on any platform                                                |
+| Guest player tokens                            | Capacitor Preferences (`player_token_${sessionId}_${normalizedName}`) | `localStorage` (same key scheme) |
+| API URL override                               | Capacitor Preferences                           | `localStorage`                                 |
 | Active player identity (shared-device mode)    | In-memory session state (`SessionContext`)                                                       |
+
+> **Web security note:** `sessionStorage` provides no hardware-backed encryption. Registered JWTs stored on web are cleared when the tab closes; on next visit the user will need to log in again. This is an acceptable trade-off for the zero-install web experience. Users who want persistent login should use the native app.
 
 **Player token cache eviction:** On app start, `pruneStalePlayerTokens()` (in `lib/playerTokenStore.ts`) scans all Preferences keys with the `player_token_` prefix, parses `joinedAt`, and removes entries older than `PLAYER_TOKEN_TTL_DAYS` (constant in `packages/core/src/constants/`, default `30`). This call is fire-and-forget — it does not block the boot path. The 30-day window comfortably covers active sessions (max 16-day lifetime) while preventing unbounded accumulation.
 
@@ -578,7 +595,7 @@ Only registered players in an active session can submit a card. Guests draw from
 
 Singleton `ApiClient` class:
 
-- Base URL resolved from: `VITE_API_URL` env → Capacitor Preferences override → platform defaults (Android emulator, web dev, production)
+- Base URL resolved from: `VITE_API_URL` env → Capacitor Preferences override (native) / `localStorage` override (web) → platform defaults (Android emulator, web dev, production)
 - 15-second request timeout via `AbortController`
 - On `401` with `X-Token-Status: invalid` — refreshes tokens and replays original request once
 - Returns typed `ApiResult<T>` (discriminated union of success/failure) — never throws
@@ -773,6 +790,7 @@ The concentric circles pool model limits exposure: strangers' cards never enter 
 - Inline error handling; `NetworkStatusBanner` for offline state
 - Admin portal: invitation code management, user management, basic analytics
 - Global card pool management (promote/demote/deactivate) in mobile app, admin-scoped users only
+- Web browser build (responsive, served from the Next.js backend or a static CDN)
 - Android + iOS builds via Capacitor
 
 ### 9.2 Post-MVP Considerations
