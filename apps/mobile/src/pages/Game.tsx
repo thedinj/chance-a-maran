@@ -271,16 +271,49 @@ function CardRevealOverlay({
     onShareDescription,
 }: CardRevealOverlayProps) {
     const cv = event.cardVersion;
+    const isGameChanger = Boolean(cv.isGameChanger);
     const isDrawer = event.playerId === activePlayerId;
     const [descrRevealed, setDescrRevealed] = useState(
         !cv.hiddenDescription || event.descriptionShared
     );
     const [sharing, setSharing] = useState(false);
+    const [flipStarted, setFlipStarted] = useState(false);
+    const [flipComplete, setFlipComplete] = useState(false);
+    const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const flipDelayMs = prefersReducedMotion ? 0 : isGameChanger ? 1100 : 120;
+    const flipDurationMs = prefersReducedMotion ? 170 : isGameChanger ? 2400 : 1180;
+    const flipEasing = prefersReducedMotion
+        ? "linear"
+        : isGameChanger
+          ? "cubic-bezier(0.22, 1, 0.36, 1)"
+          : "cubic-bezier(0.16, 1, 0.3, 1)";
+    const flipInFlight = flipStarted && !flipComplete;
 
     const showHiddenToggle =
         cv.hiddenDescription && !event.descriptionShared && isDrawer && !descrRevealed;
     const showShareBtn =
         cv.hiddenDescription && !event.descriptionShared && isDrawer && descrRevealed;
+
+    useEffect(() => {
+        setFlipStarted(false);
+        setFlipComplete(false);
+
+        const startTimer = window.setTimeout(() => {
+            setFlipStarted(true);
+        }, flipDelayMs);
+
+        const doneTimer = window.setTimeout(() => {
+            setFlipComplete(true);
+        }, flipDelayMs + flipDurationMs);
+
+        return () => {
+            window.clearTimeout(startTimer);
+            window.clearTimeout(doneTimer);
+        };
+    }, [event.id, flipDelayMs, flipDurationMs]);
 
     async function handleShare() {
         setSharing(true);
@@ -289,59 +322,208 @@ function CardRevealOverlay({
     }
 
     return (
-        <div style={styles.overlayBackdrop} onClick={onDismiss}>
-            <div style={styles.revealCardWrap} onClick={(e) => e.stopPropagation()}>
-                <div style={styles.revealCard}>
-                    {/* Ornaments */}
-                    <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>
-                        ◆
-                    </span>
-                    <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>
-                        ◆
-                    </span>
-                    <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>
-                        ◆
-                    </span>
-                    <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>
-                        ◆
-                    </span>
-
-                    <div style={styles.revealCardContent}>
-                        <p style={styles.revealTitle}>{cv.title}</p>
-                        <p style={styles.revealPlayerChip}>
-                            {players.find((p) => p.id === event.playerId)?.displayName ?? "Unknown"}
-                        </p>
-
-                        {/* Description area */}
-                        {descrRevealed ? (
-                            <p style={styles.revealDescription}>{cv.description}</p>
-                        ) : showHiddenToggle ? (
-                            <button
-                                style={styles.hiddenDescArea}
-                                onClick={() => setDescrRevealed(true)}
-                            >
-                                <span style={styles.hiddenDescLabel}>
-                                    Tap to reveal description
-                                </span>
-                            </button>
-                        ) : null}
-
-                        {/* Share button */}
-                        {showShareBtn && (
-                            <button
-                                style={styles.shareDescBtn}
-                                onClick={handleShare}
-                                disabled={sharing}
-                            >
-                                {sharing ? "Sharing..." : "Share with everyone"}
-                            </button>
+        <>
+            <style>{`
+                .reveal-description::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .reveal-description::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .reveal-description::-webkit-scrollbar-thumb {
+                    background: var(--color-accent-amber);
+                    border-radius: 3px;
+                    opacity: 0.6;
+                }
+                .reveal-description::-webkit-scrollbar-thumb:hover {
+                    opacity: 0.8;
+                }
+            `}</style>
+            <div style={styles.overlayBackdrop} onClick={onDismiss}>
+                <div style={styles.revealCardWrap} onClick={(e) => e.stopPropagation()}>
+                    <div style={styles.revealFlipScene}>
+                        {isGameChanger && !flipComplete && (
+                            <div style={styles.gameChangerBadge}>GAME CHANGER</div>
                         )}
-                    </div>
-                </div>
 
-                <p style={styles.revealDismissHint}>Tap outside to dismiss</p>
+                        <div
+                            style={{
+                                ...styles.revealFlipShadow,
+                                transform: flipInFlight
+                                    ? "scaleX(0.58) scaleY(0.86) translateY(2px)"
+                                    : "scaleX(0.96) scaleY(1)",
+                                opacity: flipInFlight ? 0.62 : 0.36,
+                                transition: `transform ${flipDurationMs}ms ${flipEasing}, opacity 180ms linear`,
+                            }}
+                        />
+
+                        <div
+                            style={{
+                                ...styles.revealFlipInner,
+                                transform: flipStarted
+                                    ? "rotateY(180deg) rotateX(0deg) scale(1)"
+                                    : "rotateY(0deg) rotateX(-3deg) scale(0.94)",
+                                transition: `transform ${flipDurationMs}ms ${flipEasing}`,
+                            }}
+                        >
+                            <div style={{ ...styles.revealFlipFace, ...styles.revealBackFace }}>
+                                <div style={styles.revealBackFrame} />
+                                <span
+                                    style={{
+                                        ...styles.cornerDiamond,
+                                        top: 12,
+                                        left: 12,
+                                        fontSize: 16,
+                                    }}
+                                >
+                                    ◆
+                                </span>
+                                <span
+                                    style={{
+                                        ...styles.cornerDiamond,
+                                        top: 12,
+                                        right: 12,
+                                        fontSize: 16,
+                                    }}
+                                >
+                                    ◆
+                                </span>
+                                <span
+                                    style={{
+                                        ...styles.cornerDiamond,
+                                        bottom: 12,
+                                        left: 12,
+                                        fontSize: 16,
+                                    }}
+                                >
+                                    ◆
+                                </span>
+                                <span
+                                    style={{
+                                        ...styles.cornerDiamond,
+                                        bottom: 12,
+                                        right: 12,
+                                        fontSize: 16,
+                                    }}
+                                >
+                                    ◆
+                                </span>
+                                <div style={styles.revealBackLogo}>C</div>
+                                <p style={styles.revealBackSub}>CHANCE</p>
+                            </div>
+
+                            <div style={{ ...styles.revealFlipFace, ...styles.revealFrontFace }}>
+                                <div style={styles.revealCard}>
+                                    <div style={styles.revealFrontFrame} />
+                                    <div style={styles.revealFrontTopRule} />
+                                    {/* Ornaments */}
+                                    <span
+                                        style={{
+                                            ...styles.cornerDiamond,
+                                            top: 12,
+                                            left: 12,
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        ◆
+                                    </span>
+                                    <span
+                                        style={{
+                                            ...styles.cornerDiamond,
+                                            top: 12,
+                                            right: 12,
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        ◆
+                                    </span>
+                                    <span
+                                        style={{
+                                            ...styles.cornerDiamond,
+                                            bottom: 12,
+                                            left: 12,
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        ◆
+                                    </span>
+                                    <span
+                                        style={{
+                                            ...styles.cornerDiamond,
+                                            bottom: 12,
+                                            right: 12,
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        ◆
+                                    </span>
+
+                                    <div style={styles.revealCardContent}>
+                                        <div
+                                            style={{
+                                                ...styles.revealContentSheen,
+                                                transform: flipInFlight
+                                                    ? "translateX(105%)"
+                                                    : "translateX(-86%)",
+                                                opacity: flipInFlight ? 0.38 : 0,
+                                                transition: `transform ${flipDurationMs}ms ${flipEasing}, opacity 120ms var(--ease)`,
+                                            }}
+                                        />
+
+                                        <div style={styles.revealCardContentBody}>
+                                            <div style={styles.revealImageSlot}>
+                                                <div style={styles.revealImageEmblem}>C</div>
+                                                <p style={styles.revealImageSlotLabel}>
+                                                    IMAGE SLOT
+                                                </p>
+                                            </div>
+
+                                            <p style={styles.revealHeroTitle}>{cv.title}</p>
+                                            <p style={styles.revealHeroMeta}>
+                                                {players.find((p) => p.id === cv.authoredByUserId)
+                                                    ?.displayName ?? "Unknown Author"}
+                                            </p>
+
+                                            {/* Description area */}
+                                            {descrRevealed ? (
+                                                <p
+                                                    style={styles.revealDescription}
+                                                    className="reveal-description"
+                                                >
+                                                    {cv.description}
+                                                </p>
+                                            ) : showHiddenToggle ? (
+                                                <button
+                                                    style={styles.hiddenDescArea}
+                                                    onClick={() => setDescrRevealed(true)}
+                                                >
+                                                    <span style={styles.hiddenDescLabel}>
+                                                        Tap to reveal description
+                                                    </span>
+                                                </button>
+                                            ) : null}
+
+                                            {/* Share button */}
+                                            {showShareBtn && (
+                                                <button
+                                                    style={styles.shareDescBtn}
+                                                    onClick={handleShare}
+                                                    disabled={sharing}
+                                                >
+                                                    {sharing ? "Sharing..." : "Share with everyone"}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p style={styles.revealDismissHint}>Tap outside to dismiss</p>
+                </div>
             </div>
-        </div>
+        </>
     );
 }
 
@@ -418,168 +600,206 @@ function CardDetailOverlay({
     const transferablePlayers = allPlayers.filter((p) => p.id !== event.playerId && p.active);
 
     return (
-        <div style={styles.overlayBackdrop} onClick={onDismiss}>
-            <div style={styles.detailWrap} onClick={(e) => e.stopPropagation()}>
-                {/* Back arrow */}
-                <button style={styles.detailBack} onClick={onDismiss}>
-                    ←
-                </button>
-
-                {/* Card content */}
-                <div style={styles.detailScroll}>
-                    <div style={styles.detailCard}>
-                        {/* Ornaments */}
-                        <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 14 }}>
-                            ◆
-                        </span>
-                        <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 14 }}>
-                            ◆
-                        </span>
-
-                        {event.resolved && <div style={styles.resolvedOverlay} />}
-                        {event.resolved && <div style={styles.resolvedBadge}>RESOLVED</div>}
-
-                        <div style={styles.detailCardContent}>
-                            <p style={styles.revealTitle}>{cv.title}</p>
-                            <p style={styles.revealPlayerChip}>
-                                {players.find((p) => p.id === event.playerId)?.displayName ??
-                                    "Unknown"}{" "}
-                                ◆{" "}
-                                {new Date(event.drawnAt).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                })}
-                            </p>
-
-                            {descrRevealed ? (
-                                <p style={styles.revealDescription}>{cv.description}</p>
-                            ) : showHiddenToggle ? (
-                                <button
-                                    style={styles.hiddenDescArea}
-                                    onClick={() => setDescrRevealed(true)}
-                                >
-                                    <span style={styles.hiddenDescLabel}>
-                                        Tap to reveal description
-                                    </span>
-                                </button>
-                            ) : null}
-
-                            {showShareBtn && (
-                                <button
-                                    style={styles.shareDescBtn}
-                                    onClick={handleShare}
-                                    disabled={sharing}
-                                >
-                                    {sharing ? "Sharing..." : "Share with everyone"}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Transfer player picker */}
-                    {showTransferPicker && (
-                        <div style={styles.transferPicker}>
-                            <p style={styles.transferPickerLabel}>TRANSFER TO</p>
-                            {transferablePlayers.map((p) => (
-                                <button
-                                    key={p.id}
-                                    style={styles.transferPlayerBtn}
-                                    onClick={() => handleTransfer(p.id)}
-                                >
-                                    {p.displayName}
-                                </button>
-                            ))}
-                            <button
-                                style={styles.transferCancelBtn}
-                                onClick={() => setShowTransferPicker(false)}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Action bar */}
-                <div style={styles.actionBar}>
-                    {/* Vote */}
-                    <button
-                        style={styles.actionBtn}
-                        onClick={() => handleVote(voteDir === "up" ? "down" : "up")}
-                    >
-                        <span
-                            style={{
-                                ...styles.actionIcon,
-                                color:
-                                    voteDir === "up"
-                                        ? "var(--color-accent-amber)"
-                                        : voteDir === "down"
-                                          ? "var(--color-danger)"
-                                          : "var(--color-text-secondary)",
-                            }}
-                        >
-                            {voteDir === "down" ? "↓" : "↑"}
-                        </span>
-                        <span style={styles.actionLabel}>{voteDir === "down" ? "Down" : "Up"}</span>
+        <>
+            <style>{`
+                .reveal-description::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .reveal-description::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .reveal-description::-webkit-scrollbar-thumb {
+                    background: var(--color-accent-amber);
+                    border-radius: 3px;
+                    opacity: 0.6;
+                }
+                .reveal-description::-webkit-scrollbar-thumb:hover {
+                    opacity: 0.8;
+                }
+            `}</style>
+            <div style={styles.overlayBackdrop} onClick={onDismiss}>
+                <div style={styles.detailWrap} onClick={(e) => e.stopPropagation()}>
+                    {/* Back arrow */}
+                    <button style={styles.detailBack} onClick={onDismiss}>
+                        ←
                     </button>
 
-                    {/* Resolve */}
-                    {!event.resolved && (
+                    {/* Card content */}
+                    <div style={styles.detailScroll}>
+                        <div style={styles.detailCard}>
+                            {/* Ornaments */}
+                            <span
+                                style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 14 }}
+                            >
+                                ◆
+                            </span>
+                            <span
+                                style={{
+                                    ...styles.cornerDiamond,
+                                    top: 12,
+                                    right: 12,
+                                    fontSize: 14,
+                                }}
+                            >
+                                ◆
+                            </span>
+
+                            {event.resolved && <div style={styles.resolvedOverlay} />}
+                            {event.resolved && <div style={styles.resolvedBadge}>RESOLVED</div>}
+
+                            <div style={styles.detailCardContent}>
+                                <p style={styles.revealTitle}>{cv.title}</p>
+                                <p style={styles.revealPlayerChip}>
+                                    {players.find((p) => p.id === event.playerId)?.displayName ??
+                                        "Unknown"}{" "}
+                                    ◆{" "}
+                                    {new Date(event.drawnAt).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    })}
+                                </p>
+
+                                {descrRevealed ? (
+                                    <p
+                                        style={styles.revealDescription}
+                                        className="reveal-description"
+                                    >
+                                        {cv.description}
+                                    </p>
+                                ) : showHiddenToggle ? (
+                                    <button
+                                        style={styles.hiddenDescArea}
+                                        onClick={() => setDescrRevealed(true)}
+                                    >
+                                        <span style={styles.hiddenDescLabel}>
+                                            Tap to reveal description
+                                        </span>
+                                    </button>
+                                ) : null}
+
+                                {showShareBtn && (
+                                    <button
+                                        style={styles.shareDescBtn}
+                                        onClick={handleShare}
+                                        disabled={sharing}
+                                    >
+                                        {sharing ? "Sharing..." : "Share with everyone"}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Transfer player picker */}
+                        {showTransferPicker && (
+                            <div style={styles.transferPicker}>
+                                <p style={styles.transferPickerLabel}>TRANSFER TO</p>
+                                {transferablePlayers.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        style={styles.transferPlayerBtn}
+                                        onClick={() => handleTransfer(p.id)}
+                                    >
+                                        {p.displayName}
+                                    </button>
+                                ))}
+                                <button
+                                    style={styles.transferCancelBtn}
+                                    onClick={() => setShowTransferPicker(false)}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Action bar */}
+                    <div style={styles.actionBar}>
+                        {/* Vote */}
                         <button
                             style={styles.actionBtn}
-                            onClick={handleResolve}
-                            disabled={resolveRequested}
+                            onClick={() => handleVote(voteDir === "up" ? "down" : "up")}
                         >
                             <span
                                 style={{
                                     ...styles.actionIcon,
-                                    color: resolveRequested
-                                        ? "var(--color-success)"
-                                        : "var(--color-text-secondary)",
+                                    color:
+                                        voteDir === "up"
+                                            ? "var(--color-accent-amber)"
+                                            : voteDir === "down"
+                                              ? "var(--color-danger)"
+                                              : "var(--color-text-secondary)",
                                 }}
                             >
-                                ✓
+                                {voteDir === "down" ? "↓" : "↑"}
                             </span>
                             <span style={styles.actionLabel}>
-                                {resolveRequested ? "Requested" : "Resolve"}
+                                {voteDir === "down" ? "Down" : "Up"}
                             </span>
                         </button>
-                    )}
 
-                    {/* Transfer */}
-                    {!transferDone && (
-                        <button
-                            style={styles.actionBtn}
-                            onClick={() => setShowTransferPicker((v) => !v)}
-                        >
-                            <span
-                                style={{
-                                    ...styles.actionIcon,
-                                    color: "var(--color-text-secondary)",
-                                }}
+                        {/* Resolve */}
+                        {!event.resolved && (
+                            <button
+                                style={styles.actionBtn}
+                                onClick={handleResolve}
+                                disabled={resolveRequested}
                             >
-                                ⇄
-                            </span>
-                            <span style={styles.actionLabel}>Transfer</span>
-                        </button>
-                    )}
+                                <span
+                                    style={{
+                                        ...styles.actionIcon,
+                                        color: resolveRequested
+                                            ? "var(--color-success)"
+                                            : "var(--color-text-secondary)",
+                                    }}
+                                >
+                                    ✓
+                                </span>
+                                <span style={styles.actionLabel}>
+                                    {resolveRequested ? "Requested" : "Resolve"}
+                                </span>
+                            </button>
+                        )}
 
-                    {/* Share desc */}
-                    {showShareBtn && (
-                        <button style={styles.actionBtn} onClick={handleShare} disabled={sharing}>
-                            <span
-                                style={{
-                                    ...styles.actionIcon,
-                                    color: "var(--color-text-secondary)",
-                                }}
+                        {/* Transfer */}
+                        {!transferDone && (
+                            <button
+                                style={styles.actionBtn}
+                                onClick={() => setShowTransferPicker((v) => !v)}
                             >
-                                ↗
-                            </span>
-                            <span style={styles.actionLabel}>Share desc</span>
-                        </button>
-                    )}
+                                <span
+                                    style={{
+                                        ...styles.actionIcon,
+                                        color: "var(--color-text-secondary)",
+                                    }}
+                                >
+                                    ⇄
+                                </span>
+                                <span style={styles.actionLabel}>Transfer</span>
+                            </button>
+                        )}
+
+                        {/* Share desc */}
+                        {showShareBtn && (
+                            <button
+                                style={styles.actionBtn}
+                                onClick={handleShare}
+                                disabled={sharing}
+                            >
+                                <span
+                                    style={{
+                                        ...styles.actionIcon,
+                                        color: "var(--color-text-secondary)",
+                                    }}
+                                >
+                                    ↗
+                                </span>
+                                <span style={styles.actionLabel}>Share desc</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
@@ -827,7 +1047,7 @@ const styles: Record<string, React.CSSProperties> = {
         "--border-color": "var(--color-border)",
         "--padding-start": "0",
         "--padding-end": "0",
-    },
+    } as React.CSSProperties,
     headerInner: {
         display: "flex",
         alignItems: "center",
@@ -838,7 +1058,7 @@ const styles: Record<string, React.CSSProperties> = {
     menuButton: {
         color: "var(--color-text-secondary)",
         "--color": "var(--color-text-secondary)",
-    },
+    } as React.CSSProperties,
     sessionName: {
         fontFamily: "var(--font-display)",
         fontSize: "var(--text-heading)",
@@ -1128,24 +1348,212 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
         gap: "var(--space-4)",
         width: "100%",
-        maxWidth: "360px",
+        maxWidth: "430px",
         animation: "cardDeal 380ms var(--ease) forwards",
+    },
+    revealFlipScene: {
+        width: "100%",
+        perspective: "920px",
+        position: "relative",
+        isolation: "isolate",
+    },
+    revealFlipInner: {
+        width: "100%",
+        display: "grid",
+        transformStyle: "preserve-3d",
+        transformOrigin: "50% 50%",
+        transform: "rotateY(0deg) rotateX(0deg) translateZ(0px)",
+        willChange: "transform",
+        position: "relative",
+        zIndex: 1,
+    },
+    revealFlipShadow: {
+        position: "absolute",
+        left: "6%",
+        width: "88%",
+        bottom: "-14px",
+        height: "36px",
+        borderRadius: "50%",
+        background: "color-mix(in srgb, var(--color-bg) 90%, transparent)",
+        filter: "blur(9px)",
+        opacity: 0.44,
+        transformOrigin: "50% 50%",
+        zIndex: 0,
+        pointerEvents: "none",
+    },
+    revealFlipFace: {
+        gridArea: "1 / 1",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+    },
+    revealBackFace: {
+        transform: "rotateY(0deg)",
+        backgroundImage: "url(/img/card.png)",
+        backgroundSize: "contain",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "transparent",
+        aspectRatio: "412 / 581",
+        clipPath:
+            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
+        boxShadow:
+            "inset 0 0 0 1px var(--color-border), 0 24px 52px -26px color-mix(in srgb, var(--color-accent-amber) 48%, transparent)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "var(--space-2)",
+        position: "relative",
+    },
+    revealFrontFace: {
+        transform: "rotateY(180deg)",
     },
     revealCard: {
         background: "var(--color-surface)",
         clipPath:
             "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
         boxShadow:
-            "inset 0 0 0 1px var(--color-border), 0 0 32px 4px color-mix(in srgb, var(--color-accent-primary) 30%, transparent)",
-        width: "100%",
+            "inset 0 0 0 1px var(--color-border), 0 24px 58px -24px color-mix(in srgb, var(--color-accent-amber) 52%, transparent)",
+        aspectRatio: "412 / 581",
         position: "relative",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+    },
+    revealBackFrame: {
+        position: "absolute",
+        inset: "14px",
+        border: "1px solid color-mix(in srgb, var(--color-accent-amber) 52%, transparent)",
+        clipPath:
+            "polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0% calc(100% - 6px), 0% 6px)",
+        pointerEvents: "none",
+    },
+    revealFrontFrame: {
+        position: "absolute",
+        inset: "12px",
+        border: "1px solid color-mix(in srgb, var(--color-accent-amber) 44%, transparent)",
+        clipPath:
+            "polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0% calc(100% - 6px), 0% 6px)",
+        pointerEvents: "none",
+        zIndex: 1,
+    },
+    revealFrontTopRule: {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        width: "100%",
+        height: "4px",
+        background:
+            "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-amber) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-amber) 45%, transparent) 100%)",
+        zIndex: 1,
+    },
+    revealBackLogo: {
+        display: "none",
+    },
+    revealBackSub: {
+        display: "none",
+    },
+    gameChangerBadge: {
+        position: "absolute",
+        top: "calc(var(--space-3) * -1)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 3,
+        background: "var(--color-accent-amber)",
+        color: "var(--color-bg)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 700,
+        letterSpacing: "0.2em",
+        padding: "6px var(--space-3)",
+        boxShadow: "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
+        animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
     },
     revealCardContent: {
-        padding: "var(--space-6)",
+        padding: "calc(var(--space-6) + var(--space-1))",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-4)",
+        position: "relative",
+        zIndex: 2,
+        overflow: "hidden",
+        flex: 1,
+        minHeight: 0,
+        clipPath:
+            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
+    },
+    revealCardContentBody: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-4)",
+        position: "relative",
+        zIndex: 1,
+        minHeight: 0,
+        flex: 1,
+    },
+    revealContentSheen: {
+        position: "absolute",
+        inset: "1px",
+        zIndex: 0,
+        pointerEvents: "none",
+        background:
+            "linear-gradient(102deg, transparent 0%, transparent 36%, color-mix(in srgb, var(--color-text-primary) 42%, transparent) 47%, color-mix(in srgb, var(--color-text-primary) 28%, transparent) 54%, transparent 64%, transparent 100%)",
+        opacity: 0,
+    },
+    revealImageSlot: {
+        width: "100%",
+        aspectRatio: "16 / 9",
+        border: "1px solid color-mix(in srgb, var(--color-accent-amber) 38%, transparent)",
+        background:
+            "linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 90%, var(--color-accent-amber) 10%) 0%, color-mix(in srgb, var(--color-surface) 94%, var(--color-accent-primary) 6%) 100%)",
+        boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent)",
+        clipPath:
+            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "var(--space-2)",
+        overflow: "hidden",
+    },
+    revealImageEmblem: {
+        fontFamily: "var(--font-display)",
+        fontSize: "clamp(44px, 12vw, 62px)",
+        fontWeight: 700,
+        lineHeight: 1,
+        letterSpacing: "-0.02em",
+        color: "color-mix(in srgb, var(--color-accent-amber) 78%, var(--color-text-primary) 22%)",
+        textShadow: "0 6px 18px color-mix(in srgb, var(--color-accent-amber) 40%, transparent)",
+    },
+    revealImageSlotLabel: {
+        margin: 0,
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 600,
+        letterSpacing: "0.18em",
+        color: "var(--color-text-secondary)",
+    },
+    revealHeroTitle: {
+        fontFamily: "var(--font-display)",
+        fontSize: "clamp(34px, 9vw, 46px)",
+        fontWeight: 700,
+        color: "var(--color-text-primary)",
+        letterSpacing: "-0.025em",
+        lineHeight: 1.06,
+        margin: 0,
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical" as const,
+        WebkitLineClamp: 2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    } as React.CSSProperties,
+    revealHeroMeta: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 600,
+        color: "color-mix(in srgb, var(--color-text-secondary) 90%, var(--color-accent-amber) 10%)",
+        margin: 0,
+        letterSpacing: "0.16em",
     },
     revealTitle: {
         fontFamily: "var(--font-display)",
@@ -1155,7 +1563,12 @@ const styles: Record<string, React.CSSProperties> = {
         letterSpacing: "-0.02em",
         lineHeight: 1.2,
         margin: 0,
-    },
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical" as const,
+        WebkitLineClamp: 2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    } as React.CSSProperties,
     revealPlayerChip: {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
@@ -1168,6 +1581,16 @@ const styles: Record<string, React.CSSProperties> = {
         color: "var(--color-text-primary)",
         lineHeight: 1.5,
         margin: 0,
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto",
+        paddingRight: "8px",
+        scrollBehavior: "smooth",
+        WebkitOverflowScrolling: "touch",
+        display: "block",
+    } as React.CSSProperties & {
+        scrollbarWidth?: string;
+        scrollbarColor?: string;
     },
     hiddenDescArea: {
         background:

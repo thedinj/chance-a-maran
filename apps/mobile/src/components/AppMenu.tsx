@@ -9,9 +9,11 @@ import {
     IonMenuToggle,
     IonToolbar,
 } from "@ionic/react";
-import React, { useMemo, useTransition } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useMemo, useState, useTransition } from "react";
+import { useLocation, useHistory } from "react-router-dom";
+import { AppDialog } from "./AppDialog";
 import { useAuth } from "../auth/useAuth";
+import { apiClient } from "../lib/api";
 import { useSession } from "../session/useSession";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
@@ -36,9 +38,13 @@ const UTILITY_NAV: NavItem[] = [{ label: "Settings", path: "/settings" }];
 
 export function AppMenu() {
     const { user, isGuest, logout } = useAuth();
-    const { session, clearSession } = useSession();
+    const { session, localPlayer, clearSession } = useSession();
     const { pathname } = useLocation();
+    const history = useHistory();
     const [isPending, startTransition] = useTransition();
+
+    const isHost = !!(session && localPlayer && localPlayer.id === session.hostPlayerId);
+    const [dialog, setDialog] = useState<"leave" | "end" | null>(null);
 
     const playNav: NavItem[] = useMemo(
         () => [
@@ -58,6 +64,26 @@ export function AppMenu() {
         startTransition(async () => {
             await logout();
             clearSession();
+        });
+    }
+
+    function handleLeaveGame() {
+        if (!session || !localPlayer) return;
+        startTransition(async () => {
+            await apiClient.leaveSession(session.id, localPlayer.id);
+            setDialog(null);
+            clearSession();
+            history.replace("/");
+        });
+    }
+
+    function handleEndGame() {
+        if (!session) return;
+        startTransition(async () => {
+            await apiClient.endSession(session.id);
+            setDialog(null);
+            clearSession();
+            history.replace("/");
         });
     }
 
@@ -92,6 +118,32 @@ export function AppMenu() {
                                 <NavRow item={item} active={isActive(item.path)} />
                             </IonMenuToggle>
                         ))}
+                        {session && !isHost && (
+                            <IonMenuToggle autoHide={false}>
+                                <IonItem
+                                    button
+                                    detail={false}
+                                    onClick={() => setDialog("leave")}
+                                    disabled={isPending}
+                                    style={styles.item}
+                                >
+                                    <IonLabel style={styles.itemLabelDanger}>Leave game</IonLabel>
+                                </IonItem>
+                            </IonMenuToggle>
+                        )}
+                        {session && isHost && (
+                            <IonMenuToggle autoHide={false}>
+                                <IonItem
+                                    button
+                                    detail={false}
+                                    onClick={() => setDialog("end")}
+                                    disabled={isPending}
+                                    style={styles.item}
+                                >
+                                    <IonLabel style={styles.itemLabelDanger}>End game</IonLabel>
+                                </IonItem>
+                            </IonMenuToggle>
+                        )}
                     </IonList>
                 )}
 
@@ -156,6 +208,32 @@ export function AppMenu() {
                 {/* ── Account indicator ───────────────────────────────────── */}
                 {user && <p style={styles.accountName}>{user.displayName}</p>}
             </IonContent>
+
+            {/* ── Confirmation dialogs (rendered outside IonContent to overlay menu) */}
+            {dialog === "leave" && (
+                <AppDialog
+                    title="Leave game?"
+                    message="You'll be removed from the session. You can rejoin with the invite code."
+                    accent="danger"
+                    onDismiss={() => setDialog(null)}
+                    buttons={[
+                        { label: "Cancel", variant: "ghost", onClick: () => setDialog(null) },
+                        { label: "Leave", variant: "danger", isPending, onClick: handleLeaveGame },
+                    ]}
+                />
+            )}
+            {dialog === "end" && (
+                <AppDialog
+                    title="End game?"
+                    message="The session will be closed for everyone. This can't be undone."
+                    accent="danger"
+                    onDismiss={() => setDialog(null)}
+                    buttons={[
+                        { label: "Cancel", variant: "ghost", onClick: () => setDialog(null) },
+                        { label: "End game", variant: "danger", isPending, onClick: handleEndGame },
+                    ]}
+                />
+            )}
         </IonMenu>
     );
 }
@@ -238,6 +316,11 @@ const styles: Record<string, React.CSSProperties> = {
     },
     itemLabelAccent: {
         color: "var(--color-accent-amber)",
+    },
+    itemLabelDanger: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-subheading)",
+        color: "var(--color-danger)",
     },
     soonBadge: {
         fontFamily: "var(--font-ui)",
