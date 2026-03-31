@@ -85,6 +85,12 @@ export const JoinByCodeRequestSchema = z.object({
      * Present on same-device rejoin; absent on first join or different device.
      */
     playerToken: z.string().optional(),
+    /**
+     * Registered players may specify their card-sharing preference at join time.
+     * Ignored for guest players (whose cardSharing is always null).
+     * Defaults to "network" on the server when absent.
+     */
+    cardSharing: z.enum(["none", "mine", "network"]).optional(),
 });
 export type JoinByCodeRequest = z.infer<typeof JoinByCodeRequestSchema>;
 

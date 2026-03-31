@@ -8,6 +8,20 @@ import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
 
+// ─── Card sharing copy ────────────────────────────────────────────────────────
+
+const SHARING_LABELS: Record<"none" | "mine" | "network", string> = {
+    network: "My network",
+    mine: "My cards",
+    none: "None",
+};
+
+const SHARING_DESCRIPTIONS: Record<"none" | "mine" | "network", string> = {
+    network: "Your cards + cards from players in your recent sessions",
+    mine: "Your own library cards only",
+    none: "Don't contribute cards to this session",
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Step = "code" | "name";
@@ -36,6 +50,7 @@ export default function Join() {
     const [code, setCode] = useState(urlCode?.toUpperCase() ?? "");
     // Pre-fill from registered user's display name — they can edit it if they want
     const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+    const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">("network");
     const [error, setError] = useState<string | null>(null);
     const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -94,6 +109,7 @@ export default function Join() {
                 joinCode: code,
                 displayName: trimmedName,
                 playerToken: savedToken,
+                ...(user ? { cardSharing } : {}),
             });
 
             if (!joinResult.ok) {
@@ -169,10 +185,13 @@ export default function Join() {
                             error={error}
                         />
                     ) : (
-                        <NameStep
+                        <JoinDetailsStep
                             code={code}
                             displayName={displayName}
                             onDisplayNameChange={setDisplayName}
+                            isRegistered={!!user}
+                            cardSharing={cardSharing}
+                            onCardSharingChange={setCardSharing}
                             onJoin={handleJoin}
                             onChangeCode={handleChangeCode}
                             onSignIn={handleSignIn}
@@ -236,12 +255,15 @@ function CodeStep({ code, onCodeChange, onContinue, error }: CodeStepProps) {
     );
 }
 
-// ─── NameStep ─────────────────────────────────────────────────────────────────
+// ─── JoinDetailsStep ──────────────────────────────────────────────────────────
 
-interface NameStepProps {
+interface JoinDetailsStepProps {
     code: string;
     displayName: string;
     onDisplayNameChange(value: string): void;
+    isRegistered: boolean;
+    cardSharing: "none" | "mine" | "network";
+    onCardSharingChange(value: "none" | "mine" | "network"): void;
     onJoin(): void;
     onChangeCode(): void;
     onSignIn(): void;
@@ -251,10 +273,13 @@ interface NameStepProps {
     nameInputRef: React.RefObject<HTMLIonInputElement | null>;
 }
 
-function NameStep({
+function JoinDetailsStep({
     code,
     displayName,
     onDisplayNameChange,
+    isRegistered,
+    cardSharing,
+    onCardSharingChange,
     onJoin,
     onChangeCode,
     onSignIn,
@@ -262,7 +287,7 @@ function NameStep({
     errorKind,
     isPending,
     nameInputRef,
-}: NameStepProps) {
+}: JoinDetailsStepProps) {
     const canJoin = displayName.trim().length > 0 && !isPending;
 
     return (
@@ -293,6 +318,41 @@ function NameStep({
                     autocapitalize="words"
                     autocomplete="nickname"
                 />
+
+                {isRegistered && (
+                    <div style={styles.sharingSection}>
+                        <p style={styles.sharingSectionLabel}>YOUR CARDS</p>
+                        <p style={styles.sharingHint}>How much of your library enters the draw pool.</p>
+                        <div style={styles.radioStack}>
+                            {(["network", "mine", "none"] as const).map((level) => (
+                                <button
+                                    key={level}
+                                    style={
+                                        (cardSharing === level
+                                            ? styles.radioRowSelected
+                                            : styles.radioRow) as React.CSSProperties
+                                    }
+                                    onClick={() => onCardSharingChange(level)}
+                                    disabled={isPending}
+                                >
+                                    <div
+                                        style={
+                                            cardSharing === level
+                                                ? styles.radioDotActive
+                                                : styles.radioDot
+                                        }
+                                    />
+                                    <div>
+                                        <div style={styles.radioLabel}>{SHARING_LABELS[level]}</div>
+                                        <div style={styles.radioSub}>
+                                            {SHARING_DESCRIPTIONS[level]}
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {error && (
                     <div style={styles.errorBlock}>
@@ -482,6 +542,94 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-label)",
         marginTop: "var(--space-2)",
     } as React.CSSProperties,
+
+    // ── Card sharing section ───────────────────────────────────────────────────
+
+    sharingSection: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+        paddingTop: "var(--space-2)",
+        borderTop: "1px solid var(--color-border)",
+    },
+    sharingSectionLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        color: "var(--color-text-secondary)",
+        letterSpacing: "0.15em",
+        margin: 0,
+    },
+    sharingHint: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        margin: 0,
+        lineHeight: 1.5,
+    },
+    radioStack: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+    },
+    radioRow: {
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "var(--space-3)",
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+        padding: "var(--space-4)",
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        boxSizing: "border-box",
+    },
+    radioRowSelected: {
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "var(--space-3)",
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-primary)",
+        padding: "var(--space-4)",
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        boxSizing: "border-box",
+    },
+    radioDot: {
+        width: "16px",
+        height: "16px",
+        border: "1.5px solid var(--color-border)",
+        borderRadius: "50%",
+        flexShrink: 0,
+        marginTop: "2px",
+        boxSizing: "border-box",
+        background: "none",
+    },
+    radioDotActive: {
+        width: "16px",
+        height: "16px",
+        border: "1.5px solid var(--color-accent-primary)",
+        borderRadius: "50%",
+        flexShrink: 0,
+        marginTop: "2px",
+        boxSizing: "border-box",
+        background: "var(--color-accent-primary)",
+        boxShadow: "inset 0 0 0 3px var(--color-surface)",
+    },
+    radioLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        fontWeight: 500,
+        color: "var(--color-text-primary)",
+        marginBottom: "var(--space-1)",
+    },
+    radioSub: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        lineHeight: 1.5,
+    },
 
     // ── Error block ────────────────────────────────────────────────────────────
 

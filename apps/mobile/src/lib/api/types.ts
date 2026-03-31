@@ -36,6 +36,7 @@ export type {
 
 import type {
     User,
+    Player,
     FilterSettings,
     Session,
     Card,
@@ -144,6 +145,16 @@ export interface ApiClient {
      * Rejected if the target player has a linked account (userId is set).
      */
     resetPlayerToken(sessionId: string, playerId: string): Promise<ApiResult<void>>;
+
+    /**
+     * Non-host player settings update. Patch object grows as new per-player
+     * settings are introduced. cardSharing is only valid for registered players.
+     */
+    updatePlayerSettings(
+        sessionId: string,
+        playerId: string,
+        patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" }
+    ): Promise<ApiResult<Player>>;
 
     // ── User management ──────────────────────────────────────────────────────
     /** Update the current user's display name and/or email. Returns the updated User. */

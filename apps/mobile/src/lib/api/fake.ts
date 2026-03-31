@@ -355,8 +355,9 @@ export class FakeApiClient implements ApiClient {
             // Name match — registered players require account auth, not name entry
             if (existing.userId !== null) {
                 if (state.currentUser?.id === existing.userId) {
-                    // Same registered user rejoining — allow
+                    // Same registered user rejoining — allow; apply updated cardSharing if provided
                     existing.active = true;
+                    if (req.cardSharing) existing.cardSharing = req.cardSharing;
                     return ok({
                         session,
                         player: existing,
@@ -410,7 +411,7 @@ export class FakeApiClient implements ApiClient {
             displayName: req.displayName.trim(),
             userId: state.currentUser?.id ?? null,
             active: true,
-            cardSharing: isRegistered ? "network" : null,
+            cardSharing: req.cardSharing ?? (isRegistered ? "network" : null),
         };
         state.players.get(session.id)!.push(player);
 
@@ -639,6 +640,21 @@ export class FakeApiClient implements ApiClient {
     }
 
     // ── Player management ─────────────────────────────────────────────────────
+
+    async updatePlayerSettings(
+        sessionId: string,
+        playerId: string,
+        patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" }
+    ): Promise<ApiResult<Player>> {
+        const players = state.players.get(sessionId) ?? [];
+        const player = players.find((p) => p.id === playerId);
+        if (!player) return fail("NOT_FOUND_ERROR", "Player not found.");
+        if (patch.cardSharing !== undefined && player.userId === null) {
+            return fail("AUTHORIZATION_ERROR", "Guests cannot set card sharing.");
+        }
+        Object.assign(player, patch);
+        return ok({ ...player });
+    }
 
     async resetPlayerToken(sessionId: string, playerId: string): Promise<ApiResult<void>> {
         const players = state.players.get(sessionId) ?? [];

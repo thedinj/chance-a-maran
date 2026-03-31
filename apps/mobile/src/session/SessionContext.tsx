@@ -50,6 +50,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setSessionData((prev) => (prev ? { ...prev, filterSettings: settings } : null));
     }, []);
 
+    const updateLocalPlayer = useCallback(
+        (playerId: string, patch: Partial<Pick<Player, "displayName" | "cardSharing">>) => {
+            setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, ...patch } : p)));
+            setLocalPlayer((prev) => (prev?.id === playerId ? { ...prev, ...patch } : prev));
+        },
+        []
+    );
+
     return (
         <SessionContext.Provider
             value={{
@@ -65,6 +73,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 setActivePlayer,
                 clearSession,
                 updateFilters,
+                updateLocalPlayer,
             }}
         >
             {children}

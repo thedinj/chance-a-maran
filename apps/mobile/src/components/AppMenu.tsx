@@ -54,6 +54,9 @@ export function AppMenu() {
             ...(session && isHost
                 ? [{ label: "Game settings", path: `/game-settings/${session.id}` }]
                 : []),
+            ...(session && !isHost
+                ? [{ label: "My game options", path: `/game-options/${session.id}` }]
+                : []),
             { label: "Create game", path: "/game-settings", disabled: !!session },
             { label: "Submit card", path: "/submit-card", disabled: !user },
             { label: "My cards", path: "/cards", disabled: !user },

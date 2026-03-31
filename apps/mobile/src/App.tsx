@@ -44,6 +44,7 @@ const About = React.lazy(() => import("./pages/About"));
 const InviteRequest = React.lazy(() => import("./pages/InviteRequest"));
 const SubmitCard = React.lazy(() => import("./pages/SubmitCard"));
 const MyCards = React.lazy(() => import("./pages/MyCards"));
+const PlayerGameOptions = React.lazy(() => import("./pages/PlayerGameOptions"));
 
 setupIonicReact();
 
@@ -110,6 +111,13 @@ export default function App() {
                                             <Route exact path="/game-settings/:sessionId">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <GameSettings />
+                                                </Suspense>
+                                            </Route>
+
+                                            {/* Non-host player options (display name, card sharing) */}
+                                            <Route exact path="/game-options/:sessionId">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <PlayerGameOptions />
                                                 </Suspense>
                                             </Route>
 

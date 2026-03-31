@@ -14,6 +14,7 @@ import type {
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
+    Player,
     RegisterRequest,
     Session,
     SessionState,
@@ -187,6 +188,14 @@ export class RealApiClient implements ApiClient {
         return this.request<void>("PATCH", `/api/sessions/${sessionId}/players/${playerId}`, {
             resetToken: true,
         });
+    }
+
+    updatePlayerSettings(
+        sessionId: string,
+        playerId: string,
+        patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" }
+    ) {
+        return this.request<Player>("PATCH", `/api/sessions/${sessionId}/players/${playerId}`, patch);
     }
 
     // ── User management ───────────────────────────────────────────────────────
