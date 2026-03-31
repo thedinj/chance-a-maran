@@ -3,6 +3,7 @@ import type {
     ApiClient,
     ApiResult,
     ApiSuccess,
+    AppConfig,
     AuthResponse,
     Card,
     CardTransfer,
@@ -238,6 +239,12 @@ const state: FakeState = {
 // ─── FakeApiClient ────────────────────────────────────────────────────────────
 
 export class FakeApiClient implements ApiClient {
+    // ── App config ────────────────────────────────────────────────────────────
+
+    async getAppConfig(): Promise<ApiResult<AppConfig>> {
+        return ok({ inviteCodeRequired: true });
+    }
+
     // ── Auth ──────────────────────────────────────────────────────────────────
 
     async login(req: LoginRequest): Promise<ApiResult<AuthResponse>> {

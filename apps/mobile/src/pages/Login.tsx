@@ -17,7 +17,7 @@ export default function Login() {
     return (
         <IonPage>
             <AppHeader />
-            <IonContent scrollY={false}>
+            <IonContent>
                 <div style={styles.root}>
                     <div style={styles.header}>
                         <h1 style={styles.title}>Sign in</h1>
@@ -31,15 +31,13 @@ export default function Login() {
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
         backgroundColor: "var(--color-bg)",
         padding: "var(--space-5)",
         paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
     },
     header: {
-        flex: 1,
+        paddingTop: "var(--space-16)",
+        paddingBottom: "var(--space-8)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

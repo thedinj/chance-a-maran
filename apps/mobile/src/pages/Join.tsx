@@ -159,7 +159,7 @@ export default function Join() {
     return (
         <IonPage>
             <AppHeader />
-            <IonContent scrollY={false}>
+            <IonContent>
                 <div style={styles.root}>
                     {step === "code" ? (
                         <CodeStep
@@ -370,9 +370,6 @@ function errorKindFor(code: string): ErrorKind {
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
         backgroundColor: "var(--color-bg)",
         padding: "var(--space-5)",
         paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
@@ -381,11 +378,11 @@ const styles: Record<string, React.CSSProperties> = {
     // ── Header area ────────────────────────────────────────────────────────────
 
     headerArea: {
-        flex: 1,
+        paddingTop: "var(--space-12)",
+        paddingBottom: "var(--space-8)",
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
-        justifyContent: "center",
         gap: "var(--space-2)",
     },
     heading: {

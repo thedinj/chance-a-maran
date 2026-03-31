@@ -5,3 +5,7 @@
  */
 
 /* Reduced motion handled per-element in Home.tsx via useReducedMotion() */
+
+.join-code-input::placeholder {
+    color: var(--color-text-secondary);
+}

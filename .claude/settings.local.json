@@ -9,7 +9,9 @@
       "Bash(pnpm install:*)",
       "Bash(pnpm --filter mobile build)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(pnpm --filter mobile exec tsc --noEmit)",
+      "Bash(ls:*)"
     ]
   }
 }

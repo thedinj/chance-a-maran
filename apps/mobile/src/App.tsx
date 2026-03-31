@@ -19,6 +19,9 @@ import "./theme/variables.css";
 // Provider stack — order matters (each provider may consume a parent)
 import { AppHeaderProvider } from "./AppHeaderContext";
 import { AuthProvider } from "./auth/AuthContext";
+import { apiClient } from "./lib/api";
+import { queryClient } from "./lib/queryClient";
+import { APP_CONFIG_QUERY_KEY } from "./hooks/useAppConfig";
 import { CardProvider } from "./cards/CardContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AppMenu } from "./components/AppMenu";
@@ -43,6 +46,16 @@ const SubmitCard = React.lazy(() => import("./pages/SubmitCard"));
 const MyCards = React.lazy(() => import("./pages/MyCards"));
 
 setupIonicReact();
+
+// Eagerly warm the app config so it's ready before any page that needs it renders.
+queryClient.prefetchQuery({
+    queryKey: APP_CONFIG_QUERY_KEY,
+    queryFn: async () => {
+        const result = await apiClient.getAppConfig();
+        if (!result.ok) throw new Error(result.error.message);
+        return result.data;
+    },
+});
 
 export default function App() {
     return (

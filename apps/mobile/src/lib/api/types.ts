@@ -57,6 +57,10 @@ import type {
 
 // ─── Local types ─────────────────────────────────────────────────────────────
 
+export interface AppConfig {
+    inviteCodeRequired: boolean;
+}
+
 export interface GetAllCardsFilters {
     search?: string;
     active?: boolean;
@@ -66,6 +70,10 @@ export interface GetAllCardsFilters {
 // ─── ApiClient interface ─────────────────────────────────────────────────────
 
 export interface ApiClient {
+    // ── App config ───────────────────────────────────────────────────────────
+    /** Public endpoint — no auth required. Returns server-side app configuration. */
+    getAppConfig(): Promise<ApiResult<AppConfig>>;
+
     // ── Auth ────────────────────────────────────────────────────────────────
     login(req: LoginRequest): Promise<ApiResult<AuthResponse>>;
     register(req: RegisterRequest): Promise<ApiResult<AuthResponse>>;

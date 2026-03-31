@@ -63,7 +63,7 @@
 | Area                                    | Status | Notes                |
 | --------------------------------------- | ------ | -------------------- |
 | Login page (`/login`)                   | ✅     |                      |
-| Register page (`/register`)             | ⬜     | Stub — "coming soon" |
+| Register page (`/register`)             | ✅     |                      |
 | Invite request page (`/invite-request`) | ⬜     | Stub — "coming soon" |
 | About / What is Chance page (`/about`)  | ⬜     | Stub — "coming soon" |
 
@@ -89,17 +89,17 @@
 
 ### Game screen (`/game/:sessionId`)
 
-| Area                                               | Status | Notes                                                    |
-| -------------------------------------------------- | ------ | -------------------------------------------------------- |
-| Game page shell                                    | ✅     |                                                          |
-| Persistent player switcher                         | ✅     |                                                          |
-| Draw button (idle glow, tap flash, disabled state) | ✅     |                                                          |
-| Full-screen card reveal overlay                    | ✅     |                                                          |
-| Hidden description toggle / Share description      | ✅     |                                                          |
-| Game Changer dramatic intro sequence               | ✅     | Badge + delayed slow flip implemented; audio cue pending |
-| Join code / QR share (in-game)                     | ✅     | Join code only — QR deferred                             |
+| Area                                               | Status | Notes                                                      |
+| -------------------------------------------------- | ------ | ---------------------------------------------------------- |
+| Game page shell                                    | ✅     |                                                            |
+| Persistent player switcher                         | ✅     |                                                            |
+| Draw button (idle glow, tap flash, disabled state) | ✅     |                                                            |
+| Full-screen card reveal overlay                    | ✅     |                                                            |
+| Hidden description toggle / Share description      | ✅     |                                                            |
+| Game Changer dramatic intro sequence               | ✅     | Badge + delayed slow flip implemented; audio cue pending   |
+| Join code / QR share (in-game)                     | ✅     | Join code only — QR deferred                               |
 | Add player to device modal                         | ✅     | joinByCode flow; playerToken saved; switches active player |
-| Background sync indicator (draw loading state)     | ⬜     |                                                          |
+| Background sync indicator (draw loading state)     | ⬜     |                                                            |
 
 ### Card submission
 
@@ -134,8 +134,8 @@
 
 | Area                                | Status | Notes                 |
 | ----------------------------------- | ------ | --------------------- |
-| My Cards page                       | ⬜     | Marked "soon" in menu |
-| My cards tab (own submissions)      | ⬜     |                       |
+| My Cards page                       | ✅     | Marked "soon" in menu |
+| My cards tab (own submissions)      | ✅     |                       |
 | All cards tab (admin only)          | ⬜     |                       |
 | Card detail — editable view         | ⬜     |                       |
 | Version history (read-only)         | ⬜     |                       |

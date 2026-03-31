@@ -1,6 +1,7 @@
 import type {
     ApiClient,
     ApiResult,
+    AppConfig,
     AuthResponse,
     Card,
     CardTransfer,
@@ -74,6 +75,12 @@ export class RealApiClient implements ApiClient {
         } finally {
             clearTimeout(timeout);
         }
+    }
+
+    // ── App config ────────────────────────────────────────────────────────────
+
+    getAppConfig() {
+        return this.request<AppConfig>("GET", "/api/config");
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────────

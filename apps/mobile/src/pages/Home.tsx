@@ -1,4 +1,4 @@
-import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
+import { IonButton, IonContent, IonPage, IonSpinner } from "@ionic/react";
 import { motion, useReducedMotion } from "motion/react";
 import React, { useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
@@ -198,44 +198,37 @@ export default function Home() {
                             </div>
                         )}
 
-                        <div style={styles.joinRow}>
-                            <IonInput
-                                style={styles.codeInput}
-                                placeholder="Enter code"
-                                value={joinCode}
-                                onIonInput={(e) => setJoinCode(String(e.detail.value ?? ""))}
-                                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                                maxlength={8}
-                                autocapitalize="characters"
-                                autocomplete="off"
-                                disabled={!!session}
-                            />
-                            {/*
-                             * Join button subtly halos amber when a code is entered —
-                             * a quiet signal that the button is ready.
-                             */}
-                            <motion.div
-                                style={{ flexShrink: 0 }}
-                                whileTap={{ scale: 0.95 }}
-                                transition={TAP_SPRING}
-                                animate={
-                                    hasCode && !session
-                                        ? {
-                                              boxShadow:
-                                                  "0 0 0 1px rgba(212,168,71,0.5), 0 0 16px rgba(212,168,71,0.22)",
-                                          }
-                                        : { boxShadow: "0 0 0 0px rgba(212,168,71,0)" }
-                                }
-                            >
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleJoin();
+                            }}
+                        >
+                            <div style={styles.joinRow}>
+                                <input
+                                    className="join-code-input"
+                                    style={styles.codeInput}
+                                    placeholder="Enter code"
+                                    value={joinCode}
+                                    onChange={(e) => setJoinCode(e.target.value)}
+                                    maxLength={8}
+                                    autoCapitalize="characters"
+                                    autoComplete="off"
+                                    disabled={!!session}
+                                />
+                                {/*
+                                 * Join button subtly halos amber when a code is entered —
+                                 * a quiet signal that the button is ready.
+                                 */}
                                 <IonButton
+                                    type="submit"
                                     style={styles.joinButton}
-                                    onClick={handleJoin}
                                     disabled={!hasCode || !!session || isPending}
                                 >
                                     Join
                                 </IonButton>
-                            </motion.div>
-                        </div>
+                            </div>
+                        </form>
 
                         {joinError && <p style={styles.error}>{joinError}</p>}
                         {session && (
@@ -283,8 +276,8 @@ const styles: Record<string, React.CSSProperties> = {
     root: {
         display: "flex",
         flexDirection: "column",
-        height: "100%",
-        position: "relative",
+        position: "absolute",
+        inset: 0,
         overflow: "hidden",
         backgroundColor: "var(--color-bg)",
     },
@@ -416,15 +409,16 @@ const styles: Record<string, React.CSSProperties> = {
     },
     codeInput: {
         flex: 1,
-        "--background": "rgba(22, 24, 36, 0.85)",
-        "--color": "var(--color-text-primary)",
-        "--placeholder-color": "var(--color-text-secondary)",
-        "--padding-start": "var(--space-4)",
-        "--padding-end": "var(--space-4)",
+        background: "rgba(22, 24, 36, 0.85)",
+        color: "var(--color-text-primary)",
+        padding: "0 var(--space-4)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-body)",
         border: "1px solid var(--color-border)",
-    } as React.CSSProperties,
+        outline: "none",
+        height: "44px",
+        minWidth: 0,
+    },
     joinButton: {
         "--background": "rgba(22, 24, 36, 0.85)",
         "--border-color": "var(--color-border)",

@@ -780,6 +780,10 @@ function ClaimAccountModal({ onClose }: ClaimAccountModalProps) {
     );
 }
 
+// Tracks which session IDs have already auto-shown the join code so navigation
+// away and back does not trigger it again.
+const joinCodeShownSessions = new Set<string>();
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Game() {
@@ -837,16 +841,15 @@ export default function Game() {
         }
     }, [session, history]);
 
-    // Auto-show join code for host on first load
-    const joinCodeShownRef = useRef(false);
+    // Auto-show join code for host only the first time they enter this session
     useEffect(() => {
         if (
             session &&
             localPlayer?.id === session.hostPlayerId &&
             drawHistory.length === 0 &&
-            !joinCodeShownRef.current
+            !joinCodeShownSessions.has(session.id)
         ) {
-            joinCodeShownRef.current = true;
+            joinCodeShownSessions.add(session.id);
             setShowJoinCode(true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
