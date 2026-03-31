@@ -17,6 +17,8 @@ export interface SessionContextValue {
     initSession(state: SessionState, myPlayerId: string): void;
     /** Called when a secondary guest player is added via the player switcher. */
     addDevicePlayer(playerId: string): void;
+    /** Called when a device player is fully removed (no draw history). Does not affect players who left with cards. */
+    removeDevicePlayer(playerId: string): void;
     /** Called from session polling — updates state without resetting device player identity. */
     setSession(state: SessionState): void;
     setActivePlayer(playerId: string): void;

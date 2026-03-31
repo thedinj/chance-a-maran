@@ -185,7 +185,7 @@ const DEMO_SESSION: Session = {
     id: DEMO_SESSION_ID,
     hostPlayerId: DEMO_HOST_PLAYER.id,
     name: "Game Night",
-    joinCode: "AB23CD",
+    joinCode: "DEMO",
     filterSettings: {
         ageAppropriate: true,
         drinking: true,

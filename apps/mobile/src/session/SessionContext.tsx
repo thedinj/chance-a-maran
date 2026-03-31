@@ -21,6 +21,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setDevicePlayerIds((prev) => (prev.includes(playerId) ? prev : [...prev, playerId]));
     }, []);
 
+    const removeDevicePlayer = useCallback((playerId: string) => {
+        setDevicePlayerIds((prev) => prev.filter((id) => id !== playerId));
+    }, []);
+
     const setSession = useCallback((state: SessionState) => {
         setSessionData(state.session);
         setPlayers(state.players);
@@ -56,6 +60,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 localPlayer,
                 initSession,
                 addDevicePlayer,
+                removeDevicePlayer,
                 setSession,
                 setActivePlayer,
                 clearSession,

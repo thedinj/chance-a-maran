@@ -15,6 +15,7 @@ import { AppDialog } from "./AppDialog";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
 import { useSession } from "../session/useSession";
+import { useExitSession } from "../session/useExitSession";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,8 @@ const UTILITY_NAV: NavItem[] = [{ label: "Settings", path: "/settings" }];
 
 export function AppMenu() {
     const { user, isGuest, logout } = useAuth();
-    const { session, localPlayer, clearSession } = useSession();
+    const { session, players, devicePlayerIds, localPlayer } = useSession();
+    const exitSession = useExitSession();
     const { pathname } = useLocation();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
@@ -53,11 +55,11 @@ export function AppMenu() {
                 ? [{ label: "Game settings", path: `/game-settings/${session.id}` }]
                 : []),
             { label: "Create game", path: "/game-settings", disabled: !!session },
-            { label: "Submit card", path: "/submit-card" },
-            { label: "My cards", path: "/cards" },
+            { label: "Submit card", path: "/submit-card", disabled: !user },
+            { label: "My cards", path: "/cards", disabled: !user },
             { label: "My games", path: "/my-games", soon: true },
         ],
-        [isHost, session]
+        [isHost, session, user]
     );
 
     const isActive = (path: string) =>
@@ -66,16 +68,24 @@ export function AppMenu() {
     function handleSignOut() {
         startTransition(async () => {
             await logout();
-            clearSession();
+            exitSession();
         });
     }
 
     function handleLeaveGame() {
-        if (!session || !localPlayer) return;
+        if (!session || devicePlayerIds.length === 0) return;
         startTransition(async () => {
-            await apiClient.leaveSession(session.id, localPlayer.id);
+            const activeDevicePlayerIds = players
+                .filter((player) => devicePlayerIds.includes(player.id) && player.active)
+                .map((player) => player.id);
+
+            for (const playerId of activeDevicePlayerIds) {
+                const result = await apiClient.leaveSession(session.id, playerId);
+                if (!result.ok) return;
+            }
+
             setDialog(null);
-            clearSession();
+            exitSession();
             history.replace("/");
         });
     }
@@ -85,7 +95,7 @@ export function AppMenu() {
         startTransition(async () => {
             await apiClient.endSession(session.id);
             setDialog(null);
-            clearSession();
+            exitSession();
             history.replace("/");
         });
     }
@@ -113,42 +123,40 @@ export function AppMenu() {
                 </IonList>
 
                 {/* ── Play — registered users only ────────────────────────── */}
-                {user && (
-                    <IonList lines="none" style={styles.list}>
-                        <IonListHeader style={styles.sectionLabel}>Play</IonListHeader>
-                        {playNav.map((item) => (
-                            <IonMenuToggle key={item.path} autoHide={false}>
-                                <NavRow item={item} active={isActive(item.path)} />
-                            </IonMenuToggle>
-                        ))}
-                        {session && !isHost && (
-                            <IonMenuToggle autoHide={false}>
-                                <IonItem
-                                    button
-                                    detail={false}
-                                    onClick={() => setDialog("leave")}
-                                    disabled={isPending}
-                                    style={styles.item}
-                                >
-                                    <IonLabel style={styles.itemLabelDanger}>Leave game</IonLabel>
-                                </IonItem>
-                            </IonMenuToggle>
-                        )}
-                        {session && isHost && (
-                            <IonMenuToggle autoHide={false}>
-                                <IonItem
-                                    button
-                                    detail={false}
-                                    onClick={() => setDialog("end")}
-                                    disabled={isPending}
-                                    style={styles.item}
-                                >
-                                    <IonLabel style={styles.itemLabelDanger}>End game</IonLabel>
-                                </IonItem>
-                            </IonMenuToggle>
-                        )}
-                    </IonList>
-                )}
+                <IonList lines="none" style={styles.list}>
+                    <IonListHeader style={styles.sectionLabel}>Play</IonListHeader>
+                    {playNav.map((item) => (
+                        <IonMenuToggle key={item.path} autoHide={false}>
+                            <NavRow item={item} active={isActive(item.path)} />
+                        </IonMenuToggle>
+                    ))}
+                    {session && !isHost && (
+                        <IonMenuToggle autoHide={false}>
+                            <IonItem
+                                button
+                                detail={false}
+                                onClick={() => setDialog("leave")}
+                                disabled={isPending}
+                                style={styles.item}
+                            >
+                                <IonLabel style={styles.itemLabelDanger}>Leave game</IonLabel>
+                            </IonItem>
+                        </IonMenuToggle>
+                    )}
+                    {session && isHost && (
+                        <IonMenuToggle autoHide={false}>
+                            <IonItem
+                                button
+                                detail={false}
+                                onClick={() => setDialog("end")}
+                                disabled={isPending}
+                                style={styles.item}
+                            >
+                                <IonLabel style={styles.itemLabelDanger}>End game</IonLabel>
+                            </IonItem>
+                        </IonMenuToggle>
+                    )}
+                </IonList>
 
                 {/* ── Discover — new users who don't have an account yet ───── */}
                 {!user && !isGuest && (
@@ -164,14 +172,17 @@ export function AppMenu() {
 
                 {/* ── Utility ─────────────────────────────────────────────── */}
                 <IonList lines="none" style={styles.list}>
-                    <IonListHeader style={styles.sectionLabel}>Account</IonListHeader>
                     {user && (
-                        <IonMenuToggle autoHide={false}>
-                            <NavRow
-                                item={UTILITY_NAV[0]!}
-                                active={isActive(UTILITY_NAV[0]!.path)}
-                            />
-                        </IonMenuToggle>
+                        <>
+                            <IonListHeader style={styles.sectionLabel}>Account</IonListHeader>
+
+                            <IonMenuToggle autoHide={false}>
+                                <NavRow
+                                    item={UTILITY_NAV[0]!}
+                                    active={isActive(UTILITY_NAV[0]!.path)}
+                                />
+                            </IonMenuToggle>
+                        </>
                     )}
 
                     {/* Auth-conditional rows */}
@@ -216,7 +227,7 @@ export function AppMenu() {
             {dialog === "leave" && (
                 <AppDialog
                     title="Leave game?"
-                    message="You'll be removed from the session. You can rejoin with the invite code."
+                    message="All players on this device will be marked as left. You can rejoin with the invite code."
                     accent="danger"
                     onDismiss={() => setDialog(null)}
                     buttons={[

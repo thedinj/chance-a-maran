@@ -1,8 +1,18 @@
-import { IonContent, IonFooter, IonHeader, IonMenuButton, IonPage, IonToolbar } from "@ionic/react";
+import {
+    IonActionSheet,
+    IonContent,
+    IonFooter,
+    IonHeader,
+    IonMenuButton,
+    IonPage,
+    IonToolbar,
+} from "@ionic/react";
 import { Carousel } from "@mantine/carousel";
-import React, { useEffect, useRef, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
+import { useAuth } from "../auth/useAuth";
 import { useCards } from "../cards/useCards";
+import { LoginForm } from "../components/LoginForm";
 import type { DrawEvent, Player, Session } from "../lib/api";
 import { apiClient } from "../lib/api";
 import { hapticLight, hapticMedium } from "../lib/haptics";
@@ -10,6 +20,7 @@ import { playerTokenStore } from "../lib/playerTokenStore";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS, SCROLLBAR_FIREFOX_STYLES } from "../lib/scrollbars";
 import { useSession } from "../session/useSession";
 import { CardFront, FlippingCard } from "../components/GameCard";
+import { useExitSession } from "../session/useExitSession";
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +41,87 @@ function getInitials(name: string): string {
     return name.trim()[0]!.toUpperCase();
 }
 
+function suppressContextMenu(event: React.MouseEvent<HTMLElement>) {
+    event.preventDefault();
+}
+
+function useLongPress(onLongPress: () => void, ms = 520) {
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const didLongPress = useRef(false);
+
+    const cancel = () => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = null;
+        }
+    };
+
+    return {
+        didLongPress,
+        onPointerDown: () => {
+            cancel();
+            didLongPress.current = false;
+            timer.current = setTimeout(() => {
+                didLongPress.current = true;
+                onLongPress();
+            }, ms);
+        },
+        onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+            cancel();
+            if (didLongPress.current) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        },
+        onPointerLeave: cancel,
+        onPointerCancel: cancel,
+    };
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+interface DevicePlayerPillProps {
+    player: Player;
+    isActive: boolean;
+    isHost: boolean;
+    onSwitch: (id: string) => void;
+    onLongPress: (player: Player) => void;
+}
+
+function DevicePlayerPill({
+    player,
+    isActive,
+    isHost,
+    onSwitch,
+    onLongPress,
+}: DevicePlayerPillProps) {
+    const longPress = useLongPress(() => onLongPress(player));
+    return (
+        <button
+            style={isActive ? styles.pillActive : styles.pillInactive}
+            className={isActive ? undefined : "pill-inactive"}
+            onContextMenuCapture={suppressContextMenu}
+            onContextMenu={suppressContextMenu}
+            onClick={(event) => {
+                if (longPress.didLongPress.current) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    longPress.didLongPress.current = false;
+                    return;
+                }
+                hapticLight();
+                onSwitch(player.id);
+            }}
+            aria-pressed={isActive}
+            {...(isHost ? {} : longPress)}
+        >
+            <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
+                {getInitials(player.displayName)}
+            </span>
+            <span style={styles.pillName}>{player.displayName}</span>
+        </button>
+    );
+}
 
 interface GameHeaderProps {
     sessionName: string;
@@ -38,8 +129,10 @@ interface GameHeaderProps {
     players: Player[];
     devicePlayerIds: string[];
     activePlayerId: string | null;
+    hostPlayerId: string;
     onSwitchPlayer: (playerId: string) => void;
     onAddPlayer: () => void;
+    onLongPressPlayer: (player: Player) => void;
 }
 
 function GameHeader({
@@ -48,10 +141,13 @@ function GameHeader({
     players,
     devicePlayerIds,
     activePlayerId,
+    hostPlayerId,
     onSwitchPlayer,
     onAddPlayer,
+    onLongPressPlayer,
 }: GameHeaderProps) {
-    const devicePlayers = players.filter((p) => devicePlayerIds.includes(p.id));
+    const activeDevicePlayers = players.filter((p) => devicePlayerIds.includes(p.id) && p.active);
+    const leftDevicePlayers = players.filter((p) => devicePlayerIds.includes(p.id) && !p.active);
 
     return (
         <>
@@ -72,7 +168,10 @@ function GameHeader({
                     opacity: 0.9 !important;
                     border-style: solid !important;
                 }
-                .pill-inactive:active, .pill-non-device:active {
+                .pill-left:not(:disabled):hover {
+                    opacity: 0.65 !important;
+                }
+                .pill-inactive:active, .pill-non-device:active, .pill-left:active {
                     transform: scale(0.94) !important;
                 }
                 .pill-add:active {
@@ -99,21 +198,56 @@ function GameHeader({
                         style={{ ...styles.switcherStrip, ...SCROLLBAR_FIREFOX_STYLES }}
                         className={SCROLLBAR_CLASS}
                     >
-                        {/* Device players (local to this device) */}
-                        {devicePlayers.map((p) => {
+                        {/* Active device players */}
+                        {activeDevicePlayers.map((p) => (
+                            <DevicePlayerPill
+                                key={p.id}
+                                player={p}
+                                isActive={p.id === activePlayerId}
+                                isHost={p.id === hostPlayerId}
+                                onSwitch={onSwitchPlayer}
+                                onLongPress={onLongPressPlayer}
+                            />
+                        ))}
+
+                        {/* Add player button — hidden at 4 active device players */}
+                        {activeDevicePlayers.length < 4 && (
+                            <button
+                                style={styles.pillAdd}
+                                className="pill-add"
+                                onContextMenuCapture={suppressContextMenu}
+                                onContextMenu={suppressContextMenu}
+                                onClick={() => {
+                                    hapticLight();
+                                    onAddPlayer();
+                                }}
+                                aria-label="Add player to this device"
+                            >
+                                +
+                            </button>
+                        )}
+
+                        {/* Left device players (inactive, still viewable) */}
+                        {leftDevicePlayers.map((p) => {
                             const isActive = p.id === activePlayerId;
                             return (
                                 <button
                                     key={p.id}
-                                    style={isActive ? styles.pillActive : styles.pillInactive}
-                                    className={isActive ? undefined : "pill-inactive"}
+                                    style={isActive ? styles.pillLeftActive : styles.pillLeft}
+                                    className={isActive ? undefined : "pill-left"}
+                                    onContextMenuCapture={suppressContextMenu}
+                                    onContextMenu={suppressContextMenu}
                                     onClick={() => {
                                         hapticLight();
                                         onSwitchPlayer(p.id);
                                     }}
                                     aria-pressed={isActive}
                                 >
-                                    <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
+                                    <span
+                                        style={
+                                            isActive ? styles.avatarLeftActive : styles.avatarLeft
+                                        }
+                                    >
                                         {getInitials(p.displayName)}
                                     </span>
                                     <span style={styles.pillName}>{p.displayName}</span>
@@ -121,36 +255,35 @@ function GameHeader({
                             );
                         })}
 
-                        {/* Add player button */}
-                        <button
-                            style={styles.pillAdd}
-                            className="pill-add"
-                            onClick={() => {
-                                hapticLight();
-                                onAddPlayer();
-                            }}
-                            aria-label="Add player to this device"
-                        >
-                            +
-                        </button>
-
                         {/* Non-device players (on other phones) */}
                         {players
-                            .filter((p) => !devicePlayerIds.includes(p.id))
+                            .filter((p) => !devicePlayerIds.includes(p.id) && p.active)
                             .map((p) => {
                                 const isActive = p.id === activePlayerId;
                                 return (
                                     <button
                                         key={p.id}
-                                        style={isActive ? styles.pillNonDeviceActive : styles.pillNonDevice}
+                                        style={
+                                            isActive
+                                                ? styles.pillNonDeviceActive
+                                                : styles.pillNonDevice
+                                        }
                                         className={isActive ? undefined : "pill-non-device"}
+                                        onContextMenuCapture={suppressContextMenu}
+                                        onContextMenu={suppressContextMenu}
                                         onClick={() => {
                                             hapticLight();
                                             onSwitchPlayer(p.id);
                                         }}
                                         aria-pressed={isActive}
                                     >
-                                        <span style={isActive ? styles.avatarNonDeviceActive : styles.avatarNonDevice}>
+                                        <span
+                                            style={
+                                                isActive
+                                                    ? styles.avatarNonDeviceActive
+                                                    : styles.avatarNonDevice
+                                            }
+                                        >
                                             {getInitials(p.displayName)}
                                         </span>
                                         <span style={styles.pillName}>{p.displayName}</span>
@@ -159,16 +292,18 @@ function GameHeader({
                             })}
                     </div>
                 </div>
-                {/* Viewing banner — shown when active player is on another device */}
+                {/* Viewing banner — shown when viewing a left or non-device player */}
                 {(() => {
-                    const viewingPlayer = !devicePlayerIds.includes(activePlayerId ?? "")
-                        ? players.find((p) => p.id === activePlayerId)
-                        : null;
-                    return viewingPlayer ? (
+                    const viewed = players.find((p) => p.id === activePlayerId);
+                    if (!viewed) return null;
+                    const isRemote = !devicePlayerIds.includes(viewed.id);
+                    const isLeft = devicePlayerIds.includes(viewed.id) && !viewed.active;
+                    if (!isRemote && !isLeft) return null;
+                    return (
                         <div style={styles.viewingBanner}>
-                            Viewing {viewingPlayer.displayName}'s hand
+                            Viewing {viewed.displayName}'s hand{isLeft ? " · left" : ""}
                         </div>
-                    ) : null;
+                    );
                 })()}
             </IonHeader>
         </>
@@ -480,22 +615,20 @@ function CardDetailOverlay({
     const transferablePlayers = allPlayers.filter((p) => p.id !== event.playerId && p.active);
 
     return (
-        <div style={styles.detailWrap}>
-            {/* Back arrow */}
-            <button style={styles.detailBack} onClick={onDismiss}>
-                ←
-            </button>
-
+        <div style={styles.detailWrap} onClick={onDismiss}>
             {/* Card with fast flip */}
             <div style={styles.detailCardArea}>
-                <div style={{ maxWidth: "430px", width: "100%" }}>
+                <div
+                    style={{ maxWidth: "430px", width: "100%" }}
+                    onClick={(e) => e.stopPropagation()}
+                >
                     <FlippingCard event={event} overrideDuration={480} />
                 </div>
             </div>
 
             {/* Transfer player picker */}
             {showTransferPicker && (
-                <div style={styles.transferPicker}>
+                <div style={styles.transferPicker} onClick={(e) => e.stopPropagation()}>
                     <p style={styles.transferPickerLabel}>TRANSFER TO</p>
                     {transferablePlayers.map((p) => (
                         <button
@@ -516,7 +649,7 @@ function CardDetailOverlay({
             )}
 
             {/* Action bar */}
-            <div style={styles.actionBar}>
+            <div style={styles.actionBar} onClick={(e) => e.stopPropagation()}>
                 {/* Vote */}
                 <button
                     style={styles.actionBtn}
@@ -626,10 +759,32 @@ function JoinCodeModal({ joinCode, onDismiss }: JoinCodeModalProps) {
     );
 }
 
+// ── ClaimAccountModal ────────────────────────────────────────────────────────
+
+interface ClaimAccountModalProps {
+    onClose: () => void;
+}
+
+function ClaimAccountModal({ onClose }: ClaimAccountModalProps) {
+    return (
+        <div style={styles.overlayBackdrop} onClick={onClose}>
+            <div style={styles.addPlayerSheet} onClick={(e) => e.stopPropagation()}>
+                <p style={styles.addPlayerTitle}>Log in to link your account</p>
+                <p style={styles.addPlayerHint}>
+                    Sign in to attach your player to a registered account. Your draws and votes will
+                    be preserved.
+                </p>
+                <LoginForm onSuccess={onClose} onCancel={onClose} showNudge={false} />
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Game() {
     const history = useHistory();
+    const exitSession = useExitSession();
     const {
         session,
         players,
@@ -638,6 +793,7 @@ export default function Game() {
         localPlayer,
         setActivePlayer,
         addDevicePlayer,
+        removeDevicePlayer,
         setSession,
     } = useSession();
     const { drawHistory, addDrawEvent, updateDrawEvent } = useCards();
@@ -646,9 +802,33 @@ export default function Game() {
     const [revealCard, setRevealCard] = useState<DrawEvent | null>(null);
     const [showJoinCode, setShowJoinCode] = useState(false);
     const [showAddPlayer, setShowAddPlayer] = useState(false);
+    const [showClaim, setShowClaim] = useState(false);
     const [showResolved, setShowResolved] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [drawPending, startDrawTransition] = useTransition();
+    const [actionSheetTarget, setActionSheetTarget] = useState<Player | null>(null);
+    const { isGuest, accessToken } = useAuth();
+
+    useEffect(() => {
+        if (!actionSheetTarget) return;
+
+        const suppressActionSheetContextMenu = (event: Event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const isActionSheetTarget =
+                target.closest("ion-action-sheet") !== null ||
+                target.closest("ion-backdrop") !== null;
+            if (!isActionSheetTarget) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        document.addEventListener("contextmenu", suppressActionSheetContextMenu, true);
+        return () => {
+            document.removeEventListener("contextmenu", suppressActionSheetContextMenu, true);
+        };
+    }, [actionSheetTarget]);
 
     // Redirect if no session
     useEffect(() => {
@@ -688,22 +868,40 @@ export default function Game() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.id]);
 
-    // Active player derivation
-    const isActivePlayerOnDevice = devicePlayerIds.includes(activePlayerId ?? "");
+    // Active player derivation — true only if the active player is on this device AND still active (not left)
+    const isActivePlayerOnDevice = useMemo(() => {
+        if (!activePlayerId) return false;
+        if (!devicePlayerIds.includes(activePlayerId)) return false;
+        return players.find((p) => p.id === activePlayerId)?.active ?? false;
+    }, [activePlayerId, devicePlayerIds, players]);
 
     // Card stack derivation
-    const playerCards = drawHistory.filter((e) => e.playerId === activePlayerId);
-    const activeCards = playerCards
-        .filter((e) => !e.resolved)
-        .sort((a, b) => new Date(b.drawnAt).getTime() - new Date(a.drawnAt).getTime());
-    const resolvedCards = playerCards
-        .filter((e) => e.resolved)
-        .sort((a, b) => new Date(b.drawnAt).getTime() - new Date(a.drawnAt).getTime());
-    const displayCards = showResolved ? [...activeCards, ...resolvedCards] : activeCards;
+    const playerCards = useMemo(
+        () => drawHistory.filter((event) => event.playerId === activePlayerId),
+        [activePlayerId, drawHistory]
+    );
+    const activeCards = useMemo(
+        () =>
+            playerCards
+                .filter((event) => !event.resolved)
+                .sort((a, b) => new Date(b.drawnAt).getTime() - new Date(a.drawnAt).getTime()),
+        [playerCards]
+    );
+    const resolvedCards = useMemo(
+        () =>
+            playerCards
+                .filter((event) => event.resolved)
+                .sort((a, b) => new Date(b.drawnAt).getTime() - new Date(a.drawnAt).getTime()),
+        [playerCards]
+    );
+    const displayCards = useMemo(
+        () => (showResolved ? [...activeCards, ...resolvedCards] : activeCards),
+        [activeCards, resolvedCards, showResolved]
+    );
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function handleDraw() {
+    const handleDraw = useCallback(() => {
         if (!session || !activePlayerId) return;
         setError(null);
         hapticMedium();
@@ -716,28 +914,83 @@ export default function Game() {
             addDrawEvent(result.data);
             setRevealCard(result.data);
         });
-    }
+    }, [activePlayerId, addDrawEvent, session, startDrawTransition]);
 
-    async function handleVote(cardId: string, direction: "up" | "down") {
+    const handleVote = useCallback(async (cardId: string, direction: "up" | "down") => {
         await apiClient.voteCard(cardId, direction);
-    }
+    }, []);
 
-    async function handleResolve(drawEventId: string) {
-        const result = await apiClient.resolveCard(drawEventId);
-        if (result.ok) updateDrawEvent(result.data);
-    }
+    const handleResolve = useCallback(
+        async (drawEventId: string) => {
+            const result = await apiClient.resolveCard(drawEventId);
+            if (result.ok) updateDrawEvent(result.data);
+        },
+        [updateDrawEvent]
+    );
 
-    async function handleTransfer(drawEventId: string, toPlayerId: string) {
+    const handleTransfer = useCallback(async (drawEventId: string, toPlayerId: string) => {
         await apiClient.createTransfer(drawEventId, toPlayerId);
-    }
+    }, []);
 
-    async function handleShareDescription(drawEventId: string) {
-        const result = await apiClient.shareDescription(drawEventId);
-        if (result.ok) {
-            updateDrawEvent(result.data);
-            if (selectedCard?.id === drawEventId) setSelectedCard(result.data);
+    const handleShareDescription = useCallback(
+        async (drawEventId: string) => {
+            const result = await apiClient.shareDescription(drawEventId);
+            if (result.ok) {
+                updateDrawEvent(result.data);
+                if (selectedCard?.id === drawEventId) setSelectedCard(result.data);
+            }
+        },
+        [selectedCard, updateDrawEvent]
+    );
+
+    const handleLeaveOrRemove = useCallback(async () => {
+        if (!actionSheetTarget || !session) return;
+        const hasCards = drawHistory.some((e) => e.playerId === actionSheetTarget.id);
+        await apiClient.leaveSession(session.id, actionSheetTarget.id);
+        if (!hasCards) removeDevicePlayer(actionSheetTarget.id);
+        const remainingDeviceIds = hasCards
+            ? devicePlayerIds
+            : devicePlayerIds.filter((id) => id !== actionSheetTarget.id);
+        let nextPlayers = players;
+        const updated = await apiClient.getSessionState(session.id);
+        if (updated.ok) {
+            nextPlayers = updated.data.players;
+            const hasRemainingActive = updated.data.players.some(
+                (p) => remainingDeviceIds.includes(p.id) && p.active
+            );
+            if (!hasRemainingActive) {
+                exitSession();
+                history.replace("/");
+                return;
+            }
+            setSession(updated.data);
         }
-    }
+        if (activePlayerId === actionSheetTarget.id) {
+            const nextId =
+                nextPlayers.find(
+                    (p) =>
+                        remainingDeviceIds.includes(p.id) &&
+                        p.id !== actionSheetTarget.id &&
+                        p.active
+                )?.id ??
+                nextPlayers.find((p) => p.id !== actionSheetTarget.id && p.active)?.id ??
+                remainingDeviceIds.find((id) => id !== actionSheetTarget.id);
+            if (nextId) setActivePlayer(nextId);
+        }
+        setActionSheetTarget(null);
+    }, [
+        actionSheetTarget,
+        session,
+        drawHistory,
+        removeDevicePlayer,
+        devicePlayerIds,
+        players,
+        exitSession,
+        setSession,
+        activePlayerId,
+        setActivePlayer,
+        history,
+    ]);
 
     if (!session) return null;
 
@@ -749,8 +1002,10 @@ export default function Game() {
                 players={players}
                 devicePlayerIds={devicePlayerIds}
                 activePlayerId={activePlayerId}
+                hostPlayerId={session.hostPlayerId}
                 onSwitchPlayer={setActivePlayer}
                 onAddPlayer={() => setShowAddPlayer(true)}
+                onLongPressPlayer={setActionSheetTarget}
             />
 
             <IonContent scrollY className="game-content">
@@ -765,11 +1020,13 @@ export default function Game() {
                             setSelectedCard(event);
                         }}
                         onToggleResolved={() => setShowResolved((v) => !v)}
-                        viewingPlayerName={
-                            !isActivePlayerOnDevice
-                                ? players.find((p) => p.id === activePlayerId)?.displayName
-                                : null
-                        }
+                        viewingPlayerName={(() => {
+                            const p = players.find((pp) => pp.id === activePlayerId);
+                            if (!p) return null;
+                            const isLeft = devicePlayerIds.includes(p.id) && !p.active;
+                            const isRemote = !devicePlayerIds.includes(p.id);
+                            return isLeft || isRemote ? p.displayName : null;
+                        })()}
                     />
 
                     {error && (
@@ -831,6 +1088,39 @@ export default function Game() {
                     onDismiss={() => setShowJoinCode(false)}
                 />
             )}
+
+            {showClaim && <ClaimAccountModal onClose={() => setShowClaim(false)} />}
+
+            <IonActionSheet
+                isOpen={actionSheetTarget !== null}
+                onDidDismiss={() => setActionSheetTarget(null)}
+                header={actionSheetTarget?.displayName}
+                buttons={[
+                    ...(isGuest &&
+                    !!accessToken &&
+                    actionSheetTarget !== null &&
+                    devicePlayerIds.includes(actionSheetTarget.id) &&
+                    actionSheetTarget.userId === null
+                        ? [
+                              {
+                                  text: "Log in to link account",
+                                  handler: () => {
+                                      setShowClaim(true);
+                                      setActionSheetTarget(null);
+                                  },
+                              },
+                          ]
+                        : []),
+                    {
+                        text: drawHistory.some((e) => e.playerId === actionSheetTarget?.id)
+                            ? "Leave game"
+                            : "Remove from session",
+                        role: "destructive",
+                        handler: handleLeaveOrRemove,
+                    },
+                    { text: "Cancel", role: "cancel" },
+                ]}
+            />
         </IonPage>
     );
 }
@@ -918,6 +1208,10 @@ const styles: Record<string, React.CSSProperties> = {
         display: "flex",
         alignItems: "center",
         gap: "var(--space-2)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
     },
     pillInactive: {
         background: "var(--color-surface-elevated)",
@@ -938,9 +1232,14 @@ const styles: Record<string, React.CSSProperties> = {
         display: "flex",
         alignItems: "center",
         gap: "var(--space-2)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
     },
     pillNonDevice: {
-        background: "color-mix(in srgb, var(--color-accent-amber) 7%, var(--color-surface-elevated))",
+        background:
+            "color-mix(in srgb, var(--color-accent-amber) 7%, var(--color-surface-elevated))",
         border: "1px dashed color-mix(in srgb, var(--color-accent-amber) 70%, transparent)",
         color: "var(--color-accent-amber)",
         fontFamily: "var(--font-ui)",
@@ -958,9 +1257,14 @@ const styles: Record<string, React.CSSProperties> = {
         display: "flex",
         alignItems: "center",
         gap: "var(--space-2)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
     },
     pillNonDeviceActive: {
-        background: "color-mix(in srgb, var(--color-accent-amber) 15%, var(--color-surface-elevated))",
+        background:
+            "color-mix(in srgb, var(--color-accent-amber) 15%, var(--color-surface-elevated))",
         border: "1.5px solid var(--color-accent-amber)",
         color: "var(--color-accent-amber)",
         fontFamily: "var(--font-ui)",
@@ -980,9 +1284,16 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
         gap: "var(--space-2)",
         boxShadow: "0 0 14px 3px rgba(212, 168, 71, 0.3), 0 2px 6px rgba(0,0,0,0.35)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
     },
     pillName: {
         fontFamily: '"Playfair Display", Georgia, serif',
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
     },
     // Avatar initials badges
     avatarActive: {
@@ -1049,6 +1360,87 @@ const styles: Record<string, React.CSSProperties> = {
         letterSpacing: "0.02em",
         lineHeight: 1,
     },
+    // Left (inactive) device player pills
+    pillLeft: {
+        background: "var(--color-surface)",
+        border: "1px dashed color-mix(in srgb, var(--color-border) 80%, transparent)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 400,
+        padding: "0 var(--space-3) 0 var(--space-2)",
+        height: "36px",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        flexShrink: 0,
+        opacity: 0.45,
+        transition: "all 200ms var(--ease)",
+        minWidth: "52px",
+        borderRadius: "5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
+    },
+    pillLeftActive: {
+        background: "color-mix(in srgb, var(--color-text-secondary) 8%, var(--color-surface))",
+        border: "1px solid color-mix(in srgb, var(--color-border) 120%, transparent)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        padding: "0 var(--space-3) 0 var(--space-2)",
+        height: "40px",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        flexShrink: 0,
+        opacity: 0.7,
+        transition: "all 200ms var(--ease)",
+        minWidth: "52px",
+        borderRadius: "5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
+    },
+    avatarLeft: {
+        width: "20px",
+        height: "20px",
+        borderRadius: "50%",
+        background: "color-mix(in srgb, var(--color-border) 60%, var(--color-surface))",
+        color: "var(--color-text-secondary)",
+        fontSize: "9px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
+    avatarLeftActive: {
+        width: "22px",
+        height: "22px",
+        borderRadius: "50%",
+        background: "color-mix(in srgb, var(--color-border) 80%, var(--color-surface))",
+        color: "var(--color-text-secondary)",
+        fontSize: "10px",
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+    },
     viewingBanner: {
         textAlign: "center",
         fontSize: "var(--text-caption)",
@@ -1076,6 +1468,10 @@ const styles: Record<string, React.CSSProperties> = {
         flexShrink: 0,
         borderRadius: "5px",
         transition: "all 200ms var(--ease)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        touchAction: "manipulation",
     },
 
     // AddPlayerModal
@@ -1387,19 +1783,9 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: "var(--color-bg)",
         display: "flex",
         flexDirection: "column",
+        paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
-    },
-    detailBack: {
-        background: "none",
-        border: "none",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-subheading)",
-        color: "var(--color-accent-primary)",
         cursor: "pointer",
-        padding: "calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5) var(--space-4)",
-        textAlign: "left",
-        minHeight: "44px",
-        alignSelf: "flex-start",
     },
     detailCardArea: {
         flex: 1,
