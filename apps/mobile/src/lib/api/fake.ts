@@ -554,6 +554,10 @@ export class FakeApiClient implements ApiClient {
         return ok(undefined);
     }
 
+    async clearVote(_cardId: string): Promise<ApiResult<void>> {
+        return ok(undefined);
+    }
+
     async flagCard(_cardId: string): Promise<ApiResult<void>> {
         return ok(undefined);
     }
@@ -569,12 +573,12 @@ export class FakeApiClient implements ApiClient {
         return fail("NOT_FOUND_ERROR", "Draw event not found.");
     }
 
-    async resolveCard(drawEventId: string): Promise<ApiResult<DrawEvent>> {
+    async resolveCard(drawEventId: string, resolved: boolean): Promise<ApiResult<DrawEvent>> {
         for (const events of state.drawEvents.values()) {
             const event = events.find((e) => e.id === drawEventId);
             if (event) {
-                event.resolved = true;
-                return ok(event);
+                event.resolved = resolved;
+                return ok({ ...event });
             }
         }
         return fail("NOT_FOUND_ERROR", "Draw event not found.");

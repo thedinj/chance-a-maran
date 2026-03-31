@@ -146,7 +146,14 @@ function GameHeader({
     onAddPlayer,
     onLongPressPlayer,
 }: GameHeaderProps) {
-    const activeDevicePlayers = players.filter((p) => devicePlayerIds.includes(p.id) && p.active);
+    const activeDevicePlayers = players
+        .filter((p) => devicePlayerIds.includes(p.id) && p.active)
+        .sort((a, b) => {
+            // Registered user's player always first — stays stable even after a mid-session claim
+            if (a.userId !== null && b.userId === null) return -1;
+            if (a.userId === null && b.userId !== null) return 1;
+            return 0;
+        });
     const leftDevicePlayers = players.filter((p) => devicePlayerIds.includes(p.id) && !p.active);
 
     return (
@@ -407,19 +414,13 @@ function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
 
 interface CardCarouselProps {
     events: DrawEvent[];
-    resolvedCount: number;
-    showResolved: boolean;
     onCardTap: (event: DrawEvent) => void;
-    onToggleResolved: () => void;
     viewingPlayerName?: string | null;
 }
 
 function CardCarousel({
     events,
-    resolvedCount,
-    showResolved,
     onCardTap,
-    onToggleResolved,
     viewingPlayerName,
 }: CardCarouselProps) {
     const isLandscape = useIsLandscape();
@@ -440,11 +441,6 @@ function CardCarousel({
 
     return (
         <div style={styles.carouselOuter}>
-            {resolvedCount > 0 && (
-                <button style={styles.showResolvedToggle} onClick={onToggleResolved}>
-                    {showResolved ? "Hide resolved" : `Show ${resolvedCount} resolved`}
-                </button>
-            )}
             <Carousel
                 key={isLandscape ? "landscape" : "portrait"}
                 withControls={false}
@@ -553,8 +549,8 @@ interface CardDetailOverlayProps {
     players: Player[];
     activePlayerId: string | null;
     onDismiss: () => void;
-    onVote: (cardId: string, direction: "up" | "down") => Promise<void>;
-    onResolve: (drawEventId: string) => Promise<void>;
+    onVote: (cardId: string, direction: "up" | "down" | null) => Promise<void>;
+    onResolve: (drawEventId: string, resolved: boolean) => Promise<void>;
     onTransfer: (drawEventId: string, toPlayerId: string) => Promise<void>;
     onShareDescription: (drawEventId: string) => Promise<void>;
     allPlayers: Player[];
@@ -574,7 +570,7 @@ function CardDetailOverlay({
     const cv = event.cardVersion;
     const isDrawer = event.playerId === activePlayerId;
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
-    const [resolveRequested, setResolveRequested] = useState(event.resolved);
+    const [resolvePending, setResolvePending] = useState(false);
     const [showTransferPicker, setShowTransferPicker] = useState(false);
     const [transferDone, setTransferDone] = useState(false);
     const [sharing, setSharing] = useState(false);
@@ -585,16 +581,15 @@ function CardDetailOverlay({
     async function handleVote(dir: "up" | "down") {
         const next = voteDir === dir ? null : dir;
         setVoteDir(next);
-        if (next) {
-            hapticLight();
-            await onVote(cv.cardId, next);
-        }
+        hapticLight();
+        await onVote(cv.cardId, next);
     }
 
     async function handleResolve() {
-        setResolveRequested(true);
+        setResolvePending(true);
         hapticLight();
-        await onResolve(event.id);
+        await onResolve(event.id, !event.resolved);
+        setResolvePending(false);
     }
 
     async function handleTransfer(toPlayerId: string) {
@@ -650,49 +645,58 @@ function CardDetailOverlay({
 
             {/* Action bar */}
             <div style={styles.actionBar} onClick={(e) => e.stopPropagation()}>
-                {/* Vote */}
-                <button
-                    style={styles.actionBtn}
-                    onClick={() => handleVote(voteDir === "up" ? "down" : "up")}
-                >
+                {/* Vote up */}
+                <button style={styles.actionBtn} onClick={() => handleVote("up")}>
                     <span
                         style={{
                             ...styles.actionIcon,
                             color:
                                 voteDir === "up"
                                     ? "var(--color-accent-amber)"
-                                    : voteDir === "down"
-                                      ? "var(--color-danger)"
-                                      : "var(--color-text-secondary)",
+                                    : "var(--color-text-secondary)",
                         }}
                     >
-                        {voteDir === "down" ? "↓" : "↑"}
+                        ↑
                     </span>
-                    <span style={styles.actionLabel}>{voteDir === "down" ? "Down" : "Up"}</span>
+                    <span style={styles.actionLabel}>Up</span>
+                </button>
+
+                {/* Vote down */}
+                <button style={styles.actionBtn} onClick={() => handleVote("down")}>
+                    <span
+                        style={{
+                            ...styles.actionIcon,
+                            color:
+                                voteDir === "down"
+                                    ? "var(--color-danger)"
+                                    : "var(--color-text-secondary)",
+                        }}
+                    >
+                        ↓
+                    </span>
+                    <span style={styles.actionLabel}>Down</span>
                 </button>
 
                 {/* Resolve */}
-                {!event.resolved && (
-                    <button
-                        style={styles.actionBtn}
-                        onClick={handleResolve}
-                        disabled={resolveRequested}
+                <button
+                    style={styles.actionBtn}
+                    onClick={handleResolve}
+                    disabled={resolvePending}
+                >
+                    <span
+                        style={{
+                            ...styles.actionIcon,
+                            color: event.resolved
+                                ? "var(--color-success)"
+                                : "var(--color-text-secondary)",
+                        }}
                     >
-                        <span
-                            style={{
-                                ...styles.actionIcon,
-                                color: resolveRequested
-                                    ? "var(--color-success)"
-                                    : "var(--color-text-secondary)",
-                            }}
-                        >
-                            ✓
-                        </span>
-                        <span style={styles.actionLabel}>
-                            {resolveRequested ? "Requested" : "Resolve"}
-                        </span>
-                    </button>
-                )}
+                        ✓
+                    </span>
+                    <span style={styles.actionLabel}>
+                        {event.resolved ? "Resolved" : "Resolve"}
+                    </span>
+                </button>
 
                 {/* Transfer */}
                 {!transferDone && (
@@ -919,13 +923,17 @@ export default function Game() {
         });
     }, [activePlayerId, addDrawEvent, session, startDrawTransition]);
 
-    const handleVote = useCallback(async (cardId: string, direction: "up" | "down") => {
-        await apiClient.voteCard(cardId, direction);
+    const handleVote = useCallback(async (cardId: string, direction: "up" | "down" | null) => {
+        if (direction === null) {
+            await apiClient.clearVote(cardId);
+        } else {
+            await apiClient.voteCard(cardId, direction);
+        }
     }, []);
 
     const handleResolve = useCallback(
-        async (drawEventId: string) => {
-            const result = await apiClient.resolveCard(drawEventId);
+        async (drawEventId: string, resolved: boolean) => {
+            const result = await apiClient.resolveCard(drawEventId, resolved);
             if (result.ok) updateDrawEvent(result.data);
         },
         [updateDrawEvent]
@@ -1016,13 +1024,10 @@ export default function Game() {
                 <div style={styles.contentArea}>
                     <CardCarousel
                         events={displayCards}
-                        resolvedCount={resolvedCards.length}
-                        showResolved={showResolved}
                         onCardTap={(event) => {
                             hapticLight();
                             setSelectedCard(event);
                         }}
-                        onToggleResolved={() => setShowResolved((v) => !v)}
                         viewingPlayerName={(() => {
                             const p = players.find((pp) => pp.id === activePlayerId);
                             if (!p) return null;
@@ -1046,6 +1051,14 @@ export default function Game() {
             {/* Draw button footer */}
             <IonFooter>
                 <div style={styles.footer}>
+                    {resolvedCards.length > 0 && (
+                        <button
+                            style={styles.resolvedToggle}
+                            onClick={() => setShowResolved((v) => !v)}
+                        >
+                            {showResolved ? "Hide resolved" : `Show ${resolvedCards.length} resolved`}
+                        </button>
+                    )}
                     <DrawButton
                         isEnabled={isActivePlayerOnDevice && !drawPending}
                         isPending={drawPending}
@@ -1109,6 +1122,21 @@ export default function Game() {
                                   text: "Log in to link account",
                                   handler: () => {
                                       setShowClaim(true);
+                                      setActionSheetTarget(null);
+                                  },
+                              },
+                          ]
+                        : []),
+                    ...(actionSheetTarget !== null &&
+                    devicePlayerIds.includes(actionSheetTarget.id) &&
+                    actionSheetTarget.id !== session?.hostPlayerId
+                        ? [
+                              {
+                                  text: "Edit options",
+                                  handler: () => {
+                                      history.push(
+                                          `/game-options/${session!.id}/${actionSheetTarget!.id}`
+                                      );
                                       setActionSheetTarget(null);
                                   },
                               },
@@ -1572,16 +1600,16 @@ const styles: Record<string, React.CSSProperties> = {
         gap: "var(--space-3)",
         paddingBottom: "var(--space-6)",
     },
-    showResolvedToggle: {
+    resolvedToggle: {
         background: "none",
         border: "none",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
-        color: "var(--color-accent-amber)",
+        color: "var(--color-text-secondary)",
         cursor: "pointer",
-        padding: "var(--space-1) 0",
-        textAlign: "left",
-        minHeight: "44px",
+        padding: "0 0 var(--space-2) 0",
+        textAlign: "center",
+        width: "100%",
     },
     cornerDiamond: {
         position: "absolute",

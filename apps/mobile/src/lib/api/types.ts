@@ -108,9 +108,12 @@ export interface ApiClient {
     submitCard(sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>>;
     submitCardOutsideSession(req: SubmitCardRequest): Promise<ApiResult<Card>>;
     voteCard(cardId: string, direction: "up" | "down"): Promise<ApiResult<void>>;
+    /** Removes the current user's vote on a card. No-op if no vote exists. */
+    clearVote(cardId: string): Promise<ApiResult<void>>;
     flagCard(cardId: string): Promise<ApiResult<void>>;
     shareDescription(drawEventId: string): Promise<ApiResult<DrawEvent>>;
-    resolveCard(drawEventId: string): Promise<ApiResult<DrawEvent>>;
+    /** Sets resolved state on a draw event. Any player in the session may call this. */
+    resolveCard(drawEventId: string, resolved: boolean): Promise<ApiResult<DrawEvent>>;
 
     // ── My Cards management ───────────────────────────────────────────────────
     /** Returns all cards authored by the current user. */

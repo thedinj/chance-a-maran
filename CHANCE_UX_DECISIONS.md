@@ -116,6 +116,8 @@ Chance is a social party app that acts as a live companion layer on top of physi
 - On game end: all players are navigated to Game Session History (read-only) before exiting
 - Registered Users can access past game sessions from the side menu at any time
 
+> **Game Session History vs. active game history:** During an active session, the full card history (draws, resolved state, card details, voting, transfer) is visible inline on the Game screen itself — no separate page needed. The `/history/:sessionId` route is exclusively for viewing **ended or past sessions** outside of active play (post-game review, "My games" archive). Do not route active-session interactions through the history page.
+
 ---
 
 ## 7. Card model
@@ -221,12 +223,13 @@ Cards may qualify under multiple tiers; the highest base weight applies. Weight 
 
 ## 10. Card resolution flow
 
-1. Any Player can request resolution of a card via the card detail view in history
-2. Request appears in the **host Player's Notifications**
-3. If the active Player on this device is the host: they can resolve directly from Notifications
-4. Host accepts resolution → card is visually marked as resolved in history for all Players
-5. Resolution is rare — most cards persist and stack for the whole game
-6. Resolved cards appear with a distinct visual treatment in history (e.g. muted, strikethrough, badge)
+Resolution is intentionally lightweight — "resolved" means whatever the group agrees it means. There is no host approval step and no notification.
+
+1. Any Player taps "Resolve" on any card in the Game screen's card detail overlay
+2. Card is immediately marked resolved on the server (`DrawEvent.resolved = true`)
+3. The action is reversible — tapping "Resolved" on an already-resolved card un-resolves it (sends explicit `resolved: false`)
+4. Resolved cards remain visible in the history carousel but are visually dimmed (0.55 opacity) and hidden by default behind a "Show N resolved" toggle
+5. No notifications are generated — resolution is not routed through Notifications at all
 
 ---
 

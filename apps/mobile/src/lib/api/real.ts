@@ -160,6 +160,10 @@ export class RealApiClient implements ApiClient {
         return this.request<void>("POST", `/api/cards/${cardId}/vote`, { direction });
     }
 
+    clearVote(cardId: string) {
+        return this.request<void>("DELETE", `/api/cards/${cardId}/vote`);
+    }
+
     flagCard(cardId: string) {
         return this.request<void>("POST", `/api/cards/${cardId}/flag`);
     }
@@ -168,8 +172,8 @@ export class RealApiClient implements ApiClient {
         return this.request<DrawEvent>("POST", `/api/draw-events/${drawEventId}/share-description`);
     }
 
-    resolveCard(drawEventId: string) {
-        return this.request<DrawEvent>("POST", `/api/draw-events/${drawEventId}/resolve`);
+    resolveCard(drawEventId: string, resolved: boolean) {
+        return this.request<DrawEvent>("PATCH", `/api/draw-events/${drawEventId}`, { resolved });
     }
 
     // ── Transfers ─────────────────────────────────────────────────────────────

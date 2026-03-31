@@ -110,25 +110,37 @@
 
 ### Game history (`/history/:sessionId`)
 
-| Area                               | Status | Notes                       |
-| ---------------------------------- | ------ | --------------------------- |
-| Game History page shell            | ⬜     | Stub — "coming soon"        |
-| Card history list (version-locked) | ⬜     |                             |
-| Resolved card visual treatment     | ⬜     |                             |
-| Card detail modal                  | ⬜     |                             |
-| Vote (up/down)                     | ⬜     |                             |
-| Flag                               | ⬜     |                             |
-| Request card transfer              | ⬜     |                             |
-| Request card resolution            | ⬜     | Sends to host Notifications |
+> **Note:** This page is for viewing **ended or past sessions** only (accessible from "My games" in the side menu, or navigated to after a session ends). It is NOT where active-game card history lives — during an active session, the card history carousel and detail overlay are part of the Game screen (`/game/:sessionId`) itself.
+
+| Area                               | Status | Notes                                                      |
+| ---------------------------------- | ------ | ---------------------------------------------------------- |
+| Game History page shell            | ⬜     | Stub — "coming soon" — for past/ended sessions only        |
+| Card history list (version-locked) | ⬜     |                                                            |
+| Card detail modal (read-only)      | ⬜     |                                                            |
+| Flag                               | ⬜     |                                                            |
+
+### Game screen — card interactions (live, in `/game/:sessionId`)
+
+> These features live in the active Game screen's card carousel and `CardDetailOverlay`, not in Game History.
+
+| Area                                    | Status | Notes                                             |
+| --------------------------------------- | ------ | ------------------------------------------------- |
+| Card history carousel                   | ✅     | Newest-first; resolved cards dimmed at 0.55 opacity |
+| Show/hide resolved toggle               | ✅     |                                                   |
+| Card detail overlay (tap to open)       | ✅     |                                                   |
+| Vote up / Vote down (separate buttons)  | ✅     | Tap active button again to clear vote             |
+| Resolve / unresolve (explicit, any player) | ✅  | Direct toggle, no host approval, no notification  |
+| Request card transfer                   | ✅     | Opens player picker; wired to fake API            |
+| Share hidden description                | ✅     | Drawer only                                       |
+| Flag                                    | ⬜     | Stub in UI                                        |
 
 ### Notifications
 
-| Area                                                       | Status | Notes |
-| ---------------------------------------------------------- | ------ | ----- |
-| Notifications modal (side menu)                            | ⬜     |       |
-| Transfer requests — accept / reject inline                 | ⬜     |       |
-| Resolution requests — resolve / dismiss inline (host only) | ⬜     |       |
-| Notification badge count                                   | ⬜     |       |
+| Area                               | Status | Notes                                        |
+| ---------------------------------- | ------ | -------------------------------------------- |
+| Notifications modal (side menu)    | ⬜     |                                              |
+| Transfer requests — accept / reject inline | ⬜ |                                           |
+| Notification badge count           | ⬜     |                                              |
 
 ### My Cards (`/cards`)
 
@@ -137,9 +149,9 @@
 | My Cards page                       | ✅     | Marked "soon" in menu |
 | My cards tab (own submissions)      | ✅     |                       |
 | All cards tab (admin only)          | ⬜     |                       |
-| Card detail — editable view         | ⬜     |                       |
+| Card detail — editable view         | ✅     |                       |
 | Version history (read-only)         | ⬜     |                       |
-| Deactivate card                     | ⬜     |                       |
+| Deactivate card                     | ✅     |                       |
 | Admin: promote / demote global pool | ⬜     |                       |
 
 ### Account / settings

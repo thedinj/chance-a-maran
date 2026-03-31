@@ -48,21 +48,36 @@ export function AppMenu() {
     const isHost = !!(session && localPlayer && localPlayer.id === session.hostPlayerId);
     const [dialog, setDialog] = useState<"leave" | "end" | null>(null);
 
+    // The registered (non-host) device player, if one exists — "My game options" is only
+    // meaningful when "my" unambiguously refers to a registered account's card-sharing settings.
+    const registeredDevicePlayer = useMemo(
+        () =>
+            session && !isHost
+                ? (players.find((p) => devicePlayerIds.includes(p.id) && p.userId !== null) ?? null)
+                : null,
+        [session, isHost, players, devicePlayerIds]
+    );
+
     const playNav: NavItem[] = useMemo(
         () => [
             ...(session ? [{ label: "Return to game", path: `/game/${session.id}` }] : []),
             ...(session && isHost
                 ? [{ label: "Game settings", path: `/game-settings/${session.id}` }]
                 : []),
-            ...(session && !isHost
-                ? [{ label: "My game options", path: `/game-options/${session.id}` }]
+            ...(registeredDevicePlayer
+                ? [
+                      {
+                          label: "My game options",
+                          path: `/game-options/${session!.id}/${registeredDevicePlayer.id}`,
+                      },
+                  ]
                 : []),
             { label: "Create game", path: "/game-settings", disabled: !!session },
             { label: "Submit card", path: "/submit-card", disabled: !user },
             { label: "My cards", path: "/cards", disabled: !user },
             { label: "My games", path: "/my-games", soon: true },
         ],
-        [isHost, session, user]
+        [isHost, registeredDevicePlayer, session, user]
     );
 
     const isActive = (path: string) =>

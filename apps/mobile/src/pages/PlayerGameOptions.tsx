@@ -22,30 +22,32 @@ const SHARING_DESCRIPTIONS: Record<"none" | "mine" | "network", string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function PlayerGameOptions() {
-    const { sessionId } = useParams<{ sessionId: string }>();
-    const { session, localPlayer, updateLocalPlayer } = useSession();
+    const { playerId } = useParams<{ sessionId: string; playerId: string }>();
+    const { session, players, devicePlayerIds, updateLocalPlayer } = useSession();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
 
-    const [displayName, setDisplayName] = useState(localPlayer?.displayName ?? "");
+    const targetPlayer = players.find((p) => p.id === playerId) ?? null;
+
+    const [displayName, setDisplayName] = useState(targetPlayer?.displayName ?? "");
     const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">(
-        localPlayer?.cardSharing ?? "network"
+        targetPlayer?.cardSharing ?? "network"
     );
     const [error, setError] = useState<string | null>(null);
 
-    // Guard: must be in an active session as a non-host player
-    if (!session || !localPlayer) {
+    // Guard: must be in an active session, target must be a non-host device player
+    if (!session || !targetPlayer || !devicePlayerIds.includes(targetPlayer.id)) {
         history.replace("/");
         return null;
     }
-    if (localPlayer.id === session.hostPlayerId) {
+    if (targetPlayer.id === session.hostPlayerId) {
         history.replace(`/game-settings/${session.id}`);
         return null;
     }
 
     // Capture after guards so closures hold non-null references
     const currentSession = session;
-    const currentPlayer = localPlayer;
+    const currentPlayer = targetPlayer;
 
     const isRegistered = currentPlayer.userId !== null;
 
@@ -97,7 +99,7 @@ export default function PlayerGameOptions() {
                         <button style={styles.backLink} onClick={handleCancel}>
                             ←
                         </button>
-                        <h1 style={styles.heading}>My Game Options</h1>
+                        <h1 style={styles.heading}>Game Options</h1>
                     </div>
 
                     {/* ── Display name ─────────────────────────────────────── */}

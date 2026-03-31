@@ -115,7 +115,7 @@ export default function App() {
                                             </Route>
 
                                             {/* Non-host player options (display name, card sharing) */}
-                                            <Route exact path="/game-options/:sessionId">
+                                            <Route exact path="/game-options/:sessionId/:playerId">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <PlayerGameOptions />
                                                 </Suspense>
