@@ -5,12 +5,8 @@ import { TransferContext } from "./useTransfers";
 export function TransferProvider({ children }: { children: React.ReactNode }) {
     const [pendingTransfers, setPendingTransfers] = useState<CardTransfer[]>([]);
 
-    const updateTransfer = useCallback((updated: CardTransfer) => {
-        setPendingTransfers((prev) =>
-            updated.status === "pending"
-                ? prev.map((t) => (t.id === updated.id ? updated : t))
-                : prev.filter((t) => t.id !== updated.id)
-        );
+    const removeTransfer = useCallback((transferId: string) => {
+        setPendingTransfers((prev) => prev.filter((t) => t.id !== transferId));
     }, []);
 
     const clearTransfers = useCallback(() => {
@@ -19,7 +15,7 @@ export function TransferProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <TransferContext.Provider
-            value={{ pendingTransfers, setPendingTransfers, updateTransfer, clearTransfers }}
+            value={{ pendingTransfers, setPendingTransfers, removeTransfer, clearTransfers }}
         >
             {children}
         </TransferContext.Provider>

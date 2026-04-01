@@ -135,10 +135,10 @@ export interface ApiClient {
 
     // ── Transfers ────────────────────────────────────────────────────────────
     createTransfer(drawEventId: string, toPlayerId: string): Promise<ApiResult<CardTransfer>>;
-    respondToTransfer(
-        transferId: string,
-        status: "accepted" | "rejected"
-    ): Promise<ApiResult<CardTransfer>>;
+    /** Accept a pending transfer — deletes the record and returns the new DrawEvent for the recipient. */
+    acceptTransfer(transferId: string): Promise<ApiResult<DrawEvent>>;
+    /** Cancel a pending transfer (retract by offerer or decline by recipient) — deletes the record. */
+    cancelTransfer(transferId: string): Promise<ApiResult<void>>;
 
     // ── Player management ────────────────────────────────────────────────────
     /**

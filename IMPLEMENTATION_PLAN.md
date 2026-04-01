@@ -42,7 +42,7 @@
 | `ApiClient` interface              | ✅     |                                                                   |
 | `AuthContext`                      | ✅     | login, register, logout, guest session, upgrade-from-guest        |
 | `SessionContext`                   | ✅     | session state, players, active player, device player list         |
-| `CardContext`                      | ✅     | draw history; `addDrawEvent`, `updateDrawEvent`, `clearHistory`   |
+| `CardContext`                      | ✅     | draw history; `addDrawEvent`, `updateDrawEvent`, `removeDrawEvent`, `clearHistory` |
 | `TransferContext`                  | ✅     | pending transfers                                                 |
 | `AppHeaderContext`                 | ✅     | title and back-button state                                       |
 | `NetworkStatusBanner`              | ✅     | shows when Capacitor reports offline                              |
@@ -130,7 +130,7 @@
 | Card detail overlay (tap to open)       | ✅     |                                                   |
 | Vote up / Vote down (separate buttons)  | ✅     | Tap active button again to clear vote             |
 | Resolve / unresolve (explicit, any player) | ✅  | Direct toggle, no host approval, no notification  |
-| Request card transfer                   | ✅     | Opens player picker; wired to fake API            |
+| Request card transfer / retract         | ✅     | Picker + confirmation dialog; retract shows amber "Retract" button |
 | Share hidden description                | ✅     | Drawer only                                       |
 | Flag                                    | ⬜     | Stub in UI                                        |
 
@@ -138,9 +138,10 @@
 
 | Area                               | Status | Notes                                        |
 | ---------------------------------- | ------ | -------------------------------------------- |
-| Notifications modal (side menu)    | ⬜     |                                              |
-| Transfer requests — accept / reject inline | ⬜ |                                           |
-| Notification badge count           | ⬜     |                                              |
+| Notifications page (`/notifications`) | ✅   | Reached via long-press action sheet on player pill with incoming transfer |
+| Transfer requests — accept / decline | ✅  | Accept returns new DrawEvent; decline cancels transfer                    |
+| Transfer dot on player pill        | ✅     | Amber dot on pill for players with incoming transfers                     |
+| Notification badge count           | ⬜     | Future: global notifications in AppMenu                                  |
 
 ### My Cards (`/cards`)
 

@@ -182,8 +182,12 @@ export class RealApiClient implements ApiClient {
         return this.request<CardTransfer>("POST", "/api/transfers", { drawEventId, toPlayerId });
     }
 
-    respondToTransfer(transferId: string, status: "accepted" | "rejected") {
-        return this.request<CardTransfer>("PATCH", `/api/transfers/${transferId}`, { status });
+    acceptTransfer(transferId: string) {
+        return this.request<DrawEvent>("POST", `/api/transfers/${transferId}/accept`);
+    }
+
+    cancelTransfer(transferId: string) {
+        return this.request<void>("DELETE", `/api/transfers/${transferId}`);
     }
 
     // ── Player management ─────────────────────────────────────────────────────

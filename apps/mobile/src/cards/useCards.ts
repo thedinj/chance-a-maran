@@ -5,6 +5,7 @@ export interface CardContextValue {
     drawHistory: DrawEvent[];
     addDrawEvent(event: DrawEvent): void;
     updateDrawEvent(updated: DrawEvent): void;
+    removeDrawEvent(drawEventId: string): void;
     clearHistory(): void;
 }
 

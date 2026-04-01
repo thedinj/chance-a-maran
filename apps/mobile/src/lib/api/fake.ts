@@ -74,7 +74,7 @@ const DEMO_CARD_VERSION: CardVersion = {
     drinksPerHourThisPlayer: 0,
     avgDrinksPerHourAllPlayers: 0,
     isFamilySafe: true,
-    isGameChanger: false,
+    isGameChanger: true,
     gameTags: [],
     authoredByUserId: "user-demo",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -429,9 +429,7 @@ export class FakeApiClient implements ApiClient {
             session,
             players: state.players.get(sessionId) ?? [],
             drawEvents: state.drawEvents.get(sessionId) ?? [],
-            pendingTransfers: (state.transfers.get(sessionId) ?? []).filter(
-                (t) => t.status === "pending"
-            ),
+            pendingTransfers: state.transfers.get(sessionId) ?? [],
             serverTimestamp: ts(),
         });
     }
@@ -591,35 +589,65 @@ export class FakeApiClient implements ApiClient {
         toPlayerId: string
     ): Promise<ApiResult<CardTransfer>> {
         let sessionId: string | undefined;
+        let fromPlayerId: string | undefined;
         for (const [sid, events] of state.drawEvents.entries()) {
-            if (events.some((e) => e.id === drawEventId)) {
+            const event = events.find((e) => e.id === drawEventId);
+            if (event) {
                 sessionId = sid;
+                fromPlayerId = event.playerId;
                 break;
             }
         }
-        if (!sessionId) return fail("NOT_FOUND_ERROR", "Draw event not found.");
+        if (!sessionId || !fromPlayerId) return fail("NOT_FOUND_ERROR", "Draw event not found.");
+
+        // Auto-cancel any existing pending transfer for this draw event
+        const existing = state.transfers.get(sessionId)!;
+        const prevIdx = existing.findIndex((t) => t.drawEventId === drawEventId);
+        if (prevIdx !== -1) existing.splice(prevIdx, 1);
 
         const transfer: CardTransfer = {
             id: id(),
-            fromPlayerId: "unknown",
+            fromPlayerId,
             toPlayerId,
             drawEventId,
-            status: "pending",
             createdAt: ts(),
         };
-        state.transfers.get(sessionId)!.push(transfer);
+        existing.push(transfer);
         return ok(transfer);
     }
 
-    async respondToTransfer(
-        transferId: string,
-        status: "accepted" | "rejected"
-    ): Promise<ApiResult<CardTransfer>> {
+    async acceptTransfer(transferId: string): Promise<ApiResult<DrawEvent>> {
+        for (const [sid, transfers] of state.transfers.entries()) {
+            const idx = transfers.findIndex((t) => t.id === transferId);
+            if (idx === -1) continue;
+            const transfer = transfers[idx]!;
+            transfers.splice(idx, 1);
+
+            const events = state.drawEvents.get(sid) ?? [];
+            const origIdx = events.findIndex((e) => e.id === transfer.drawEventId);
+            if (origIdx === -1) return fail("NOT_FOUND_ERROR", "Draw event not found.");
+            const orig = events[origIdx]!;
+
+            const newEvent: DrawEvent = {
+                ...orig,
+                id: id(),
+                playerId: transfer.toPlayerId,
+                drawnAt: ts(),
+                revealedToAllAt: ts(),
+            };
+            events.splice(origIdx, 1);
+            events.push(newEvent);
+            return ok({ ...newEvent });
+        }
+        return fail("NOT_FOUND_ERROR", "Transfer not found.");
+    }
+
+    async cancelTransfer(transferId: string): Promise<ApiResult<void>> {
         for (const transfers of state.transfers.values()) {
-            const transfer = transfers.find((t) => t.id === transferId);
-            if (transfer) {
-                transfer.status = status;
-                return ok(transfer);
+            const idx = transfers.findIndex((t) => t.id === transferId);
+            if (idx !== -1) {
+                transfers.splice(idx, 1);
+                return ok(undefined);
             }
         }
         return fail("NOT_FOUND_ERROR", "Transfer not found.");

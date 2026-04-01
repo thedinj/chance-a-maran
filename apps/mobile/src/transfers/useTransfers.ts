@@ -1,10 +1,10 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type Dispatch, type SetStateAction } from "react";
 import type { CardTransfer } from "../lib/api";
 
 export interface TransferContextValue {
     pendingTransfers: CardTransfer[];
-    setPendingTransfers(transfers: CardTransfer[]): void;
-    updateTransfer(updated: CardTransfer): void;
+    setPendingTransfers: Dispatch<SetStateAction<CardTransfer[]>>;
+    removeTransfer(transferId: string): void;
     clearTransfers(): void;
 }
 

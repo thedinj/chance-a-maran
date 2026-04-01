@@ -45,6 +45,7 @@ const InviteRequest = React.lazy(() => import("./pages/InviteRequest"));
 const SubmitCard = React.lazy(() => import("./pages/SubmitCard"));
 const MyCards = React.lazy(() => import("./pages/MyCards"));
 const PlayerGameOptions = React.lazy(() => import("./pages/PlayerGameOptions"));
+const Notifications = React.lazy(() => import("./pages/Notifications"));
 
 setupIonicReact();
 
@@ -118,6 +119,13 @@ export default function App() {
                                             <Route exact path="/game-options/:sessionId/:playerId">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <PlayerGameOptions />
+                                                </Suspense>
+                                            </Route>
+
+                                            {/* In-session notifications (transfer offers) */}
+                                            <Route exact path="/notifications">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <Notifications />
                                                 </Suspense>
                                             </Route>
 

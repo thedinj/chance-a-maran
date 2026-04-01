@@ -5,7 +5,6 @@ export const CardTransferSchema = z.object({
     fromPlayerId: z.string(),
     toPlayerId: z.string(),
     drawEventId: z.string(),
-    status: z.enum(["pending", "accepted", "rejected"]),
     createdAt: z.string(),
 });
 

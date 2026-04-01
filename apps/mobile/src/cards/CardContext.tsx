@@ -22,12 +22,16 @@ export function CardProvider({ children }: { children: React.ReactNode }) {
         setDrawHistory((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     }, []);
 
+    const removeDrawEvent = useCallback((drawEventId: string) => {
+        setDrawHistory((prev) => prev.filter((e) => e.id !== drawEventId));
+    }, []);
+
     const clearHistory = useCallback(() => {
         setDrawHistory([]);
     }, []);
 
     return (
-        <CardContext.Provider value={{ drawHistory, addDrawEvent, updateDrawEvent, clearHistory }}>
+        <CardContext.Provider value={{ drawHistory, addDrawEvent, updateDrawEvent, removeDrawEvent, clearHistory }}>
             {children}
         </CardContext.Provider>
     );

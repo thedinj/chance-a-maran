@@ -21,6 +21,42 @@ import { SCROLLBAR_CSS, SCROLLBAR_CLASS, SCROLLBAR_FIREFOX_STYLES } from "../lib
 import { useSession } from "../session/useSession";
 import { CardFront, FlippingCard } from "../components/GameCard";
 import { useExitSession } from "../session/useExitSession";
+import { useTransfers } from "../transfers/useTransfers";
+import { AppDialog } from "../components/AppDialog";
+
+// ─── Draw Drama ──────────────────────────────────────────────────────────────
+
+interface DrawDrama {
+    /** Sound to loop from overlay mount until hitSoundAt */
+    loopSound: string;
+    /** One-shot sound fired at hitSoundAt ms */
+    hitSound: string;
+    /** ms from overlay mount when loop stops and hit sound fires */
+    hitSoundAt: number;
+    /** ms to show card back (static) before the flip begins */
+    backMs: number;
+    /** flip animation duration ms (passed as overrideDuration to FlippingCard) */
+    flipMs: number;
+    /** Optional label badge shown during the back phase (e.g. "GAME CHANGER") */
+    preFlipLabel?: string;
+}
+
+const STANDARD_DRAW_DRAMA: DrawDrama = {
+    loopSound: "/sound/drumrollloop.mp3",
+    hitSound: "/sound/cymbal.mp3",
+    hitSoundAt: 500 + 2000 * 0.75, // 2000ms from mount
+    backMs: 500,
+    flipMs: 2000,
+};
+
+const GAME_CHANGER_DRAMA: DrawDrama = {
+    loopSound: "/sound/drama.mp3",
+    hitSound: "/sound/cymbal.mp3",
+    hitSoundAt: 1500 + 3000 * 0.75, // 3750ms from mount
+    backMs: 1500,
+    flipMs: 3000,
+    preFlipLabel: "GAME CHANGER",
+};
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +120,7 @@ interface DevicePlayerPillProps {
     player: Player;
     isActive: boolean;
     isHost: boolean;
+    hasNotification: boolean;
     onSwitch: (id: string) => void;
     onLongPress: (player: Player) => void;
 }
@@ -92,34 +129,52 @@ function DevicePlayerPill({
     player,
     isActive,
     isHost,
+    hasNotification,
     onSwitch,
     onLongPress,
 }: DevicePlayerPillProps) {
     const longPress = useLongPress(() => onLongPress(player));
     return (
-        <button
-            style={isActive ? styles.pillActive : styles.pillInactive}
-            className={isActive ? undefined : "pill-inactive"}
-            onContextMenuCapture={suppressContextMenu}
-            onContextMenu={suppressContextMenu}
-            onClick={(event) => {
-                if (longPress.didLongPress.current) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    longPress.didLongPress.current = false;
-                    return;
-                }
-                hapticLight();
-                onSwitch(player.id);
-            }}
-            aria-pressed={isActive}
-            {...(isHost ? {} : longPress)}
-        >
-            <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
-                {getInitials(player.displayName)}
-            </span>
-            <span style={styles.pillName}>{player.displayName}</span>
-        </button>
+        <div style={{ position: "relative", display: "inline-flex" }}>
+            <button
+                style={isActive ? styles.pillActive : styles.pillInactive}
+                className={isActive ? undefined : "pill-inactive"}
+                onContextMenuCapture={suppressContextMenu}
+                onContextMenu={suppressContextMenu}
+                onClick={(event) => {
+                    if (longPress.didLongPress.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        longPress.didLongPress.current = false;
+                        return;
+                    }
+                    hapticLight();
+                    onSwitch(player.id);
+                }}
+                aria-pressed={isActive}
+                {...(isHost ? {} : longPress)}
+            >
+                <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
+                    {getInitials(player.displayName)}
+                </span>
+                <span style={styles.pillName}>{player.displayName}</span>
+            </button>
+            {hasNotification && (
+                <span
+                    style={{
+                        position: "absolute",
+                        top: 2,
+                        right: 2,
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: "var(--color-accent-amber)",
+                        border: "1.5px solid var(--color-bg)",
+                        pointerEvents: "none",
+                    }}
+                />
+            )}
+        </div>
     );
 }
 
@@ -146,6 +201,7 @@ function GameHeader({
     onAddPlayer,
     onLongPressPlayer,
 }: GameHeaderProps) {
+    const { pendingTransfers } = useTransfers();
     const activeDevicePlayers = players
         .filter((p) => devicePlayerIds.includes(p.id) && p.active)
         .sort((a, b) => {
@@ -212,6 +268,9 @@ function GameHeader({
                                 player={p}
                                 isActive={p.id === activePlayerId}
                                 isHost={p.id === hostPlayerId}
+                                hasNotification={pendingTransfers.some(
+                                    (t) => t.toPlayerId === p.id
+                                )}
                                 onSwitch={onSwitchPlayer}
                                 onLongPress={onLongPressPlayer}
                             />
@@ -529,13 +588,44 @@ function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
 interface CardRevealOverlayProps {
     event: DrawEvent;
     onDismiss: () => void;
+    drama?: DrawDrama;
 }
 
-function CardRevealOverlay({ event, onDismiss }: CardRevealOverlayProps) {
+function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) {
+    const loopRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        if (!drama) return;
+
+        const loop = new Audio(drama.loopSound);
+        loop.loop = true;
+        loop.play().catch(() => {});
+        loopRef.current = loop;
+
+        const hitTimer = window.setTimeout(() => {
+            loopRef.current?.pause();
+            loopRef.current = null;
+            new Audio(drama.hitSound).play().catch(() => {});
+        }, drama.hitSoundAt);
+
+        return () => {
+            window.clearTimeout(hitTimer);
+            loopRef.current?.pause();
+            loopRef.current = null;
+        };
+    }, [drama]);
+
     return (
         <div style={styles.overlayBackdrop} onClick={onDismiss}>
-            <div style={styles.revealCardWrap} onClick={(e) => e.stopPropagation()}>
-                <FlippingCard event={event} />
+            <div style={{ ...styles.revealCardWrap, position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                {drama?.preFlipLabel && (
+                    <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>
+                )}
+                <FlippingCard
+                    event={event}
+                    dramaDelayMs={drama?.backMs}
+                    overrideDuration={drama?.flipMs}
+                />
                 <p style={styles.revealDismissHint}>Tap outside to dismiss</p>
             </div>
         </div>
@@ -548,10 +638,12 @@ interface CardDetailOverlayProps {
     event: DrawEvent;
     players: Player[];
     activePlayerId: string | null;
+    pendingTransfer: import("../lib/api").CardTransfer | null;
     onDismiss: () => void;
     onVote: (cardId: string, direction: "up" | "down" | null) => Promise<void>;
     onResolve: (drawEventId: string, resolved: boolean) => Promise<void>;
     onTransfer: (drawEventId: string, toPlayerId: string) => Promise<void>;
+    onCancelTransfer: (transferId: string) => Promise<void>;
     onShareDescription: (drawEventId: string) => Promise<void>;
     allPlayers: Player[];
 }
@@ -560,10 +652,12 @@ function CardDetailOverlay({
     event,
     players: _players,
     activePlayerId,
+    pendingTransfer,
     onDismiss,
     onVote,
     onResolve,
     onTransfer,
+    onCancelTransfer,
     onShareDescription,
     allPlayers,
 }: CardDetailOverlayProps) {
@@ -572,11 +666,19 @@ function CardDetailOverlay({
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
     const [resolvePending, setResolvePending] = useState(false);
     const [showTransferPicker, setShowTransferPicker] = useState(false);
-    const [transferDone, setTransferDone] = useState(false);
+    // confirmTransfer: holds the chosen target until user confirms in the dialog
+    const [confirmTransfer, setConfirmTransfer] = useState<{
+        toPlayerId: string;
+        toPlayerName: string;
+    } | null>(null);
     const [sharing, setSharing] = useState(false);
     const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
 
     const showActionBarShareBtn = cv.hiddenDescription && !sharedViaActionBar && isDrawer;
+
+    // Current transfer target name (for retract confirmation)
+    const pendingTargetName =
+        allPlayers.find((p) => p.id === pendingTransfer?.toPlayerId)?.displayName ?? "player";
 
     async function handleVote(dir: "up" | "down") {
         const next = voteDir === dir ? null : dir;
@@ -592,11 +694,24 @@ function CardDetailOverlay({
         setResolvePending(false);
     }
 
-    async function handleTransfer(toPlayerId: string) {
+    function handlePickTransferTarget(toPlayerId: string, toPlayerName: string) {
         setShowTransferPicker(false);
-        setTransferDone(true);
+        setConfirmTransfer({ toPlayerId, toPlayerName });
+    }
+
+    async function handleConfirmTransfer() {
+        if (!confirmTransfer) return;
+        const { toPlayerId } = confirmTransfer;
+        setConfirmTransfer(null);
         hapticLight();
         await onTransfer(event.id, toPlayerId);
+    }
+
+    async function handleConfirmRetract() {
+        if (!pendingTransfer) return;
+        setConfirmTransfer(null);
+        hapticLight();
+        await onCancelTransfer(pendingTransfer.id);
     }
 
     async function handleShare() {
@@ -608,6 +723,9 @@ function CardDetailOverlay({
     }
 
     const transferablePlayers = allPlayers.filter((p) => p.id !== event.playerId && p.active);
+
+    // Confirmation dialog state — retract vs. new transfer
+    const [showRetractConfirm, setShowRetractConfirm] = useState(false);
 
     return (
         <div style={styles.detailWrap} onClick={onDismiss}>
@@ -629,7 +747,7 @@ function CardDetailOverlay({
                         <button
                             key={p.id}
                             style={styles.transferPlayerBtn}
-                            onClick={() => handleTransfer(p.id)}
+                            onClick={() => handlePickTransferTarget(p.id, p.displayName)}
                         >
                             {p.displayName}
                         </button>
@@ -641,6 +759,60 @@ function CardDetailOverlay({
                         Cancel
                     </button>
                 </div>
+            )}
+
+            {/* New-transfer confirmation dialog */}
+            {confirmTransfer && (
+                <AppDialog
+                    title={
+                        pendingTransfer
+                            ? `Cancel offer to ${pendingTargetName}?`
+                            : `Offer to ${confirmTransfer.toPlayerName}?`
+                    }
+                    message={
+                        pendingTransfer
+                            ? `Your pending offer to ${pendingTargetName} will be cancelled. Offer "${cv.title}" to ${confirmTransfer.toPlayerName} instead?`
+                            : `Offer "${cv.title}" to ${confirmTransfer.toPlayerName}?`
+                    }
+                    onDismiss={() => setConfirmTransfer(null)}
+                    buttons={[
+                        {
+                            label: "Cancel",
+                            variant: "ghost",
+                            onClick: () => setConfirmTransfer(null),
+                        },
+                        {
+                            label: pendingTransfer ? "Re-offer" : "Offer",
+                            variant: "accent",
+                            onClick: handleConfirmTransfer,
+                        },
+                    ]}
+                />
+            )}
+
+            {/* Retract confirmation dialog */}
+            {showRetractConfirm && (
+                <AppDialog
+                    title="Retract offer?"
+                    message={`Cancel your pending offer of "${cv.title}" to ${pendingTargetName}?`}
+                    accent="danger"
+                    onDismiss={() => setShowRetractConfirm(false)}
+                    buttons={[
+                        {
+                            label: "Keep offer",
+                            variant: "ghost",
+                            onClick: () => setShowRetractConfirm(false),
+                        },
+                        {
+                            label: "Retract",
+                            variant: "danger",
+                            onClick: async () => {
+                                setShowRetractConfirm(false);
+                                await handleConfirmRetract();
+                            },
+                        },
+                    ]}
+                />
             )}
 
             {/* Action bar */}
@@ -698,8 +870,25 @@ function CardDetailOverlay({
                     </span>
                 </button>
 
-                {/* Transfer */}
-                {!transferDone && (
+                {/* Transfer / Retract */}
+                {pendingTransfer ? (
+                    <button
+                        style={styles.actionBtn}
+                        onClick={() => setShowRetractConfirm(true)}
+                    >
+                        <span
+                            style={{
+                                ...styles.actionIcon,
+                                color: "var(--color-accent-amber)",
+                            }}
+                        >
+                            ⇄
+                        </span>
+                        <span style={{ ...styles.actionLabel, color: "var(--color-accent-amber)" }}>
+                            Retract
+                        </span>
+                    </button>
+                ) : (
                     <button
                         style={styles.actionBtn}
                         onClick={() => setShowTransferPicker((v) => !v)}
@@ -804,10 +993,12 @@ export default function Game() {
         removeDevicePlayer,
         setSession,
     } = useSession();
-    const { drawHistory, addDrawEvent, updateDrawEvent } = useCards();
+    const { drawHistory, addDrawEvent, updateDrawEvent, removeDrawEvent } = useCards();
+    const { pendingTransfers, setPendingTransfers, removeTransfer } = useTransfers();
 
     const [selectedCard, setSelectedCard] = useState<DrawEvent | null>(null);
     const [revealCard, setRevealCard] = useState<DrawEvent | null>(null);
+    const [revealDrama, setRevealDrama] = useState<DrawDrama | null>(null);
     const [showJoinCode, setShowJoinCode] = useState(false);
     const [showAddPlayer, setShowAddPlayer] = useState(false);
     const [showClaim, setShowClaim] = useState(false);
@@ -870,6 +1061,13 @@ export default function Game() {
                 if (event.revealedToAllAt !== null) addDrawEvent(event);
                 else updateDrawEvent(event);
             }
+            // Sync pending transfers — filter to transfers involving this device's players
+            const relevant = (result.data.pendingTransfers ?? []).filter(
+                (t) =>
+                    devicePlayerIds.includes(t.fromPlayerId) ||
+                    devicePlayerIds.includes(t.toPlayerId)
+            );
+            setPendingTransfers(relevant);
         }, 5000);
         return () => clearInterval(intervalId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -919,6 +1117,11 @@ export default function Game() {
                 return;
             }
             addDrawEvent(result.data);
+            const prefersReduced =
+                typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const isGameChanger = Boolean(result.data.cardVersion.isGameChanger);
+            setRevealDrama(prefersReduced ? null : isGameChanger ? GAME_CHANGER_DRAMA : STANDARD_DRAW_DRAMA);
             setRevealCard(result.data);
         });
     }, [activePlayerId, addDrawEvent, session, startDrawTransition]);
@@ -939,9 +1142,27 @@ export default function Game() {
         [updateDrawEvent]
     );
 
-    const handleTransfer = useCallback(async (drawEventId: string, toPlayerId: string) => {
-        await apiClient.createTransfer(drawEventId, toPlayerId);
-    }, []);
+    const handleTransfer = useCallback(
+        async (drawEventId: string, toPlayerId: string) => {
+            const result = await apiClient.createTransfer(drawEventId, toPlayerId);
+            if (result.ok) {
+                // Replace any existing pending transfer for this card with the new one
+                setPendingTransfers((prev) => [
+                    ...prev.filter((t) => t.drawEventId !== drawEventId),
+                    result.data,
+                ]);
+            }
+        },
+        [setPendingTransfers]
+    );
+
+    const handleCancelTransfer = useCallback(
+        async (transferId: string) => {
+            const result = await apiClient.cancelTransfer(transferId);
+            if (result.ok) removeTransfer(transferId);
+        },
+        [removeTransfer]
+    );
 
     const handleShareDescription = useCallback(
         async (drawEventId: string) => {
@@ -1069,7 +1290,14 @@ export default function Game() {
 
             {/* Overlays */}
             {revealCard && (
-                <CardRevealOverlay event={revealCard} onDismiss={() => setRevealCard(null)} />
+                <CardRevealOverlay
+                    event={revealCard}
+                    drama={revealDrama ?? undefined}
+                    onDismiss={() => {
+                        setRevealCard(null);
+                        setRevealDrama(null);
+                    }}
+                />
             )}
 
             {selectedCard && !revealCard && (
@@ -1077,10 +1305,14 @@ export default function Game() {
                     event={selectedCard}
                     players={players}
                     activePlayerId={activePlayerId}
+                    pendingTransfer={
+                        pendingTransfers.find((t) => t.drawEventId === selectedCard.id) ?? null
+                    }
                     onDismiss={() => setSelectedCard(null)}
                     onVote={handleVote}
                     onResolve={handleResolve}
                     onTransfer={handleTransfer}
+                    onCancelTransfer={handleCancelTransfer}
                     onShareDescription={handleShareDescription}
                     allPlayers={players}
                 />
@@ -1112,6 +1344,18 @@ export default function Game() {
                 onDidDismiss={() => setActionSheetTarget(null)}
                 header={actionSheetTarget?.displayName}
                 buttons={[
+                    ...(actionSheetTarget !== null &&
+                    pendingTransfers.some((t) => t.toPlayerId === actionSheetTarget.id)
+                        ? [
+                              {
+                                  text: "Notifications",
+                                  handler: () => {
+                                      history.push("/notifications");
+                                      setActionSheetTarget(null);
+                                  },
+                              },
+                          ]
+                        : []),
                     ...(isGuest &&
                     !!accessToken &&
                     actionSheetTarget !== null &&
@@ -1720,6 +1964,24 @@ const styles: Record<string, React.CSSProperties> = {
     },
 
     // CardRevealOverlay
+    preFlipBadge: {
+        position: "absolute",
+        top: "calc(var(--space-3) * -1)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 3,
+        background: "var(--color-accent-amber)",
+        color: "var(--color-bg)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 700,
+        letterSpacing: "0.2em",
+        padding: "6px var(--space-3)",
+        boxShadow:
+            "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
+        animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
+        whiteSpace: "nowrap" as const,
+    },
     revealCardWrap: {
         display: "flex",
         flexDirection: "column",

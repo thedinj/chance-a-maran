@@ -11,7 +11,9 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
       "Bash(wc:*)",
       "Bash(pnpm --filter mobile exec tsc --noEmit)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep -E \"\\\\.\\(tsx?|css\\)$\")",
+      "Bash(grep -E \"\\\\.tsx$\")"
     ]
   }
 }

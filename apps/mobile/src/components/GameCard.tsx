@@ -8,7 +8,7 @@ import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
 // ── CardBack ──────────────────────────────────────────────────────────────────
 // Static card back face. Size the container; this fills it at 412:581 aspect ratio.
 
-export function CardBack(): JSX.Element {
+export function CardBack(): React.JSX.Element {
     return (
         <div style={styles.revealBackFace}>
             <div style={styles.revealBackFrame} />
@@ -34,7 +34,11 @@ interface CardFrontProps {
     readOnly?: boolean;
 }
 
-export function CardFront({ event, flipInFlight = false, readOnly = false }: CardFrontProps): JSX.Element {
+export function CardFront({
+    event,
+    flipInFlight = false,
+    readOnly = false,
+}: CardFrontProps): React.JSX.Element {
     const cv = event.cardVersion;
     const { players, activePlayerId } = useSession();
     const { updateDrawEvent } = useCards();
@@ -46,8 +50,10 @@ export function CardFront({ event, flipInFlight = false, readOnly = false }: Car
     );
     const [sharing, setSharing] = useState(false);
 
-    const showHiddenToggle = !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && !descrRevealed;
-    const showShareBtn = !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && descrRevealed;
+    const showHiddenToggle =
+        !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && !descrRevealed;
+    const showShareBtn =
+        !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && descrRevealed;
 
     async function handleShare() {
         setSharing(true);
@@ -67,8 +73,12 @@ export function CardFront({ event, flipInFlight = false, readOnly = false }: Car
                 <div style={styles.revealFrontTopRule} />
                 <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>◆</span>
                 <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>◆</span>
+                <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>
+                    ◆
+                </span>
+                <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>
+                    ◆
+                </span>
 
                 <div style={styles.revealCardContent}>
                     <div
@@ -156,17 +166,34 @@ interface FlippingCardProps {
     onFlipComplete?: () => void;
     /** Override flip duration in ms — bypasses isGameChanger timing and sets delay to 0. */
     overrideDuration?: number;
+    /** Explicit pre-flip hold time in ms. Takes precedence over overrideDuration's implicit 0-delay. */
+    dramaDelayMs?: number;
 }
 
-export function FlippingCard({ event, onFlipComplete, overrideDuration }: FlippingCardProps): JSX.Element {
+export function FlippingCard({
+    event,
+    onFlipComplete,
+    overrideDuration,
+    dramaDelayMs,
+}: FlippingCardProps): React.JSX.Element {
     const cv = event.cardVersion;
     const isGameChanger = Boolean(cv.isGameChanger);
     const prefersReducedMotion =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const flipDelayMs = prefersReducedMotion ? 0 : overrideDuration != null ? 0 : isGameChanger ? 1100 : 120;
-    const flipDurationMs = prefersReducedMotion ? 170 : overrideDuration ?? (isGameChanger ? 2400 : 1180);
+    const flipDelayMs = prefersReducedMotion
+        ? 0
+        : dramaDelayMs != null
+          ? dramaDelayMs
+          : overrideDuration != null
+            ? 0
+            : isGameChanger
+              ? 1100
+              : 120;
+    const flipDurationMs = prefersReducedMotion
+        ? 170
+        : (overrideDuration ?? (isGameChanger ? 2400 : 1180));
     const flipEasing = prefersReducedMotion
         ? "linear"
         : isGameChanger
@@ -505,8 +532,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 700,
         letterSpacing: "0.2em",
         padding: "6px var(--space-3)",
-        boxShadow:
-            "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
+        boxShadow: "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
         animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
     },
 };

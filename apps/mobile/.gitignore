@@ -10,6 +10,10 @@
 
 # production
 /dist
+/vite.config.js
+/vite.config.d.ts
+/tsconfig.tsbuildinfo
+/tsconfig.node.tsbuildinfo
 
 # misc
 .DS_Store

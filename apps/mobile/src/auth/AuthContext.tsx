@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import type { AuthResponse, Player } from "../lib/api";
+import type { ApiResult, AuthResponse, Player, User } from "../lib/api";
 import { apiClient, setApiAccessToken } from "../lib/api";
 import { AuthContext, type AuthState } from "./useAuth";
 
