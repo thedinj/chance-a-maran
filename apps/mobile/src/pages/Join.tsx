@@ -103,7 +103,7 @@ export default function Join() {
 
         startTransition(async () => {
             // Pass any stored device-binding token so the server can do a silent rejoin
-            const savedToken = playerTokenStore.get(code, trimmedName);
+            const savedToken = await playerTokenStore.get(code, trimmedName);
 
             const joinResult = await apiClient.joinByCode({
                 joinCode: code,

@@ -1,48 +1,51 @@
-import { hashPassword } from "@/lib/auth/password";
-import * as storeService from "@/lib/services/storeService";
+import { hash } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { config } from "dotenv";
 import { resolve } from "path";
 import { initializeDatabase } from "../src/db/init";
 import { db } from "../src/lib/db/db";
-import * as referenceRepo from "../src/lib/repos/referenceRepo";
+import * as invitationCodeRepo from "../src/lib/repos/invitationCodeRepo";
 
-// Load environment variables from .env file
+// Load .env from the backend app root
 config({ path: resolve(__dirname, "../.env") });
 
-/**
- * Creates a user if they don't already exist
- * @returns true if user was created, false if already exists
- */
-async function createUserIfNotExists(
+const BCRYPT_ROUNDS = 12;
+
+async function upsertUser(
     email: string,
     password: string,
-    name: string,
-    scopes: string
+    displayName: string,
+    isAdmin: boolean,
+    inviteCode: string
 ): Promise<boolean> {
-    const existingUser = db.prepare("SELECT * FROM User WHERE email = ?").get(email);
-
-    if (existingUser) {
+    const existing = db.prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE").get(email);
+    if (existing) {
         console.log(`User ${email} already exists. Skipping.`);
         return false;
     }
 
-    const hashedPassword = await hashPassword(password);
+    // Ensure the invite code exists (upsert so seed is idempotent)
+    const code = invitationCodeRepo.upsertSeeded(inviteCode);
+
+    if (code.used_by_user_id) {
+        console.log(`Invite code "${inviteCode}" already consumed — creating user without consuming again.`);
+    }
+
+    const passwordHash = await hash(password, BCRYPT_ROUNDS);
     const userId = randomUUID();
 
-    db.prepare(
-        `
-        INSERT INTO User (id, email, name, password, scopes, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `
-    ).run(userId, email, name, hashedPassword, scopes);
+    db.transaction(() => {
+        db.prepare(`
+            INSERT INTO users (id, email, display_name, password_hash, is_admin, invitation_code_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        `).run(userId, email, displayName, passwordHash, isAdmin ? 1 : 0, code.id);
 
-    console.log(`Created user: ${email} (ID: ${userId})`);
+        if (!code.used_by_user_id) {
+            invitationCodeRepo.consume(code.id, userId);
+        }
+    })();
 
-    const storeId = storeService.createDefaultStoreForNewUser(userId, name);
-
-    console.log(`Created default store (ID: ${storeId}) for user: ${email}`);
-
+    console.log(`Created ${isAdmin ? "admin" : "user"}: ${email} (ID: ${userId})`);
     return true;
 }
 
@@ -52,40 +55,39 @@ async function main() {
     const adminName = process.env.ADMIN_NAME || "Admin";
 
     if (!adminEmail || !adminPassword) {
-        throw new Error(
-            "ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment variables for seeding"
-        );
+        throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD must be set for seeding");
     }
 
-    // Initialize database schema
+    const inviteCode = process.env.REGISTRATION_INVITATION_CODE;
+    if (!inviteCode) {
+        throw new Error("REGISTRATION_INVITATION_CODE must be set for seeding");
+    }
+
+    console.log("Initializing database...");
     initializeDatabase();
 
-    // Seed REGISTRATION_INVITATION_CODE into AppSettings
-    const invitationCode = process.env.REGISTRATION_INVITATION_CODE || "";
-    referenceRepo.setAppSetting("REGISTRATION_INVITATION_CODE", invitationCode);
-    console.log(
-        `Set REGISTRATION_INVITATION_CODE: ${invitationCode ? "[code set]" : "[empty - open registration]"}`
-    );
+    await upsertUser(adminEmail, adminPassword, adminName, true, inviteCode);
 
-    // Create admin user
-    await createUserIfNotExists(adminEmail, adminPassword, adminName, "admin");
+    // Optional second test user
+    const secondEmail = process.env.SECOND_USER_EMAIL;
+    const secondPassword = process.env.SECOND_USER_PASSWORD;
+    const secondName = process.env.SECOND_USER_NAME || "Test User";
+    const secondCode = process.env.SECOND_USER_INVITATION_CODE;
 
-    // Create optional second test user for collaboration testing
-    const secondUserEmail = process.env.SECOND_USER_EMAIL;
-    const secondUserPassword = process.env.SECOND_USER_PASSWORD;
-    const secondUserName = process.env.SECOND_USER_NAME || "Test User";
-    if (secondUserEmail && secondUserPassword) {
-        await createUserIfNotExists(secondUserEmail, secondUserPassword, secondUserName, "");
-    } else {
+    if (secondEmail && secondPassword && secondCode) {
+        await upsertUser(secondEmail, secondPassword, secondName, false, secondCode);
+    } else if (secondEmail || secondPassword) {
         console.log(
-            "SECOND_USER_EMAIL or SECOND_USER_PASSWORD not set. Skipping second test user."
+            "SECOND_USER_* vars partially set — need SECOND_USER_EMAIL, SECOND_USER_PASSWORD, and SECOND_USER_INVITATION_CODE. Skipping."
         );
     }
+
+    console.log("Seed complete.");
 }
 
 main()
     .catch((e) => {
-        console.error("Error seeding database:", e);
+        console.error("Seed error:", e);
         process.exit(1);
     })
     .finally(() => {

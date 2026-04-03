@@ -140,10 +140,14 @@ export const SubmitCardRequestSchema = z.object({
     description: z.string(),
     hiddenDescription: z.boolean(),
     imageUrl: z.string().url().optional(),
-    drinksPerHourThisPlayer: z.number().nonnegative(),
-    avgDrinksPerHourAllPlayers: z.number().nonnegative(),
-    isFamilySafe: z.boolean(),
+    drinkingLevel: z.number().int().min(0).max(3),
+    spiceLevel: z.number().int().min(0).max(3),
+    /**
+     * Forced to false server-side when cardType === 'reparations'.
+     * The form hides this toggle for reparations cards.
+     */
     isGameChanger: z.boolean(),
+    cardType: z.enum(["standard", "reparations"]),
     gameTags: z.array(z.string()),
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequestSchema>;

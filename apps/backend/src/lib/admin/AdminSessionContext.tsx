@@ -1,4 +1,4 @@
-import type { User } from "@basket-bot/core";
+import type { User } from "@chance/core";
 import { createContext } from "react";
 
 export interface AdminSessionContextValue {

@@ -396,7 +396,7 @@ function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
         if (!trimmed || pending) return;
         setError(null);
         startTransition(async () => {
-            const savedToken = playerTokenStore.get(session.joinCode, trimmed);
+            const savedToken = await playerTokenStore.get(session.joinCode, trimmed);
             const result = await apiClient.joinByCode({
                 joinCode: session.joinCode,
                 displayName: trimmed,
@@ -1144,7 +1144,8 @@ export default function Game() {
 
     const handleTransfer = useCallback(
         async (drawEventId: string, toPlayerId: string) => {
-            const result = await apiClient.createTransfer(drawEventId, toPlayerId);
+            if (!activePlayerId) return;
+            const result = await apiClient.createTransfer(drawEventId, activePlayerId, toPlayerId);
             if (result.ok) {
                 // Replace any existing pending transfer for this card with the new one
                 setPendingTransfers((prev) => [
@@ -1153,15 +1154,16 @@ export default function Game() {
                 ]);
             }
         },
-        [setPendingTransfers]
+        [activePlayerId, setPendingTransfers]
     );
 
     const handleCancelTransfer = useCallback(
         async (transferId: string) => {
-            const result = await apiClient.cancelTransfer(transferId);
+            if (!activePlayerId) return;
+            const result = await apiClient.cancelTransfer(transferId, activePlayerId);
             if (result.ok) removeTransfer(transferId);
         },
-        [removeTransfer]
+        [activePlayerId, removeTransfer]
     );
 
     const handleShareDescription = useCallback(

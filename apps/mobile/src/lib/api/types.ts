@@ -12,6 +12,7 @@ export type {
     Card,
     DrawEvent,
     CardTransfer,
+    Game,
     // API envelope
     ApiSuccess,
     ApiFailure,
@@ -43,6 +44,7 @@ import type {
     CardVersion,
     DrawEvent,
     CardTransfer,
+    Game,
     ApiResult,
     AuthResponse,
     LoginRequest,
@@ -79,9 +81,11 @@ export interface ApiClient {
     login(req: LoginRequest): Promise<ApiResult<AuthResponse>>;
     register(req: RegisterRequest): Promise<ApiResult<AuthResponse>>;
     logout(): Promise<ApiResult<void>>;
+    /** Web: no argument needed (HttpOnly cookie sent automatically). Native: pass stored refresh token. */
     refreshTokens(
-        refreshToken: string
+        refreshToken?: string
     ): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>>;
+    getMe(): Promise<ApiResult<User>>;
 
     /**
      * Called when a guest player wants to log in or register mid-session.
@@ -105,15 +109,20 @@ export interface ApiClient {
 
     // ── Cards ────────────────────────────────────────────────────────────────
     drawCard(sessionId: string, playerId: string): Promise<ApiResult<DrawEvent>>;
+    /** Draw a reparations card (penalty pool) for a player. */
+    drawReparationsCard(sessionId: string, playerId: string): Promise<ApiResult<DrawEvent>>;
     submitCard(sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>>;
     submitCardOutsideSession(req: SubmitCardRequest): Promise<ApiResult<Card>>;
     voteCard(cardId: string, direction: "up" | "down"): Promise<ApiResult<void>>;
     /** Removes the current user's vote on a card. No-op if no vote exists. */
     clearVote(cardId: string): Promise<ApiResult<void>>;
-    flagCard(cardId: string): Promise<ApiResult<void>>;
     shareDescription(drawEventId: string): Promise<ApiResult<DrawEvent>>;
     /** Sets resolved state on a draw event. Any player in the session may call this. */
     resolveCard(drawEventId: string, resolved: boolean): Promise<ApiResult<DrawEvent>>;
+
+    // ── Games ────────────────────────────────────────────────────────────────
+    /** Public — no auth required. Returns all active games for the game tag picker. */
+    getGames(): Promise<ApiResult<Game[]>>;
 
     // ── My Cards management ───────────────────────────────────────────────────
     /** Returns all cards authored by the current user. */
@@ -134,11 +143,15 @@ export interface ApiClient {
     demoteFromGlobal(cardId: string): Promise<ApiResult<Card>>;
 
     // ── Transfers ────────────────────────────────────────────────────────────
-    createTransfer(drawEventId: string, toPlayerId: string): Promise<ApiResult<CardTransfer>>;
+    createTransfer(
+        drawEventId: string,
+        fromPlayerId: string,
+        toPlayerId: string
+    ): Promise<ApiResult<CardTransfer>>;
     /** Accept a pending transfer — deletes the record and returns the new DrawEvent for the recipient. */
-    acceptTransfer(transferId: string): Promise<ApiResult<DrawEvent>>;
+    acceptTransfer(transferId: string, acceptingPlayerId: string): Promise<ApiResult<DrawEvent>>;
     /** Cancel a pending transfer (retract by offerer or decline by recipient) — deletes the record. */
-    cancelTransfer(transferId: string): Promise<ApiResult<void>>;
+    cancelTransfer(transferId: string, requestingPlayerId: string): Promise<ApiResult<void>>;
 
     // ── Player management ────────────────────────────────────────────────────
     /**

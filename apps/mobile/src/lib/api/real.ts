@@ -10,6 +10,7 @@ import type {
     CreateSessionRequest,
     DrawEvent,
     FilterSettings,
+    Game,
     GetAllCardsFilters,
     JoinByCodeRequest,
     JoinByCodeResponse,
@@ -26,9 +27,7 @@ import type {
 const REQUEST_TIMEOUT_MS = 15_000;
 
 function resolveBaseUrl(): string {
-    // Vite env → Capacitor Preferences override (set at runtime) → platform defaults
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
-    // Android emulator default; will be overridden by Capacitor Preferences in production
     if (import.meta.env.DEV) return "http://10.0.2.2:3000";
     return "https://api.chance.app";
 }
@@ -36,32 +35,82 @@ function resolveBaseUrl(): string {
 export class RealApiClient implements ApiClient {
     private baseUrl = resolveBaseUrl();
     private accessToken: string | null = null;
+    // Native only: the raw refresh token loaded from secure storage.
+    // Web: always null — the HttpOnly cookie is the refresh mechanism.
+    private refreshToken: string | null = null;
+
+    private isRefreshing = false;
+    private refreshPromise: Promise<boolean> | null = null;
+
+    // Resolved once AuthContext finishes the hydration/silent-refresh attempt.
+    // Non-auth requests wait on this gate so they don't race the hydration.
+    private authReadyResolve!: () => void;
+    private authReadyPromise: Promise<void> = new Promise((resolve) => {
+        this.authReadyResolve = resolve;
+    });
+
+    // Wired by AuthContext after mount so token state changes are reflected there.
+    onTokenRefreshed?: (accessToken: string, refreshToken: string) => Promise<void>;
+    onAuthFailed?: () => void;
+
+    // ── Control surface (called by index.ts helpers) ──────────────────────────
 
     setAccessToken(token: string | null) {
         this.accessToken = token;
     }
 
-    private async request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+    setRefreshToken(token: string | null) {
+        this.refreshToken = token;
+    }
+
+    clearTokens() {
+        this.accessToken = null;
+        this.refreshToken = null;
+    }
+
+    markAuthReady() {
+        this.authReadyResolve();
+    }
+
+    setCallbacks(callbacks: {
+        onTokenRefreshed?: (accessToken: string, refreshToken: string) => Promise<void>;
+        onAuthFailed?: () => void;
+    }) {
+        this.onTokenRefreshed = callbacks.onTokenRefreshed;
+        this.onAuthFailed = callbacks.onAuthFailed;
+    }
+
+    // ── Core request ──────────────────────────────────────────────────────────
+
+    private async request<T>(
+        method: string,
+        path: string,
+        body?: unknown,
+        isRetry = false
+    ): Promise<ApiResult<T>> {
+        // Non-auth routes wait until the hydration/silent-refresh attempt is done
+        // so they don't fire before the access token is restored.
+        if (!path.startsWith("/api/auth/")) {
+            await this.authReadyPromise;
+        }
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+        let res: Response;
         try {
-            const res = await fetch(`${this.baseUrl}${path}`, {
+            res = await fetch(`${this.baseUrl}${path}`, {
                 method,
                 signal: controller.signal,
+                credentials: "include", // always send HttpOnly cookie cross-origin (web)
                 headers: {
                     "Content-Type": "application/json",
                     ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
                 },
                 body: body !== undefined ? JSON.stringify(body) : undefined,
             });
-
-            const json = (await res.json()) as ApiResult<T>;
-
-            // Token refresh on 401 is handled at the AuthContext level via the
-            // X-Token-Status header — not here. ApiClient never throws.
-            return json;
         } catch (err) {
+            clearTimeout(timeout);
             return {
                 ok: false,
                 error: {
@@ -76,6 +125,66 @@ export class RealApiClient implements ApiClient {
         } finally {
             clearTimeout(timeout);
         }
+
+        // Auto-refresh on 401 with X-Token-Status: invalid (once per request)
+        if (
+            res.status === 401 &&
+            res.headers.get("X-Token-Status") === "invalid" &&
+            !isRetry
+        ) {
+            const refreshed = await this.tryRefreshToken();
+            if (refreshed) {
+                return this.request<T>(method, path, body, true);
+            }
+            // Refresh failed — return the original 401
+        }
+
+        try {
+            return (await res.json()) as ApiResult<T>;
+        } catch {
+            return {
+                ok: false,
+                error: { code: "NETWORK_ERROR", message: "Invalid response from server." },
+                serverTimestamp: new Date().toISOString(),
+            };
+        }
+    }
+
+    private async tryRefreshToken(): Promise<boolean> {
+        // Deduplicate concurrent refresh attempts
+        if (this.isRefreshing) {
+            return this.refreshPromise!;
+        }
+        this.isRefreshing = true;
+        this.refreshPromise = (async () => {
+            try {
+                const result = await this.request<
+                    Pick<AuthResponse, "accessToken" | "refreshToken">
+                >(
+                    "POST",
+                    "/api/auth/refresh",
+                    this.refreshToken ? { refreshToken: this.refreshToken } : undefined,
+                    true // isRetry — prevents loop
+                );
+                if (result.ok) {
+                    this.accessToken = result.data.accessToken;
+                    this.refreshToken = result.data.refreshToken;
+                    await this.onTokenRefreshed?.(result.data.accessToken, result.data.refreshToken);
+                    return true;
+                }
+                this.clearTokens();
+                this.onAuthFailed?.();
+                return false;
+            } catch {
+                this.clearTokens();
+                this.onAuthFailed?.();
+                return false;
+            } finally {
+                this.isRefreshing = false;
+                this.refreshPromise = null;
+            }
+        })();
+        return this.refreshPromise;
     }
 
     // ── App config ────────────────────────────────────────────────────────────
@@ -98,11 +207,11 @@ export class RealApiClient implements ApiClient {
         return this.request<void>("POST", "/api/auth/logout");
     }
 
-    refreshTokens(refreshToken: string) {
+    refreshTokens(refreshToken?: string) {
         return this.request<Pick<AuthResponse, "accessToken" | "refreshToken">>(
             "POST",
             "/api/auth/refresh",
-            { refreshToken }
+            refreshToken ? { refreshToken } : undefined
         );
     }
 
@@ -111,6 +220,10 @@ export class RealApiClient implements ApiClient {
             guestAccessToken,
             ...credentials,
         });
+    }
+
+    getMe() {
+        return this.request<User>("GET", "/api/auth/me");
     }
 
     // ── Sessions ──────────────────────────────────────────────────────────────
@@ -148,6 +261,14 @@ export class RealApiClient implements ApiClient {
         return this.request<DrawEvent>("POST", `/api/sessions/${sessionId}/draw`, { playerId });
     }
 
+    drawReparationsCard(sessionId: string, playerId: string) {
+        return this.request<DrawEvent>(
+            "POST",
+            `/api/sessions/${sessionId}/draw-reparations`,
+            { playerId }
+        );
+    }
+
     submitCard(sessionId: string, req: SubmitCardRequest) {
         return this.request<Card>("POST", `/api/sessions/${sessionId}/cards`, req);
     }
@@ -164,10 +285,6 @@ export class RealApiClient implements ApiClient {
         return this.request<void>("DELETE", `/api/cards/${cardId}/vote`);
     }
 
-    flagCard(cardId: string) {
-        return this.request<void>("POST", `/api/cards/${cardId}/flag`);
-    }
-
     shareDescription(drawEventId: string) {
         return this.request<DrawEvent>("POST", `/api/draw-events/${drawEventId}/share-description`);
     }
@@ -178,16 +295,24 @@ export class RealApiClient implements ApiClient {
 
     // ── Transfers ─────────────────────────────────────────────────────────────
 
-    createTransfer(drawEventId: string, toPlayerId: string) {
-        return this.request<CardTransfer>("POST", "/api/transfers", { drawEventId, toPlayerId });
+    createTransfer(drawEventId: string, fromPlayerId: string, toPlayerId: string) {
+        return this.request<CardTransfer>("POST", "/api/transfers", {
+            drawEventId,
+            fromPlayerId,
+            toPlayerId,
+        });
     }
 
-    acceptTransfer(transferId: string) {
-        return this.request<DrawEvent>("POST", `/api/transfers/${transferId}/accept`);
+    acceptTransfer(transferId: string, acceptingPlayerId: string) {
+        return this.request<DrawEvent>("POST", `/api/transfers/${transferId}/accept`, {
+            acceptingPlayerId,
+        });
     }
 
-    cancelTransfer(transferId: string) {
-        return this.request<void>("DELETE", `/api/transfers/${transferId}`);
+    cancelTransfer(transferId: string, requestingPlayerId: string) {
+        return this.request<void>("DELETE", `/api/transfers/${transferId}`, {
+            requestingPlayerId,
+        });
     }
 
     // ── Player management ─────────────────────────────────────────────────────
@@ -214,6 +339,12 @@ export class RealApiClient implements ApiClient {
 
     changePassword(req: ChangePasswordRequest) {
         return this.request<void>("POST", "/api/users/me/change-password", req);
+    }
+
+    // ── Games ─────────────────────────────────────────────────────────────────
+
+    getGames() {
+        return this.request<Game[]>("GET", "/api/games");
     }
 
     // ── My Cards management ───────────────────────────────────────────────────

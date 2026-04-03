@@ -4,7 +4,7 @@ import { useHistory } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
-import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
+import type { Card, CardVersion, Game, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -40,20 +40,24 @@ export default function MyCards() {
     const [editTitle, setEditTitle] = useState("");
     const [editDesc, setEditDesc] = useState("");
     const [editHiddenDesc, setEditHiddenDesc] = useState(false);
-    const [editDrinksThis, setEditDrinksThis] = useState(0);
-    const [editDrinksAll, setEditDrinksAll] = useState(0);
-    const [editFamilySafe, setEditFamilySafe] = useState(false);
+    const [editDrinkingLevel, setEditDrinkingLevel] = useState<0 | 1 | 2 | 3>(0);
+    const [editSpiceLevel, setEditSpiceLevel] = useState<0 | 1 | 2 | 3>(0);
     const [editGameChanger, setEditGameChanger] = useState(false);
     const [editGameTags, setEditGameTags] = useState<string[]>([]);
-    const [editTagInput, setEditTagInput] = useState("");
+    const [availableGames, setAvailableGames] = useState<Game[]>([]);
+    const [gamesLoading, setGamesLoading] = useState(true);
 
-    // ── Load my cards on mount ────────────────────────────────────────────────
+    // ── Load my cards + available games on mount ──────────────────────────────
     useEffect(() => {
         if (!user) return;
         apiClient.getMyCards().then((result) => {
             if (result.ok) setMyCards(result.data);
             else setLoadError(result.error.message);
             setIsLoading(false);
+        });
+        apiClient.getGames().then((result) => {
+            if (result.ok) setAvailableGames(result.data);
+            setGamesLoading(false);
         });
     }, [user]);
 
@@ -87,12 +91,10 @@ export default function MyCards() {
         setEditTitle(v.title);
         setEditDesc(v.description ?? "");
         setEditHiddenDesc(v.hiddenDescription);
-        setEditDrinksThis(v.drinksPerHourThisPlayer);
-        setEditDrinksAll(v.avgDrinksPerHourAllPlayers);
-        setEditFamilySafe(v.isFamilySafe);
+        setEditDrinkingLevel(v.drinkingLevel as 0 | 1 | 2 | 3);
+        setEditSpiceLevel(v.spiceLevel as 0 | 1 | 2 | 3);
         setEditGameChanger(v.isGameChanger);
-        setEditGameTags(v.gameTags ?? []);
-        setEditTagInput("");
+        setEditGameTags(v.gameTags.map((g) => g.id));
         setEditError(null);
         setShowVersionHistory(false);
         setShowPreviewNote(false);
@@ -107,16 +109,12 @@ export default function MyCards() {
         modalRef.current?.dismiss();
     }
 
-    // ── Tag helpers ───────────────────────────────────────────────────────────
+    // ── Handlers ─────────────────────────────────────────────────────────────
 
-    function addTag() {
-        const tag = editTagInput.trim();
-        if (tag && !editGameTags.includes(tag)) setEditGameTags((prev) => [...prev, tag]);
-        setEditTagInput("");
-    }
-
-    function removeTag(tag: string) {
-        setEditGameTags((prev) => prev.filter((t) => t !== tag));
+    function toggleGame(gameId: string) {
+        setEditGameTags((prev) =>
+            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
+        );
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -134,10 +132,10 @@ export default function MyCards() {
                 title: trimmedTitle,
                 description: editDesc.trim(),
                 hiddenDescription: editHiddenDesc,
-                drinksPerHourThisPlayer: editDrinksThis,
-                avgDrinksPerHourAllPlayers: editDrinksAll,
-                isFamilySafe: editFamilySafe,
-                isGameChanger: editGameChanger,
+                drinkingLevel: editDrinkingLevel,
+                spiceLevel: editSpiceLevel,
+                isGameChanger: selectedCard?.cardType === "reparations" ? false : editGameChanger,
+                cardType: selectedCard?.cardType ?? "standard",
                 gameTags: editGameTags,
             };
             const result = await apiClient.updateCard(selectedCard.id, req);
@@ -218,9 +216,9 @@ export default function MyCards() {
                 {v.description && <p style={styles.tileDesc}>{v.description}</p>}
                 {v.gameTags.length > 0 && (
                     <div style={styles.tileTagRow}>
-                        {v.gameTags.map((tag) => (
-                            <span key={tag} style={styles.tileTag}>
-                                {tag}
+                        {v.gameTags.map((game) => (
+                            <span key={game.id} style={styles.tileTag}>
+                                {game.name}
                             </span>
                         ))}
                     </div>
@@ -447,132 +445,101 @@ export default function MyCards() {
                             {/* ── Drinking ──────────────────────────────────── */}
                             <div style={styles.modalSection}>
                                 <p style={styles.sectionLabel}>DRINKING</p>
-                                <div style={styles.numberRow}>
-                                    <label style={styles.numberLabel}>
-                                        <span style={styles.numberLabelText}>
-                                            Drinks / hr (you)
-                                        </span>
-                                        <input
-                                            type="number"
-                                            style={styles.numberInput}
-                                            value={editDrinksThis}
-                                            min={0}
-                                            step={0.5}
-                                            onChange={(e) =>
-                                                setEditDrinksThis(
-                                                    Math.max(0, parseFloat(e.target.value) || 0)
-                                                )
-                                            }
-                                            disabled={isPending}
-                                        />
-                                    </label>
-                                    <label style={styles.numberLabel}>
-                                        <span style={styles.numberLabelText}>
-                                            Drinks / hr (everyone)
-                                        </span>
-                                        <input
-                                            type="number"
-                                            style={styles.numberInput}
-                                            value={editDrinksAll}
-                                            min={0}
-                                            step={0.5}
-                                            onChange={(e) =>
-                                                setEditDrinksAll(
-                                                    Math.max(0, parseFloat(e.target.value) || 0)
-                                                )
-                                            }
-                                            disabled={isPending}
-                                        />
-                                    </label>
+                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                    {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
+                                        ([label, val]) => (
+                                            <button
+                                                key={val}
+                                                style={
+                                                    editDrinkingLevel === val
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => setEditDrinkingLevel(val)}
+                                                disabled={isPending}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    )}
                                 </div>
                             </div>
 
                             <div style={styles.divider} />
 
                             {/* ── Game tags ─────────────────────────────────── */}
-                            <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>GAME</p>
-                                {editGameTags.length > 0 && (
+                            {!gamesLoading && availableGames.length > 0 && (
+                                <div style={styles.modalSection}>
+                                    <p style={styles.sectionLabel}>GAME</p>
                                     <div style={styles.tagList}>
-                                        {editGameTags.map((tag) => (
-                                            <button
-                                                key={tag}
-                                                style={styles.tagChip as React.CSSProperties}
-                                                onClick={() => removeTag(tag)}
-                                                disabled={isPending}
-                                            >
-                                                {tag} ×
-                                            </button>
-                                        ))}
+                                        {availableGames.map((game) => {
+                                            const selected = editGameTags.includes(game.id);
+                                            return (
+                                                <button
+                                                    key={game.id}
+                                                    style={
+                                                        (selected
+                                                            ? styles.gameChipOn
+                                                            : styles.gameChipOff) as React.CSSProperties
+                                                    }
+                                                    onClick={() => toggleGame(game.id)}
+                                                    disabled={isPending}
+                                                >
+                                                    {game.name}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                )}
-                                <div style={styles.tagInputRow}>
-                                    <input
-                                        style={{ ...styles.textInput, flex: 1, minWidth: 0 }}
-                                        placeholder="Add a game"
-                                        value={editTagInput}
-                                        onChange={(e) => setEditTagInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                                e.preventDefault();
-                                                addTag();
-                                            }
-                                        }}
-                                        maxLength={40}
-                                        disabled={isPending}
-                                    />
-                                    <button
-                                        style={
-                                            editTagInput.trim() && !isPending
-                                                ? styles.addButton
-                                                : styles.addButtonDisabled
-                                        }
-                                        onClick={addTag}
-                                        disabled={!editTagInput.trim() || isPending}
-                                    >
-                                        Add
-                                    </button>
                                 </div>
-                            </div>
+                            )}
 
                             <div style={styles.divider} />
 
                             {/* ── Flags ─────────────────────────────────────── */}
                             <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>FLAGS</p>
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Family safe</span>
-                                        <span style={styles.toggleSub}>Suitable for all ages</span>
-                                    </div>
-                                    <button
-                                        style={editFamilySafe ? styles.toggleOn : styles.toggleOff}
-                                        onClick={() => setEditFamilySafe((v) => !v)}
-                                        disabled={isPending}
-                                    >
-                                        {editFamilySafe ? "ON" : "OFF"}
-                                    </button>
+                                <p style={styles.sectionLabel}>CONTENT RATING</p>
+                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                    {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
+                                        ([label, val]) => (
+                                            <button
+                                                key={val}
+                                                style={
+                                                    editSpiceLevel === val
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => setEditSpiceLevel(val)}
+                                                disabled={isPending}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    )}
                                 </div>
-                                <div style={styles.rowDivider} />
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Game Changer</span>
-                                        <span style={styles.toggleSub}>
-                                            Triggers a dramatic reveal
-                                        </span>
-                                    </div>
-                                    <button
-                                        style={
-                                            editGameChanger
-                                                ? styles.toggleOnViolet
-                                                : styles.toggleOff
-                                        }
-                                        onClick={() => setEditGameChanger((v) => !v)}
-                                        disabled={isPending}
-                                    >
-                                        {editGameChanger ? "ON" : "OFF"}
-                                    </button>
-                                </div>
+                                {selectedCard?.cardType !== "reparations" && (
+                                    <>
+                                        <div style={styles.rowDivider} />
+                                        <div style={styles.toggleRow}>
+                                            <div style={styles.toggleText}>
+                                                <span style={styles.toggleTitle}>Game Changer</span>
+                                                <span style={styles.toggleSub}>
+                                                    Triggers a dramatic reveal
+                                                </span>
+                                            </div>
+                                            <button
+                                                style={
+                                                    editGameChanger
+                                                        ? styles.toggleOnViolet
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => setEditGameChanger((v) => !v)}
+                                                disabled={isPending}
+                                            >
+                                                {editGameChanger ? "ON" : "OFF"}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             <div style={styles.divider} />
@@ -1117,34 +1084,6 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: 1.5,
     },
 
-    // Number inputs
-    numberRow: {
-        display: "flex",
-        gap: "var(--space-3)",
-    },
-    numberLabel: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-1)",
-        flex: 1,
-    },
-    numberLabelText: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-    },
-    numberInput: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        padding: "var(--space-3) var(--space-4)",
-        outline: "none",
-        width: "100%",
-        boxSizing: "border-box",
-    },
-
     // Toggles
     toggleRow: {
         display: "flex",
@@ -1211,53 +1150,36 @@ const styles: Record<string, React.CSSProperties> = {
         textAlign: "center",
     },
 
-    // Tags
+    // Game chips
     tagList: {
         display: "flex",
         flexWrap: "wrap",
         gap: "var(--space-2)",
     },
-    tagChip: {
-        background: "var(--color-surface-elevated)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        padding: "var(--space-1) var(--space-3)",
-        cursor: "pointer",
-        minHeight: "32px",
-        display: "inline-flex",
-        alignItems: "center",
-    },
-    tagInputRow: {
-        display: "flex",
-        gap: "var(--space-2)",
-    },
-    addButton: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-accent-primary)",
-        color: "var(--color-accent-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "pointer",
-        flexShrink: 0,
-        minHeight: "44px",
-    },
-    addButtonDisabled: {
+    gameChipOff: {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    },
+    gameChipOn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-primary)",
+        color: "var(--color-accent-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
         fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "default",
-        flexShrink: 0,
-        minHeight: "44px",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
     },
 
     // Preview card link

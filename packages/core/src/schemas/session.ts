@@ -1,8 +1,18 @@
 import { z } from "zod";
 
 export const FilterSettingsSchema = z.object({
-    ageAppropriate: z.boolean(),
-    drinking: z.boolean(),
+    /**
+     * Maximum drinking level cards to include (0–3, matching drinkingLevel on CardVersion).
+     * 0 = no drinking cards; 3 = all cards regardless of drinking content.
+     * Displayed as 🍺 count selector.
+     */
+    maxDrinkingLevel: z.number().int().min(0).max(3),
+    /**
+     * Maximum spice level cards to include (0–3, matching spiceLevel on CardVersion).
+     * 0 = G only; 3 = up to R.
+     * Displayed as MPAA rating selector.
+     */
+    maxSpiceLevel: z.number().int().min(0).max(3),
     /** One or more game names. Empty array = any game. */
     gameTags: z.array(z.string()),
 });

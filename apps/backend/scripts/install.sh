@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# BASKET BOT BACKEND INSTALLATION SCRIPT
+# CHANCE-A-MARAN BACKEND INSTALLATION SCRIPT
 # ==============================================================================
 # For Raspberry Pi Raspbian - Run as admin user
 #
@@ -23,15 +23,15 @@ set -e
 #    # Use 'pwd' to confirm your current location
 #
 # 4. Clone the repository from GitHub:
-#    git clone https://github.com/thedinj/basket-bot.git
-#    # This creates a new directory: ~/basket-bot
+#    git clone https://github.com/thedinj/chance-a-maran.git
+#    # This creates a new directory: ~/chance-a-maran
 #
 #    OR, if you've already cloned it, navigate into it and update to latest:
-#    cd ~/basket-bot
+#    cd ~/chance-a-maran
 #    git pull origin main
 #
 # 5. Configure Git to ignore file mode changes (prevents chmod from showing as change):
-#    cd ~/basket-bot
+#    cd ~/chance-a-maran
 #    git config core.filemode false
 #
 # 6. Navigate to the backend scripts directory:
@@ -53,7 +53,7 @@ set -e
 # ==============================================================================
 
 echo "================================================"
-echo "Basket Bot Backend Installation"
+echo "Chance-a-Maran Backend Installation"
 echo "================================================"
 echo ""
 
@@ -230,7 +230,7 @@ echo ""
 
 # Build core package
 echo "Building core package..."
-if ! pnpm --filter @basket-bot/core build; then
+if ! pnpm --filter @chance/core build; then
     echo "❌ Failed to build core package"
     exit 1
 fi
@@ -346,14 +346,14 @@ echo "✓ Database initialized"
 echo ""
 
 # Create systemd service file
-SERVICE_NAME="basket-bot-backend"
+SERVICE_NAME="chance-a-maran-backend"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 SERVICE_CREATED=true
 
 echo "Creating systemd service..."
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=Basket Bot Backend Service
+Description=Chance-a-Maran Backend Service
 After=network.target
 
 [Service]
@@ -505,7 +505,7 @@ if [ "$ENABLE_HTTPS" = true ]; then
     CADDYFILE="/etc/caddy/Caddyfile"
 
     sudo tee "$CADDYFILE" > /dev/null <<EOF
-# Basket Bot Backend - Automatic HTTPS
+# Chance-a-Maran Backend - Automatic HTTPS
 $DOMAIN_NAME {
     # Reverse proxy to Next.js backend
     reverse_proxy localhost:$PORT
@@ -611,13 +611,13 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "Configuring Samba shares..."
 
-    # Share 1: Basket Bot project (read-write)
-    if ! grep -q "\[basket-bot\]" "$SAMBA_CONF"; then
+    # Share 1: Chance-a-Maran project (read-write)
+    if ! grep -q "\[chance-a-maran\]" "$SAMBA_CONF"; then
         sudo tee -a "$SAMBA_CONF" > /dev/null <<EOF
 
-# Basket Bot Backend Files (read-write)
-[basket-bot]
-    comment = Basket Bot Application Files
+# Chance-a-Maran Backend Files (read-write)
+[chance-a-maran]
+    comment = Chance-a-Maran Application Files
     path = $PROJECT_ROOT
     browseable = yes
     read only = no
@@ -625,9 +625,9 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     directory mask = 0755
     valid users = $CURRENT_USER
 EOF
-        echo "✓ basket-bot share configured (read-write)"
+        echo "✓ chance-a-maran share configured (read-write)"
     else
-        echo "✓ basket-bot share already exists"
+        echo "✓ chance-a-maran share already exists"
     fi
 
     # Share 2: System logs (read-only)
@@ -733,7 +733,7 @@ EOF
     echo "================================================"
     echo ""
     echo "From Windows File Explorer, access:"
-    echo "  \\\\$SERVER_IP\\basket-bot       (Application files - read/write)"
+    echo "  \\\\$SERVER_IP\\chance-a-maran       (Application files - read/write)"
     echo "  \\\\$SERVER_IP\\logs              (System logs - read-only)"
     if [ "$ENABLE_HTTPS" = true ]; then
         echo "  \\\\$SERVER_IP\\caddy-config      (Caddy config - read/write)"
@@ -859,7 +859,7 @@ if [ "$INSTALL_SAMBA" = true ]; then
     echo "  3. Enter credentials when prompted"
     echo ""
     echo "Available shares:"
-    echo "  \\\\$SERVER_IP\\basket-bot       (read/write)"
+    echo "  \\\\$SERVER_IP\\chance-a-maran       (read/write)"
     echo "  \\\\$SERVER_IP\\logs              (read-only)"
     if [ "$ENABLE_HTTPS" = true ]; then
         echo "  \\\\$SERVER_IP\\caddy-config      (read/write)"

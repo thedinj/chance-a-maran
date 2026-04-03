@@ -66,6 +66,7 @@ export default function Notifications() {
                                             key={transfer.id}
                                             transferId={transfer.id}
                                             drawEventId={transfer.drawEventId}
+                                            acceptingPlayerId={transfer.toPlayerId}
                                             cardTitle={cardTitle}
                                             fromName={fromName}
                                             toName={toName}
@@ -98,6 +99,7 @@ export default function Notifications() {
 interface TransferItemProps {
     transferId: string;
     drawEventId: string;
+    acceptingPlayerId: string;
     cardTitle: string;
     fromName: string;
     toName: string;
@@ -110,6 +112,7 @@ interface TransferItemProps {
 function TransferItem({
     transferId,
     drawEventId,
+    acceptingPlayerId,
     cardTitle,
     fromName,
     toName,
@@ -123,7 +126,7 @@ function TransferItem({
     function handleAccept() {
         setError(null);
         startTransition(async () => {
-            const result = await apiClient.acceptTransfer(transferId);
+            const result = await apiClient.acceptTransfer(transferId, acceptingPlayerId);
             if (result.ok) {
                 onRemoveDrawEvent(drawEventId);
                 onAddDrawEvent(result.data);
@@ -137,7 +140,7 @@ function TransferItem({
     function handleDecline() {
         setError(null);
         startTransition(async () => {
-            const result = await apiClient.cancelTransfer(transferId);
+            const result = await apiClient.cancelTransfer(transferId, acceptingPlayerId);
             if (result.ok) {
                 onRemoveTransfer(transferId);
             } else {

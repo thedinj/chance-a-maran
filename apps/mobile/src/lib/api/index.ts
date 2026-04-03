@@ -26,9 +26,29 @@ const useFake = import.meta.env.VITE_USE_FAKE_API === "true";
 
 export const apiClient: ApiClient = useFake ? new FakeApiClient() : new RealApiClient();
 
-// Expose the real client's setAccessToken when not in fake mode
+function realClient(): RealApiClient | null {
+    return useFake ? null : (apiClient as RealApiClient);
+}
+
 export function setApiAccessToken(token: string | null) {
-    if (!useFake) {
-        (apiClient as RealApiClient).setAccessToken(token);
-    }
+    realClient()?.setAccessToken(token);
+}
+
+export function setApiRefreshToken(token: string | null) {
+    realClient()?.setRefreshToken(token);
+}
+
+export function clearApiTokens() {
+    realClient()?.clearTokens();
+}
+
+export function markApiAuthReady() {
+    realClient()?.markAuthReady();
+}
+
+export function setApiCallbacks(callbacks: {
+    onTokenRefreshed?: (accessToken: string, refreshToken: string) => Promise<void>;
+    onAuthFailed?: () => void;
+}) {
+    realClient()?.setCallbacks(callbacks);
 }

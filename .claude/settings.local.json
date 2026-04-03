@@ -13,7 +13,28 @@
       "Bash(pnpm --filter mobile exec tsc --noEmit)",
       "Bash(ls:*)",
       "Bash(grep -E \"\\\\.\\(tsx?|css\\)$\")",
-      "Bash(grep -E \"\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(cat /d/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/next.config.*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(pnpm --filter backend typecheck)",
+      "Bash(pnpm --filter backend exec tsc --noEmit)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm --filter @chance/core exec tsc --noEmit)",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/cards/[cardId]/vote\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/cards/[cardId]/versions\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/cards/[cardId]/deactivate\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/cards/[cardId]/reactivate\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/cards/[cardId]/promote\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/sessions/[sessionId]/cards\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/sessions/[sessionId]/draw\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/sessions/[sessionId]/draw-reparations\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/draw-events/[drawEventId]/share-description\")",
+      "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/transfers/[transferId]/accept\")",
+      "Bash(pnpm --filter core exec tsc --noEmit)"
+    ],
+    "additionalDirectories": [
+      "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"
     ]
   }
 }

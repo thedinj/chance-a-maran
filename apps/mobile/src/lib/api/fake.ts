@@ -12,6 +12,7 @@ import type {
     CreateSessionRequest,
     DrawEvent,
     FilterSettings,
+    Game,
     GetAllCardsFilters,
     JoinByCodeRequest,
     JoinByCodeResponse,
@@ -53,6 +54,16 @@ function fail(code: ErrorCode, message: string): ApiResult<never> {
 
 // ─── Seed data ───────────────────────────────────────────────────────────────
 
+const DEMO_GAME_CATAN: Game = { id: "game-catan", name: "Catan", slug: "catan" };
+const DEMO_GAME_CODENAMES: Game = { id: "game-codenames", name: "Codenames", slug: "codenames" };
+const DEMO_GAME_TTR: Game = {
+    id: "game-ttr",
+    name: "Ticket to Ride",
+    slug: "ticket-to-ride",
+};
+
+const DEMO_GAMES: Game[] = [DEMO_GAME_CATAN, DEMO_GAME_CODENAMES, DEMO_GAME_TTR];
+
 const DEMO_USER: User = {
     id: "user-demo",
     email: "demo@chance.app",
@@ -71,9 +82,8 @@ const DEMO_CARD_VERSION: CardVersion = {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."*/,
     hiddenDescription: false,
     imageUrl: null,
-    drinksPerHourThisPlayer: 0,
-    avgDrinksPerHourAllPlayers: 0,
-    isFamilySafe: true,
+    drinkingLevel: 0,
+    spiceLevel: 0,
     isGameChanger: true,
     gameTags: [],
     authoredByUserId: "user-demo",
@@ -85,6 +95,7 @@ const DEMO_CARD: Card = {
     authorUserId: "user-demo",
     active: true,
     isGlobal: true,
+    cardType: "standard",
     createdInSessionId: null,
     currentVersionId: "cv-1",
     currentVersion: DEMO_CARD_VERSION,
@@ -100,9 +111,8 @@ const DEMO_CARD_2_V1: CardVersion = {
     description: "Tell the group something they don't know about you.",
     hiddenDescription: false,
     imageUrl: null,
-    drinksPerHourThisPlayer: 0,
-    avgDrinksPerHourAllPlayers: 0,
-    isFamilySafe: true,
+    drinkingLevel: 0,
+    spiceLevel: 0,
     isGameChanger: false,
     gameTags: [],
     authoredByUserId: "user-demo",
@@ -120,6 +130,7 @@ const DEMO_CARD_2: Card = {
     authorUserId: "user-demo",
     active: true,
     isGlobal: false,
+    cardType: "standard",
     createdInSessionId: null,
     currentVersionId: "cv-2-v2",
     currentVersion: DEMO_CARD_2_V2,
@@ -135,11 +146,10 @@ const DEMO_CARD_3_V1: CardVersion = {
     description: "The player to your left gets to ask you any question.",
     hiddenDescription: true,
     imageUrl: null,
-    drinksPerHourThisPlayer: 0,
-    avgDrinksPerHourAllPlayers: 0,
-    isFamilySafe: false,
+    drinkingLevel: 0,
+    spiceLevel: 1,
     isGameChanger: false,
-    gameTags: ["Catan"],
+    gameTags: [DEMO_GAME_CATAN],
     authoredByUserId: "user-demo",
     createdAt: "2026-01-03T00:00:00.000Z",
 };
@@ -148,6 +158,7 @@ const DEMO_CARD_3: Card = {
     authorUserId: "user-demo",
     active: false,
     isGlobal: false,
+    cardType: "standard",
     createdInSessionId: null,
     currentVersionId: "cv-3-v1",
     currentVersion: DEMO_CARD_3_V1,
@@ -188,8 +199,8 @@ const DEMO_SESSION: Session = {
     name: "Game Night",
     joinCode: "DEMO",
     filterSettings: {
-        ageAppropriate: true,
-        drinking: true,
+        maxDrinkingLevel: 3,
+        maxSpiceLevel: 2,
         gameTags: [],
     },
     status: "active",
@@ -295,13 +306,18 @@ export class FakeApiClient implements ApiClient {
     }
 
     async refreshTokens(
-        refreshToken: string
+        refreshToken?: string
     ): Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>> {
-        if (!refreshToken.startsWith("fake-refresh-")) {
+        if (!refreshToken || !refreshToken.startsWith("fake-refresh-")) {
             return fail("AUTHENTICATION_ERROR", "Invalid refresh token.");
         }
         const userId = refreshToken.replace("fake-refresh-", "");
         return ok({ accessToken: `fake-access-${userId}`, refreshToken: `fake-refresh-${userId}` });
+    }
+
+    async getMe(): Promise<ApiResult<User>> {
+        if (!state.currentUser) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        return ok(state.currentUser);
     }
 
     async claimAccount(
@@ -482,8 +498,16 @@ export class FakeApiClient implements ApiClient {
         return ok(drawEvent);
     }
 
+    async drawReparationsCard(sessionId: string, playerId: string): Promise<ApiResult<DrawEvent>> {
+        // Reuse drawCard logic — fake client doesn't distinguish pool types
+        return this.drawCard(sessionId, playerId);
+    }
+
     async submitCard(sessionId: string, req: SubmitCardRequest): Promise<ApiResult<Card>> {
         const cardId = id();
+        const resolvedGameTags = req.gameTags
+            .map((gid) => DEMO_GAMES.find((g) => g.id === gid))
+            .filter((g): g is Game => g !== undefined);
         const version: CardVersion = {
             id: id(),
             cardId,
@@ -492,11 +516,10 @@ export class FakeApiClient implements ApiClient {
             description: req.description,
             hiddenDescription: req.hiddenDescription,
             imageUrl: req.imageUrl ?? null,
-            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
-            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
-            isFamilySafe: req.isFamilySafe,
+            drinkingLevel: req.drinkingLevel,
+            spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,
-            gameTags: req.gameTags,
+            gameTags: resolvedGameTags,
             authoredByUserId: state.currentUser?.id ?? "unknown",
             createdAt: ts(),
         };
@@ -505,6 +528,7 @@ export class FakeApiClient implements ApiClient {
             authorUserId: state.currentUser?.id ?? "unknown",
             active: true,
             isGlobal: false,
+            cardType: req.cardType,
             createdInSessionId: sessionId || null,
             currentVersionId: version.id,
             currentVersion: version,
@@ -517,6 +541,9 @@ export class FakeApiClient implements ApiClient {
 
     async submitCardOutsideSession(req: SubmitCardRequest): Promise<ApiResult<Card>> {
         const cardId = id();
+        const resolvedGameTags = req.gameTags
+            .map((gid) => DEMO_GAMES.find((g) => g.id === gid))
+            .filter((g): g is Game => g !== undefined);
         const version: CardVersion = {
             id: id(),
             cardId,
@@ -525,11 +552,10 @@ export class FakeApiClient implements ApiClient {
             description: req.description,
             hiddenDescription: req.hiddenDescription,
             imageUrl: req.imageUrl ?? null,
-            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
-            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
-            isFamilySafe: req.isFamilySafe,
+            drinkingLevel: req.drinkingLevel,
+            spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,
-            gameTags: req.gameTags,
+            gameTags: resolvedGameTags,
             authoredByUserId: state.currentUser?.id ?? "unknown",
             createdAt: ts(),
         };
@@ -538,6 +564,7 @@ export class FakeApiClient implements ApiClient {
             authorUserId: state.currentUser?.id ?? "unknown",
             active: true,
             isGlobal: false,
+            cardType: req.cardType,
             createdInSessionId: null,
             currentVersionId: version.id,
             currentVersion: version,
@@ -553,10 +580,6 @@ export class FakeApiClient implements ApiClient {
     }
 
     async clearVote(_cardId: string): Promise<ApiResult<void>> {
-        return ok(undefined);
-    }
-
-    async flagCard(_cardId: string): Promise<ApiResult<void>> {
         return ok(undefined);
     }
 
@@ -586,19 +609,17 @@ export class FakeApiClient implements ApiClient {
 
     async createTransfer(
         drawEventId: string,
+        fromPlayerId: string,
         toPlayerId: string
     ): Promise<ApiResult<CardTransfer>> {
         let sessionId: string | undefined;
-        let fromPlayerId: string | undefined;
         for (const [sid, events] of state.drawEvents.entries()) {
-            const event = events.find((e) => e.id === drawEventId);
-            if (event) {
+            if (events.find((e) => e.id === drawEventId)) {
                 sessionId = sid;
-                fromPlayerId = event.playerId;
                 break;
             }
         }
-        if (!sessionId || !fromPlayerId) return fail("NOT_FOUND_ERROR", "Draw event not found.");
+        if (!sessionId) return fail("NOT_FOUND_ERROR", "Draw event not found.");
 
         // Auto-cancel any existing pending transfer for this draw event
         const existing = state.transfers.get(sessionId)!;
@@ -616,7 +637,7 @@ export class FakeApiClient implements ApiClient {
         return ok(transfer);
     }
 
-    async acceptTransfer(transferId: string): Promise<ApiResult<DrawEvent>> {
+    async acceptTransfer(transferId: string, _acceptingPlayerId: string): Promise<ApiResult<DrawEvent>> {
         for (const [sid, transfers] of state.transfers.entries()) {
             const idx = transfers.findIndex((t) => t.id === transferId);
             if (idx === -1) continue;
@@ -642,7 +663,7 @@ export class FakeApiClient implements ApiClient {
         return fail("NOT_FOUND_ERROR", "Transfer not found.");
     }
 
-    async cancelTransfer(transferId: string): Promise<ApiResult<void>> {
+    async cancelTransfer(transferId: string, _requestingPlayerId: string): Promise<ApiResult<void>> {
         for (const transfers of state.transfers.values()) {
             const idx = transfers.findIndex((t) => t.id === transferId);
             if (idx !== -1) {
@@ -699,6 +720,12 @@ export class FakeApiClient implements ApiClient {
         return ok(undefined);
     }
 
+    // ── Games ─────────────────────────────────────────────────────────────────
+
+    async getGames(): Promise<ApiResult<Game[]>> {
+        return ok([...DEMO_GAMES]);
+    }
+
     // ── My Cards management ───────────────────────────────────────────────────
 
     async getMyCards(): Promise<ApiResult<Card[]>> {
@@ -730,6 +757,9 @@ export class FakeApiClient implements ApiClient {
         const card = state.cards.get(cardId);
         if (!card) return fail("NOT_FOUND_ERROR", "Card not found.");
         const versions = state.cardVersions.get(cardId) ?? [];
+        const resolvedGameTags = req.gameTags
+            .map((gid) => DEMO_GAMES.find((g) => g.id === gid))
+            .filter((g): g is Game => g !== undefined);
         const newVersion: CardVersion = {
             id: id(),
             cardId,
@@ -738,11 +768,10 @@ export class FakeApiClient implements ApiClient {
             description: req.description,
             hiddenDescription: req.hiddenDescription,
             imageUrl: req.imageUrl ?? null,
-            drinksPerHourThisPlayer: req.drinksPerHourThisPlayer,
-            avgDrinksPerHourAllPlayers: req.avgDrinksPerHourAllPlayers,
-            isFamilySafe: req.isFamilySafe,
+            drinkingLevel: req.drinkingLevel,
+            spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,
-            gameTags: req.gameTags,
+            gameTags: resolvedGameTags,
             authoredByUserId: state.currentUser?.id ?? "unknown",
             createdAt: ts(),
         };

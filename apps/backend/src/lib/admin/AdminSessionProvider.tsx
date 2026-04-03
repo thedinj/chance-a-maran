@@ -1,6 +1,6 @@
 "use client";
 
-import type { User } from "@basket-bot/core";
+import type { User } from "@chance/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSessionContext } from "./AdminSessionContext";
 

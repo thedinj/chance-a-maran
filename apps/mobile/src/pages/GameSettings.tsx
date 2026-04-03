@@ -1,10 +1,11 @@
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
 import { AppHeader } from "../components/AppHeader";
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { useHistory, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { useSession } from "../session/useSession";
 import { apiClient } from "../lib/api";
+import type { Game } from "../lib/api/types";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -33,16 +34,26 @@ export default function GameSettings() {
 
     // Form state — seeded from existing session in edit mode
     const [name, setName] = useState(session?.name ?? "");
-    const [drinking, setDrinking] = useState(session?.filterSettings.drinking ?? false);
-    const [ageAppropriate, setAgeAppropriate] = useState(
-        session?.filterSettings.ageAppropriate ?? false
+    const [maxDrinkingLevel, setMaxDrinkingLevel] = useState<0 | 1 | 2 | 3>(
+        (session?.filterSettings.maxDrinkingLevel ?? 3) as 0 | 1 | 2 | 3
+    );
+    const [maxSpiceLevel, setMaxSpiceLevel] = useState<0 | 1 | 2 | 3>(
+        (session?.filterSettings.maxSpiceLevel ?? 2) as 0 | 1 | 2 | 3
     );
     const [gameTags, setGameTags] = useState<string[]>(session?.filterSettings.gameTags ?? []);
-    const [tagInput, setTagInput] = useState("");
+    const [availableGames, setAvailableGames] = useState<Game[]>([]);
+    const [gamesLoading, setGamesLoading] = useState(true);
     // Card sharing default per UX spec — host's own setting for pool contribution
     // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
     const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">("network");
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        apiClient.getGames().then((result) => {
+            if (result.ok) setAvailableGames(result.data);
+            setGamesLoading(false);
+        });
+    }, []);
 
     // Registered-only page
     if (!user) {
@@ -52,16 +63,10 @@ export default function GameSettings() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function addTag() {
-        const tag = tagInput.trim();
-        if (tag && !gameTags.includes(tag)) {
-            setGameTags((prev) => [...prev, tag]);
-        }
-        setTagInput("");
-    }
-
-    function removeTag(tag: string) {
-        setGameTags((prev) => prev.filter((t) => t !== tag));
+    function toggleGame(gameId: string) {
+        setGameTags((prev) =>
+            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
+        );
     }
 
     function handleSave() {
@@ -76,7 +81,7 @@ export default function GameSettings() {
             startTransition(async () => {
                 const result = await apiClient.createSession({
                     name: trimmedName,
-                    filterSettings: { drinking, ageAppropriate, gameTags },
+                    filterSettings: { maxDrinkingLevel, maxSpiceLevel, gameTags },
                 });
                 if (result.ok) {
                     const stateResult = await apiClient.getSessionState(result.data.id);
@@ -91,8 +96,8 @@ export default function GameSettings() {
         } else {
             startTransition(async () => {
                 const result = await apiClient.updateSessionFilters(sessionId!, {
-                    drinking,
-                    ageAppropriate,
+                    maxDrinkingLevel,
+                    maxSpiceLevel,
                     gameTags,
                 });
                 if (result.ok) {
@@ -153,89 +158,91 @@ export default function GameSettings() {
 
                         <div style={styles.toggleRow}>
                             <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Drinking cards</span>
-                                <span style={styles.toggleSub}>
-                                    Include cards with drinking mechanics
-                                </span>
+                                <span style={styles.toggleTitle}>Drinking limit</span>
                             </div>
-                            <button
-                                style={drinking ? styles.toggleOn : styles.toggleOff}
-                                onClick={() => setDrinking((v) => !v)}
-                                disabled={isPending}
-                            >
-                                {drinking ? "ON" : "OFF"}
-                            </button>
+                            <div style={styles.selectorGroup}>
+                                {([0, 1, 2, 3] as const).map((level) => (
+                                    <button
+                                        key={level}
+                                        style={
+                                            maxDrinkingLevel === level
+                                                ? styles.toggleOn
+                                                : styles.toggleOff
+                                        }
+                                        onClick={() => setMaxDrinkingLevel(level)}
+                                        disabled={isPending}
+                                    >
+                                        {level === 0
+                                            ? "∅"
+                                            : level === 1
+                                              ? "🍺"
+                                              : level === 2
+                                                ? "🍺🍺"
+                                                : "🍺🍺🍺"}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-
-                        <div style={styles.rowDivider} />
 
                         <div style={styles.toggleRow}>
                             <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Family safe only</span>
-                                <span style={styles.toggleSub}>Exclude mature content</span>
+                                <span style={styles.toggleTitle}>Content rating</span>
                             </div>
-                            <button
-                                style={ageAppropriate ? styles.toggleOn : styles.toggleOff}
-                                onClick={() => setAgeAppropriate((v) => !v)}
-                                disabled={isPending}
-                            >
-                                {ageAppropriate ? "ON" : "OFF"}
-                            </button>
+                            <div style={styles.selectorGroup}>
+                                {([0, 1, 2, 3] as const).map((level) => (
+                                    <button
+                                        key={level}
+                                        style={
+                                            maxSpiceLevel === level
+                                                ? styles.toggleOn
+                                                : styles.toggleOff
+                                        }
+                                        onClick={() => setMaxSpiceLevel(level)}
+                                        disabled={isPending}
+                                    >
+                                        {level === 0
+                                            ? "G"
+                                            : level === 1
+                                              ? "PG"
+                                              : level === 2
+                                                ? "PG-13"
+                                                : "R"}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
                     <div style={styles.divider} />
 
                     {/* ── Game tags ────────────────────────────────────────── */}
-                    <div style={styles.section}>
-                        <p style={styles.sectionLabel}>GAME</p>
-                        <p style={styles.hint}>
-                            Filter cards by the game you're playing. Leave empty for any game.
-                        </p>
-
-                        {gameTags.length > 0 && (
+                    {!gamesLoading && availableGames.length > 0 && (
+                        <div style={styles.section}>
+                            <p style={styles.sectionLabel}>GAME</p>
+                            <p style={styles.hint}>
+                                Filter cards by the game you're playing. Leave empty for any game.
+                            </p>
                             <div style={styles.tagList}>
-                                {gameTags.map((tag) => (
-                                    <button
-                                        key={tag}
-                                        style={styles.tagChip as React.CSSProperties}
-                                        onClick={() => removeTag(tag)}
-                                        disabled={isPending}
-                                    >
-                                        {tag} ×
-                                    </button>
-                                ))}
+                                {availableGames.map((game) => {
+                                    const selected = gameTags.includes(game.id);
+                                    return (
+                                        <button
+                                            key={game.id}
+                                            style={
+                                                (selected
+                                                    ? styles.gameChipOn
+                                                    : styles.gameChipOff) as React.CSSProperties
+                                            }
+                                            onClick={() => toggleGame(game.id)}
+                                            disabled={isPending}
+                                        >
+                                            {game.name}
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        )}
-
-                        <div style={styles.tagInputRow}>
-                            <input
-                                style={{ ...styles.textInput, flex: 1, minWidth: 0 }}
-                                placeholder="Add a game"
-                                value={tagInput}
-                                onChange={(e) => setTagInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        addTag();
-                                    }
-                                }}
-                                maxLength={40}
-                                disabled={isPending}
-                            />
-                            <button
-                                style={
-                                    tagInput.trim() && !isPending
-                                        ? styles.addButton
-                                        : styles.addButtonDisabled
-                                }
-                                onClick={addTag}
-                                disabled={!tagInput.trim() || isPending}
-                            >
-                                Add
-                            </button>
                         </div>
-                    </div>
+                    )}
 
                     <div style={styles.divider} />
 
@@ -439,6 +446,11 @@ const styles: Record<string, React.CSSProperties> = {
         gap: "var(--space-1)",
         flex: 1,
     },
+    selectorGroup: {
+        display: "flex",
+        gap: "var(--space-1)",
+        flexShrink: 0,
+    },
     toggleTitle: {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-body)",
@@ -484,47 +496,30 @@ const styles: Record<string, React.CSSProperties> = {
         flexWrap: "wrap",
         gap: "var(--space-2)",
     },
-    tagChip: {
-        background: "var(--color-surface-elevated)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        padding: "var(--space-1) var(--space-3)",
-        cursor: "pointer",
-        minHeight: "32px",
-        display: "inline-flex",
-        alignItems: "center",
-    },
-    tagInputRow: {
-        display: "flex",
-        gap: "var(--space-2)",
-    },
-    addButton: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-accent-primary)",
-        color: "var(--color-accent-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "pointer",
-        flexShrink: 0,
-        minHeight: "44px",
-    },
-    addButtonDisabled: {
+    gameChipOff: {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    },
+    gameChipOn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-primary)",
+        color: "var(--color-accent-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
         fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "default",
-        flexShrink: 0,
-        minHeight: "44px",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
     },
 
     // Card sharing

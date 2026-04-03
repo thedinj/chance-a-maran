@@ -1,10 +1,11 @@
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
 import { AppHeader } from "../components/AppHeader";
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { useSession } from "../session/useSession";
 import { apiClient } from "../lib/api";
+import type { Game } from "../lib/api/types";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -18,13 +19,21 @@ export default function SubmitCard() {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [hiddenDescription, setHiddenDescription] = useState(false);
-    const [drinksPerHourThisPlayer, setDrinksPerHourThisPlayer] = useState(0);
-    const [avgDrinksPerHourAllPlayers, setAvgDrinksPerHourAllPlayers] = useState(0);
-    const [isFamilySafe, setIsFamilySafe] = useState(false);
+    const [drinkingLevel, setDrinkingLevel] = useState<0 | 1 | 2 | 3>(0);
+    const [spiceLevel, setSpiceLevel] = useState<0 | 1 | 2 | 3>(0);
+    const [cardType, setCardType] = useState<"standard" | "reparations">("standard");
     const [isGameChanger, setIsGameChanger] = useState(false);
     const [gameTags, setGameTags] = useState<string[]>([]);
-    const [tagInput, setTagInput] = useState("");
+    const [availableGames, setAvailableGames] = useState<Game[]>([]);
+    const [gamesLoading, setGamesLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        apiClient.getGames().then((result) => {
+            if (result.ok) setAvailableGames(result.data);
+            setGamesLoading(false);
+        });
+    }, []);
 
     // Registered-only page
     if (!user) {
@@ -34,16 +43,10 @@ export default function SubmitCard() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function addTag() {
-        const tag = tagInput.trim();
-        if (tag && !gameTags.includes(tag)) {
-            setGameTags((prev) => [...prev, tag]);
-        }
-        setTagInput("");
-    }
-
-    function removeTag(tag: string) {
-        setGameTags((prev) => prev.filter((t) => t !== tag));
+    function toggleGame(gameId: string) {
+        setGameTags((prev) =>
+            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
+        );
     }
 
     function handleSubmit() {
@@ -65,10 +68,10 @@ export default function SubmitCard() {
             title: trimmedTitle,
             description: trimmedDescription,
             hiddenDescription,
-            drinksPerHourThisPlayer,
-            avgDrinksPerHourAllPlayers,
-            isFamilySafe,
-            isGameChanger,
+            drinkingLevel,
+            spiceLevel,
+            isGameChanger: cardType === "reparations" ? false : isGameChanger,
+            cardType,
             gameTags,
         };
 
@@ -153,136 +156,133 @@ export default function SubmitCard() {
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>DRINKING</p>
                         <p style={styles.hint}>
-                            Estimated drinks per hour this card adds. Leave at 0 for non-drinking
-                            cards — these pass the session drinking filter regardless.
+                            How much drinking this card involves for the drawing player.
                         </p>
-
-                        <div style={styles.numberRow}>
-                            <label style={styles.numberLabel}>
-                                <span style={styles.numberLabelText}>Drinks / hr (you)</span>
-                                <input
-                                    type="number"
-                                    style={styles.numberInput}
-                                    value={drinksPerHourThisPlayer}
-                                    min={0}
-                                    step={0.5}
-                                    onChange={(e) =>
-                                        setDrinksPerHourThisPlayer(
-                                            Math.max(0, parseFloat(e.target.value) || 0)
-                                        )
-                                    }
-                                    disabled={isPending}
-                                />
-                            </label>
-                            <label style={styles.numberLabel}>
-                                <span style={styles.numberLabelText}>Drinks / hr (everyone)</span>
-                                <input
-                                    type="number"
-                                    style={styles.numberInput}
-                                    value={avgDrinksPerHourAllPlayers}
-                                    min={0}
-                                    step={0.5}
-                                    onChange={(e) =>
-                                        setAvgDrinksPerHourAllPlayers(
-                                            Math.max(0, parseFloat(e.target.value) || 0)
-                                        )
-                                    }
-                                    disabled={isPending}
-                                />
-                            </label>
+                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                            {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
+                                ([label, val]) => (
+                                    <button
+                                        key={val}
+                                        style={
+                                            drinkingLevel === val
+                                                ? styles.toggleOn
+                                                : styles.toggleOff
+                                        }
+                                        onClick={() => setDrinkingLevel(val)}
+                                        disabled={isPending}
+                                    >
+                                        {label}
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
 
                     <div style={styles.divider} />
 
                     {/* ── Game tags ────────────────────────────────────────── */}
-                    <div style={styles.section}>
-                        <p style={styles.sectionLabel}>GAME</p>
-                        <p style={styles.hint}>Tag specific games or leave empty for any game.</p>
-
-                        {gameTags.length > 0 && (
+                    {!gamesLoading && availableGames.length > 0 && (
+                        <div style={styles.section}>
+                            <p style={styles.sectionLabel}>GAME</p>
+                            <p style={styles.hint}>Tag specific games or leave empty for any game.</p>
                             <div style={styles.tagList}>
-                                {gameTags.map((tag) => (
-                                    <button
-                                        key={tag}
-                                        style={styles.tagChip as React.CSSProperties}
-                                        onClick={() => removeTag(tag)}
-                                        disabled={isPending}
-                                    >
-                                        {tag} ×
-                                    </button>
-                                ))}
+                                {availableGames.map((game) => {
+                                    const selected = gameTags.includes(game.id);
+                                    return (
+                                        <button
+                                            key={game.id}
+                                            style={
+                                                (selected
+                                                    ? styles.gameChipOn
+                                                    : styles.gameChipOff) as React.CSSProperties
+                                            }
+                                            onClick={() => toggleGame(game.id)}
+                                            disabled={isPending}
+                                        >
+                                            {game.name}
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        )}
-
-                        <div style={styles.tagInputRow}>
-                            <input
-                                style={{ ...styles.textInput, flex: 1, minWidth: 0 }}
-                                placeholder="Add a game"
-                                value={tagInput}
-                                onChange={(e) => setTagInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        addTag();
-                                    }
-                                }}
-                                maxLength={40}
-                                disabled={isPending}
-                            />
-                            <button
-                                style={
-                                    tagInput.trim() && !isPending
-                                        ? styles.addButton
-                                        : styles.addButtonDisabled
-                                }
-                                onClick={addTag}
-                                disabled={!tagInput.trim() || isPending}
-                            >
-                                Add
-                            </button>
                         </div>
-                    </div>
+                    )}
 
-                    <div style={styles.divider} />
+                    {(!gamesLoading && availableGames.length > 0) && <div style={styles.divider} />}
 
                     {/* ── Flags ────────────────────────────────────────────── */}
                     <div style={styles.section}>
-                        <p style={styles.sectionLabel}>FLAGS</p>
+                        <p style={styles.sectionLabel}>CARD TYPE</p>
 
-                        <div style={styles.toggleRow}>
+                        <button
+                            style={cardType === "standard" ? styles.radioRowSelected : styles.radioRow}
+                            onClick={() => setCardType("standard")}
+                            disabled={isPending}
+                        >
+                            <span style={cardType === "standard" ? styles.radioDotActive : styles.radioDot} />
                             <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Family safe</span>
-                                <span style={styles.toggleSub}>
-                                    Suitable for all ages — no mature content
-                                </span>
+                                <span style={styles.toggleTitle}>Standard</span>
+                                <span style={styles.toggleSub}>Normal draw pool</span>
                             </div>
-                            <button
-                                style={isFamilySafe ? styles.toggleOn : styles.toggleOff}
-                                onClick={() => setIsFamilySafe((v) => !v)}
-                                disabled={isPending}
-                            >
-                                {isFamilySafe ? "ON" : "OFF"}
-                            </button>
-                        </div>
+                        </button>
+
+                        <button
+                            style={cardType === "reparations" ? styles.radioRowSelected : styles.radioRow}
+                            onClick={() => setCardType("reparations")}
+                            disabled={isPending}
+                        >
+                            <span style={cardType === "reparations" ? styles.radioDotActive : styles.radioDot} />
+                            <div style={styles.toggleText}>
+                                <span style={styles.toggleTitle}>Reparations</span>
+                                <span style={styles.toggleSub}>Penalty card, drawn when rules are violated</span>
+                            </div>
+                        </button>
+
+                        {cardType === "reparations" && (
+                            <p style={styles.hint}>
+                                Reparations cards are drawn as a penalty for rule violations. They should be uniformly negative for the drawing player.
+                            </p>
+                        )}
 
                         <div style={styles.rowDivider} />
 
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Game Changer</span>
-                                <span style={styles.toggleSub}>
-                                    Triggers a dramatic reveal with intro sequence
-                                </span>
-                            </div>
-                            <button
-                                style={isGameChanger ? styles.toggleOnViolet : styles.toggleOff}
-                                onClick={() => setIsGameChanger((v) => !v)}
-                                disabled={isPending}
-                            >
-                                {isGameChanger ? "ON" : "OFF"}
-                            </button>
+                        <p style={styles.sectionLabel}>CONTENT RATING</p>
+                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                            {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
+                                ([label, val]) => (
+                                    <button
+                                        key={val}
+                                        style={
+                                            spiceLevel === val ? styles.toggleOn : styles.toggleOff
+                                        }
+                                        onClick={() => setSpiceLevel(val)}
+                                        disabled={isPending}
+                                    >
+                                        {label}
+                                    </button>
+                                )
+                            )}
                         </div>
+
+                        {cardType === "standard" && (
+                            <>
+                                <div style={styles.rowDivider} />
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Game Changer</span>
+                                        <span style={styles.toggleSub}>
+                                            Triggers a dramatic reveal with intro sequence
+                                        </span>
+                                    </div>
+                                    <button
+                                        style={isGameChanger ? styles.toggleOnViolet : styles.toggleOff}
+                                        onClick={() => setIsGameChanger((v) => !v)}
+                                        disabled={isPending}
+                                    >
+                                        {isGameChanger ? "ON" : "OFF"}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {error && <p style={styles.error}>{error}</p>}
@@ -409,32 +409,47 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: 1.5,
     },
 
-    // Number inputs
-    numberRow: {
+    // Radio rows (card type selector)
+    radioRow: {
         display: "flex",
+        alignItems: "center",
         gap: "var(--space-3)",
-    },
-    numberLabel: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-1)",
-        flex: 1,
-    },
-    numberLabelText: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-    },
-    numberInput: {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
         padding: "var(--space-3) var(--space-4)",
-        outline: "none",
+        cursor: "pointer",
         width: "100%",
-        boxSizing: "border-box",
+        textAlign: "left",
+        minHeight: "56px",
+    },
+    radioRowSelected: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-3)",
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-amber)",
+        padding: "var(--space-3) var(--space-4)",
+        cursor: "pointer",
+        width: "100%",
+        textAlign: "left",
+        minHeight: "56px",
+    },
+    radioDot: {
+        width: "12px",
+        height: "12px",
+        borderRadius: "50%",
+        border: "1.5px solid var(--color-border)",
+        flexShrink: 0,
+        display: "inline-block",
+    },
+    radioDotActive: {
+        width: "12px",
+        height: "12px",
+        borderRadius: "50%",
+        border: "1.5px solid var(--color-accent-amber)",
+        background: "var(--color-accent-amber)",
+        flexShrink: 0,
+        display: "inline-block",
     },
 
     // Toggles
@@ -503,53 +518,36 @@ const styles: Record<string, React.CSSProperties> = {
         textAlign: "center",
     },
 
-    // Game tags
+    // Game chips
     tagList: {
         display: "flex",
         flexWrap: "wrap",
         gap: "var(--space-2)",
     },
-    tagChip: {
-        background: "var(--color-surface-elevated)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        padding: "var(--space-1) var(--space-3)",
-        cursor: "pointer",
-        minHeight: "32px",
-        display: "inline-flex",
-        alignItems: "center",
-    },
-    tagInputRow: {
-        display: "flex",
-        gap: "var(--space-2)",
-    },
-    addButton: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-accent-primary)",
-        color: "var(--color-accent-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "pointer",
-        flexShrink: 0,
-        minHeight: "44px",
-    },
-    addButtonDisabled: {
+    gameChipOff: {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    },
+    gameChipOn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-primary)",
+        color: "var(--color-accent-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
         fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "default",
-        flexShrink: 0,
-        minHeight: "44px",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
     },
 
     // Error

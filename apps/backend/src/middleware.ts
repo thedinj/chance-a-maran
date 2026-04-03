@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:8100";
+
 export function middleware(request: NextRequest) {
     // Check if request is over HTTPS (consider proxy headers)
     const protocol = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol;
     const isHttps = protocol === "https:" || protocol === "https";
-
-    // In production, enforce HTTPS for all requests (optional but recommended)
-    // Uncomment if you want to force HTTPS redirects:
-    // if (process.env.NODE_ENV === "production" && !isHttps) {
-    //     const url = request.nextUrl.clone();
-    //     url.protocol = "https:";
-    //     return NextResponse.redirect(url, 301);
-    // }
 
     // Handle CORS for API routes
     if (request.nextUrl.pathname.startsWith("/api")) {
@@ -20,10 +14,10 @@ export function middleware(request: NextRequest) {
             return new NextResponse(null, {
                 status: 200,
                 headers: {
-                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+                    "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers":
-                        "Content-Type, Authorization, X-Retry-After-Refresh",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Idempotency-Key",
                     "Access-Control-Expose-Headers": "X-Token-Status",
                     "Access-Control-Max-Age": "86400",
                 },
@@ -32,12 +26,10 @@ export function middleware(request: NextRequest) {
 
         // Add CORS headers to actual requests
         const response = NextResponse.next();
-        response.headers.set("Access-Control-Allow-Origin", "*");
+        response.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+        response.headers.set("Access-Control-Allow-Credentials", "true");
         response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-        response.headers.set(
-            "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Retry-After-Refresh"
-        );
+        response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Idempotency-Key");
         response.headers.set("Access-Control-Expose-Headers", "X-Token-Status");
 
         // Security headers

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GameSchema } from "./game";
 
 /** Immutable snapshot of a card at a point in time. Saves never overwrite; they create a new version. */
 export const CardVersionSchema = z.object({
@@ -10,15 +11,22 @@ export const CardVersionSchema = z.object({
     /** If true, only the drawing player sees the description initially. They can choose to share it. */
     hiddenDescription: z.boolean(),
     imageUrl: z.string().url().nullable(),
-    /** Estimated drinks per hour this card adds for the drawing player. 0 = no drinking element. */
-    drinksPerHourThisPlayer: z.number().nonnegative(),
-    /** Estimated average drinks per hour this card distributes across all players. 0 = no drinking element. */
-    avgDrinksPerHourAllPlayers: z.number().nonnegative(),
-    isFamilySafe: z.boolean(),
-    /** If true, triggers a dramatic reveal sequence before the standard overlay. */
+    /**
+     * How much drinking this card involves for the drawing player.
+     * 0 = none, 1 = light (sip), 2 = moderate (full drink), 3 = heavy (multiple drinks).
+     * Displayed as 🍺 count in the UI.
+     */
+    drinkingLevel: z.number().int().min(0).max(3),
+    /**
+     * Content rating of the card.
+     * 0 = G, 1 = PG, 2 = PG-13, 3 = R.
+     * Displayed as MPAA-style badge in the UI.
+     */
+    spiceLevel: z.number().int().min(0).max(3),
+    /** If true, triggers a dramatic reveal sequence before the standard overlay. Not applicable to reparations cards. */
     isGameChanger: z.boolean(),
     /** Empty = universal (eligible for any session). */
-    gameTags: z.array(z.string()),
+    gameTags: z.array(GameSchema),
     authoredByUserId: z.string(),
     createdAt: z.string(),
 });
@@ -28,6 +36,11 @@ export type CardVersion = z.infer<typeof CardVersionSchema>;
 export const CardSchema = z.object({
     id: z.string(),
     authorUserId: z.string(),
+    /**
+     * 'standard' — drawn normally from the main pool.
+     * 'reparations' — drawn as a penalty; pulled from a separate pool on demand.
+     */
+    cardType: z.enum(["standard", "reparations"]),
     active: z.boolean(),
     /** Admin-promoted to the global pool; eligible for all sessions regardless of player presence. */
     isGlobal: z.boolean(),

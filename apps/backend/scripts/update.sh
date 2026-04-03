@@ -2,19 +2,19 @@
 set -e
 
 # ==============================================================================
-# BASKET BOT BACKEND UPDATE SCRIPT
+# CHANCE-A-MARAN BACKEND UPDATE SCRIPT
 # ==============================================================================
 # For Raspberry Pi Raspbian - Run as admin user
 #
 # Putty to admin@pi-server
-# `cd ~/basket-bot/apps/backend`
+# `cd ~/chance-a-maran/apps/backend`
 # `git pull`
 # If update.sh doesn't have execute permissions, run:
 #   `chmod +x update.sh`
 # `./scripts/update.sh`
 
 echo "================================================"
-echo "Basket Bot Backend Update"
+echo "Chance-a-Maran Backend Update"
 echo "================================================"
 echo ""
 
@@ -32,7 +32,7 @@ BACKEND_DIR="$PROJECT_ROOT/apps/backend"
 CORE_DIR="$PROJECT_ROOT/packages/core"
 
 # Service name
-SERVICE_NAME="basket-bot-backend"
+SERVICE_NAME="chance-a-maran-backend"
 
 # Backup directory
 BACKUP_DIR="$BACKEND_DIR/backups"
@@ -284,7 +284,7 @@ echo -e "${GREEN}✓${NC} Dependencies updated"
 echo ""
 
 echo "Building core package..."
-pnpm --filter @basket-bot/core build
+pnpm --filter @chance/core build
 echo -e "${GREEN}✓${NC} Core package built"
 echo ""
 
@@ -388,7 +388,7 @@ if [ "$SERVICE_STATUS" != "active" ]; then
 
     echo "Rebuilding previous version..."
     pnpm install
-    pnpm --filter @basket-bot/core build
+    pnpm --filter @chance/core build
     cd "$BACKEND_DIR"
     pnpm build
 

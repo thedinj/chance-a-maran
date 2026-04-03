@@ -9,27 +9,58 @@
  * Keyed by `JOIN_CODE:displayname_lower` so the lookup only requires information
  * the user has already entered (no session ID needed at lookup time).
  *
- * TODO: migrate to Capacitor Preferences for cross-restart persistence.
- * Current in-memory implementation clears on every app launch.
+ * Native: persisted via @capacitor/preferences (survives app restarts).
+ * Web: persisted via localStorage (survives page reloads, cleared on clear-site-data).
  */
+import { Capacitor } from "@capacitor/core";
 
-const _store = new Map<string, string>();
+const STORAGE_PREFIX = "player_token:";
 
 function storeKey(joinCode: string, displayName: string): string {
-    return `${joinCode.toUpperCase()}:${displayName.trim().toLowerCase()}`;
+    return `${STORAGE_PREFIX}${joinCode.toUpperCase()}:${displayName.trim().toLowerCase()}`;
+}
+
+async function getPreferences() {
+    const { Preferences } = await import("@capacitor/preferences");
+    return Preferences;
 }
 
 export const playerTokenStore = {
-    get(joinCode: string, displayName: string): string | undefined {
-        return _store.get(storeKey(joinCode, displayName));
+    async get(joinCode: string, displayName: string): Promise<string | undefined> {
+        const key = storeKey(joinCode, displayName);
+        try {
+            if (Capacitor.isNativePlatform()) {
+                const prefs = await getPreferences();
+                const { value } = await prefs.get({ key });
+                return value ?? undefined;
+            }
+            return localStorage.getItem(key) ?? undefined;
+        } catch {
+            return undefined;
+        }
     },
 
-    set(joinCode: string, displayName: string, token: string): void {
-        _store.set(storeKey(joinCode, displayName), token);
+    async set(joinCode: string, displayName: string, token: string): Promise<void> {
+        const key = storeKey(joinCode, displayName);
+        if (Capacitor.isNativePlatform()) {
+            const prefs = await getPreferences();
+            await prefs.set({ key, value: token });
+        } else {
+            localStorage.setItem(key, token);
+        }
     },
 
-    /** Called when the host resets a player's identity — token is no longer valid. */
-    clear(joinCode: string, displayName: string): void {
-        _store.delete(storeKey(joinCode, displayName));
+    async clear(joinCode: string, displayName: string): Promise<void> {
+        const key = storeKey(joinCode, displayName);
+        try {
+            if (Capacitor.isNativePlatform()) {
+                const prefs = await getPreferences();
+                await prefs.remove({ key });
+            } else {
+                localStorage.removeItem(key);
+            }
+        } catch {
+            // Ignore
+        }
     },
 };
