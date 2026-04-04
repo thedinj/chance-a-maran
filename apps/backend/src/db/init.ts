@@ -6,13 +6,12 @@ export function initializeDatabase() {
 
         -- Invitation codes (must exist before users due to FK)
         CREATE TABLE IF NOT EXISTS invitation_codes (
-            id          TEXT NOT NULL PRIMARY KEY,
-            code        TEXT NOT NULL UNIQUE,
+            id                 TEXT NOT NULL PRIMARY KEY,
+            code               TEXT NOT NULL UNIQUE,
             created_by_user_id TEXT REFERENCES users(id),
-            used_by_user_id    TEXT REFERENCES users(id),
-            expires_at  DATETIME,
-            is_active   INTEGER NOT NULL DEFAULT 1,
-            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            expires_at         DATETIME,
+            is_active          INTEGER NOT NULL DEFAULT 1,
+            created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS users (
@@ -35,7 +34,8 @@ export function initializeDatabase() {
             status          TEXT NOT NULL DEFAULT 'active'
                 CHECK(status IN ('active', 'ended', 'expired')),
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            expires_at      DATETIME
+            expires_at      DATETIME,
+            ended_at        DATETIME
         );
 
         CREATE TABLE IF NOT EXISTS session_players (
@@ -66,6 +66,15 @@ export function initializeDatabase() {
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS card_images (
+            id                  TEXT NOT NULL PRIMARY KEY,
+            data                BLOB NOT NULL,
+            mime_type           TEXT NOT NULL,
+            size                INTEGER NOT NULL,
+            uploaded_by_user_id TEXT NOT NULL REFERENCES users(id),
+            created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_users_email
             ON users(email);
         CREATE INDEX IF NOT EXISTS idx_session_players_session_id
@@ -76,6 +85,101 @@ export function initializeDatabase() {
             ON refresh_tokens(token_hash);
         CREATE INDEX IF NOT EXISTS idx_invitation_codes_code
             ON invitation_codes(code);
+
+        -- Games (named game modes / expansions)
+        CREATE TABLE IF NOT EXISTS games (
+            id         TEXT NOT NULL PRIMARY KEY,
+            name       TEXT NOT NULL,
+            slug       TEXT NOT NULL UNIQUE,
+            active     INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Cards and versioned content
+        CREATE TABLE IF NOT EXISTS cards (
+            id                   TEXT NOT NULL PRIMARY KEY,
+            author_user_id       TEXT NOT NULL REFERENCES users(id),
+            card_type            TEXT NOT NULL DEFAULT 'standard'
+                CHECK(card_type IN ('standard', 'reparations')),
+            active               INTEGER NOT NULL DEFAULT 1,
+            is_global            INTEGER NOT NULL DEFAULT 0,
+            created_in_session_id TEXT REFERENCES sessions(id),
+            current_version_id   TEXT NOT NULL,
+            created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS card_versions (
+            id                   TEXT NOT NULL PRIMARY KEY,
+            card_id              TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+            version_number       INTEGER NOT NULL,
+            title                TEXT NOT NULL,
+            description          TEXT NOT NULL,
+            hidden_description   INTEGER NOT NULL DEFAULT 0,
+            image_url            TEXT,
+            drinking_level       INTEGER NOT NULL DEFAULT 1,
+            spice_level          INTEGER NOT NULL DEFAULT 1,
+            is_game_changer      INTEGER NOT NULL DEFAULT 0,
+            authored_by_user_id  TEXT NOT NULL REFERENCES users(id),
+            created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Tags linking card versions to game modes
+        CREATE TABLE IF NOT EXISTS card_game_tags (
+            card_version_id TEXT NOT NULL REFERENCES card_versions(id) ON DELETE CASCADE,
+            game_id         TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+            PRIMARY KEY (card_version_id, game_id)
+        );
+
+        -- Per-card votes by registered users
+        CREATE TABLE IF NOT EXISTS card_votes (
+            id         TEXT NOT NULL PRIMARY KEY,
+            card_id    TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            direction  TEXT NOT NULL CHECK(direction IN ('up', 'down')),
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(card_id, user_id)
+        );
+
+        -- Draw events (one row per card drawn in a session)
+        CREATE TABLE IF NOT EXISTS draw_events (
+            id                  TEXT NOT NULL PRIMARY KEY,
+            session_id          TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+            player_id           TEXT NOT NULL REFERENCES session_players(id),
+            card_version_id     TEXT NOT NULL REFERENCES card_versions(id),
+            drawn_at            DATETIME NOT NULL,
+            revealed_to_all_at  DATETIME,
+            description_shared  INTEGER NOT NULL DEFAULT 0,
+            resolved            INTEGER NOT NULL DEFAULT 0
+        );
+
+        -- Card transfers between players within a session
+        CREATE TABLE IF NOT EXISTS card_transfers (
+            id             TEXT NOT NULL PRIMARY KEY,
+            draw_event_id  TEXT NOT NULL REFERENCES draw_events(id) ON DELETE CASCADE,
+            from_player_id TEXT NOT NULL REFERENCES session_players(id),
+            to_player_id   TEXT NOT NULL REFERENCES session_players(id),
+            created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Idempotency cache for POST/PATCH/DELETE endpoints
+        CREATE TABLE IF NOT EXISTS idempotency_cache (
+            key           TEXT NOT NULL PRIMARY KEY,
+            response_body TEXT NOT NULL,
+            status_code   INTEGER NOT NULL,
+            created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at    DATETIME NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cards_author_user_id
+            ON cards(author_user_id);
+        CREATE INDEX IF NOT EXISTS idx_card_versions_card_id
+            ON card_versions(card_id);
+        CREATE INDEX IF NOT EXISTS idx_draw_events_session_id
+            ON draw_events(session_id);
+        CREATE INDEX IF NOT EXISTS idx_card_votes_card_id
+            ON card_votes(card_id);
+        CREATE INDEX IF NOT EXISTS idx_idempotency_cache_expires_at
+            ON idempotency_cache(expires_at);
     `);
 
     console.log("Database initialized successfully");

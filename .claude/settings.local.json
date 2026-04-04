@@ -31,7 +31,9 @@
       "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/sessions/[sessionId]/draw-reparations\")",
       "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/draw-events/[drawEventId]/share-description\")",
       "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/transfers/[transferId]/accept\")",
-      "Bash(pnpm --filter core exec tsc --noEmit)"
+      "Bash(pnpm --filter core exec tsc --noEmit)",
+      "Bash(pnpm --filter mobile add browser-image-compression @capacitor/camera)",
+      "Bash(pnpm:*)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

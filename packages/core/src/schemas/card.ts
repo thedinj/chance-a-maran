@@ -10,7 +10,7 @@ export const CardVersionSchema = z.object({
     description: z.string(),
     /** If true, only the drawing player sees the description initially. They can choose to share it. */
     hiddenDescription: z.boolean(),
-    imageUrl: z.string().url().nullable(),
+    imageUrl: z.string().nullable(),
     /**
      * How much drinking this card involves for the drawing player.
      * 0 = none, 1 = light (sip), 2 = moderate (full drink), 3 = heavy (multiple drinks).

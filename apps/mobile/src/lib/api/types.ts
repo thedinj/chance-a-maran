@@ -28,12 +28,14 @@ export type {
     JoinByCodeRequest,
     JoinByCodeResponse,
     SessionState,
+    SessionSummary,
     // Cards
     SubmitCardRequest,
     // User management
     UpdateUserRequest,
     ChangePasswordRequest,
 } from "@chance/core";
+export { SubmitCardRequestSchema } from "@chance/core";
 
 import type {
     User,
@@ -53,6 +55,7 @@ import type {
     JoinByCodeRequest,
     JoinByCodeResponse,
     SessionState,
+    SessionSummary,
     SubmitCardRequest,
     UpdateUserRequest,
     ChangePasswordRequest,
@@ -100,6 +103,10 @@ export interface ApiClient {
     createSession(req: CreateSessionRequest): Promise<ApiResult<Session>>;
     joinByCode(req: JoinByCodeRequest): Promise<ApiResult<JoinByCodeResponse>>;
     getSessionState(sessionId: string, since?: string): Promise<ApiResult<SessionState>>;
+    /** Returns past (ended/expired) sessions for the current registered user. */
+    getSessionHistory(): Promise<ApiResult<SessionSummary[]>>;
+    /** Returns active sessions the current registered user has a player record in. */
+    getActiveSessions(): Promise<ApiResult<SessionSummary[]>>;
     updateSessionFilters(
         sessionId: string,
         filterSettings: FilterSettings
@@ -119,6 +126,18 @@ export interface ApiClient {
     shareDescription(drawEventId: string): Promise<ApiResult<DrawEvent>>;
     /** Sets resolved state on a draw event. Any player in the session may call this. */
     resolveCard(drawEventId: string, resolved: boolean): Promise<ApiResult<DrawEvent>>;
+
+    // ── Images ───────────────────────────────────────────────────────────────
+    /**
+     * Upload an image file. Returns imageId; construct display URL via resolveImageUrl.
+     * Registered users only.
+     */
+    uploadImage(file: File): Promise<ApiResult<{ imageId: string }>>;
+    /**
+     * Converts a stored image path ("/api/images/{id}") to a fully-qualified URL.
+     * Returns null for null input.
+     */
+    resolveImageUrl(imagePath: string | null): string | null;
 
     // ── Games ────────────────────────────────────────────────────────────────
     /** Public — no auth required. Returns all active games for the game tag picker. */

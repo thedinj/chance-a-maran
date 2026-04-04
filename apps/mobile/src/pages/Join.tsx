@@ -7,6 +7,7 @@ import { AppHeader } from "../components/AppHeader";
 import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
+import { useCards } from "../cards/useCards";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export default function Join() {
     const { setShowBack } = useAppHeader();
     const { user, setGuestSession } = useAuth();
     const sessionCtx = useSession();
+    const { clearHistory, addDrawEvent } = useCards();
 
     // If a code arrived via URL, jump straight to name entry
     const [step, setStep] = useState<Step>(urlCode ? "name" : "code");
@@ -153,6 +155,10 @@ export default function Join() {
             }
 
             sessionCtx.initSession(stateResult.data, player.id);
+            clearHistory();
+            for (const event of stateResult.data.drawEvents ?? []) {
+                addDrawEvent(event);
+            }
             history.replace(`/game/${session.id}`);
         });
     }

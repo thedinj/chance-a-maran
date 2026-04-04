@@ -37,6 +37,7 @@ const GameSettings = React.lazy(() => import("./pages/GameSettings"));
 const Join = React.lazy(() => import("./pages/Join"));
 const Game = React.lazy(() => import("./pages/Game"));
 const GameHistory = React.lazy(() => import("./pages/GameHistory"));
+const GameHistoryList = React.lazy(() => import("./pages/GameHistoryList"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Register = React.lazy(() => import("./pages/Register"));
 const Settings = React.lazy(() => import("./pages/AppSettings"));
@@ -132,6 +133,12 @@ export default function App() {
                                             <Route exact path="/game/:sessionId">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <Game />
+                                                </Suspense>
+                                            </Route>
+
+                                            <Route exact path="/history">
+                                                <Suspense fallback={<PageSkeleton />}>
+                                                    <GameHistoryList />
                                                 </Suspense>
                                             </Route>
 

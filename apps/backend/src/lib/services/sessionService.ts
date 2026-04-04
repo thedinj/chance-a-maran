@@ -6,11 +6,13 @@ import type {
     Player,
     Session,
     SessionState,
+    SessionSummary,
 } from "@chance/core";
 import { generateAccessToken, generateGuestToken } from "../auth/jwt";
 import type { JwtPayload } from "../auth/types";
 import * as playerRepo from "../repos/playerRepo";
 import * as sessionRepo from "../repos/sessionRepo";
+import { normalizeJoinCode } from "../utils/stringUtils";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
 import { db } from "../db/db";
@@ -29,7 +31,7 @@ function generateJoinCode(): string {
 function uniqueJoinCode(): string {
     for (let i = 0; i < 10; i++) {
         const code = generateJoinCode();
-        if (!sessionRepo.findByJoinCode(code)) return code;
+        if (!sessionRepo.findByJoinCode(normalizeJoinCode(code))) return code;
     }
     throw new Error("Failed to generate unique join code after 10 attempts");
 }
@@ -75,7 +77,7 @@ export function joinByCode(
     auth: JwtPayload | null,
     req: JoinByCodeRequest
 ): { session: Session; player: playerRepo.DbPlayer; accessToken: string; playerToken: string | null } {
-    const session = sessionRepo.findByJoinCode(req.joinCode.toUpperCase());
+    const session = sessionRepo.findByJoinCode(normalizeJoinCode(req.joinCode));
     if (!session) throw new NotFoundError("Session not found for that join code");
     if (session.status !== "active") throw new ConflictError("Session is no longer active");
 
@@ -164,6 +166,22 @@ export function joinByCode(
     });
 
     return { session: sessionRepo.mapSession(session), player, accessToken, playerToken };
+}
+
+export function getSessionHistory(userId: string): SessionSummary[] {
+    return sessionRepo.findHistoryByUserId(userId).map((row) => ({
+        ...sessionRepo.mapSession(row),
+        playerCount: row.player_count,
+        drawCount: row.draw_count,
+    }));
+}
+
+export function getActiveSessions(userId: string): SessionSummary[] {
+    return sessionRepo.findActiveByUserId(userId).map((row) => ({
+        ...sessionRepo.mapSession(row),
+        playerCount: row.player_count,
+        drawCount: row.draw_count,
+    }));
 }
 
 export function getSessionState(sessionId: string): SessionState {

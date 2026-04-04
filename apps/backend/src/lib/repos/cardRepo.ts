@@ -290,9 +290,11 @@ export function setGlobal(id: string, isGlobal: boolean): void {
 
 export function getDrawPool(
     sessionId: string,
-    filters: { maxDrinkingLevel: number; maxSpiceLevel: number },
+    filters: { maxDrinkingLevel: number; maxSpiceLevel: number; includeGlobalCards?: boolean },
     cardType: "standard" | "reparations"
 ): DrawPoolEntry[] {
+    const includeGlobal = filters.includeGlobalCards !== false;
+    const globalClause = includeGlobal ? "c.is_global = 1 OR " : "";
     const rows = db
         .prepare(
             `SELECT
@@ -309,12 +311,11 @@ export function getDrawPool(
              FROM cards c
              JOIN card_versions cv ON cv.id = c.current_version_id
              WHERE c.active = 1
-               AND cv.card_type = ?
+               AND c.card_type = ?
                AND cv.drinking_level <= ?
                AND cv.spice_level   <= ?
                AND (
-                 c.is_global = 1
-                 OR c.created_in_session_id = ?
+                 ${globalClause}c.created_in_session_id = ?
                  OR c.author_user_id IN (
                    SELECT user_id FROM session_players
                    WHERE session_id = ?

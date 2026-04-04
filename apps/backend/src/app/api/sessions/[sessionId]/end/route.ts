@@ -24,6 +24,7 @@ export const POST = withAuth(async (req, { params }) => {
         if (!isHost) throw new AuthorizationError("Only the host can end the session");
 
         sessionRepo.updateStatus(sessionId, "ended");
+        sessionRepo.setEndedAt(sessionId, new Date().toISOString());
         return ok(undefined);
     } catch (err) {
         return handleError(err);

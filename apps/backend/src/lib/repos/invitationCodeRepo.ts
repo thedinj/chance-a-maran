@@ -4,7 +4,6 @@ export interface DbInvitationCode {
     id: string;
     code: string;
     created_by_user_id: string | null;
-    used_by_user_id: string | null;
     expires_at: string | null;
     is_active: number;
     created_at: string;
@@ -16,12 +15,6 @@ export function findByCode(code: string): DbInvitationCode | null {
             .prepare("SELECT * FROM invitation_codes WHERE code = ?")
             .get(code) as DbInvitationCode | undefined) ?? null
     );
-}
-
-export function consume(id: string, usedByUserId: string): void {
-    db.prepare(
-        "UPDATE invitation_codes SET used_by_user_id = ? WHERE id = ? AND used_by_user_id IS NULL"
-    ).run(usedByUserId, id);
 }
 
 export function create(data: {

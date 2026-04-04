@@ -4,6 +4,7 @@ import React, { useEffect, useState, useTransition } from "react";
 import { useHistory, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { useSession } from "../session/useSession";
+import { useCards } from "../cards/useCards";
 import { apiClient } from "../lib/api";
 import type { Game } from "../lib/api/types";
 
@@ -29,6 +30,7 @@ export default function GameSettings() {
 
     const { user, isInitializing } = useAuth();
     const { session, players, initSession } = useSession();
+    const { clearHistory, addDrawEvent } = useCards();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
 
@@ -46,6 +48,9 @@ export default function GameSettings() {
     // Card sharing default per UX spec — host's own setting for pool contribution
     // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
     const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">("network");
+    const [includeGlobalCards, setIncludeGlobalCards] = useState<boolean>(
+        session?.filterSettings.includeGlobalCards ?? true
+    );
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -81,14 +86,23 @@ export default function GameSettings() {
             startTransition(async () => {
                 const result = await apiClient.createSession({
                     name: trimmedName,
-                    filterSettings: { maxDrinkingLevel, maxSpiceLevel, gameTags },
+                    filterSettings: {
+                        maxDrinkingLevel,
+                        maxSpiceLevel,
+                        gameTags,
+                        includeGlobalCards,
+                    },
                 });
                 if (result.ok) {
                     const stateResult = await apiClient.getSessionState(result.data.id);
                     if (stateResult.ok) {
                         initSession(stateResult.data, result.data.hostPlayerId);
+                        clearHistory();
+                        for (const event of stateResult.data.drawEvents ?? []) {
+                            addDrawEvent(event);
+                        }
                     }
-                    history.replace(`/game/${result.data.id}`);
+                    history.replace(`/game/${result.data.id}`, { newSession: true });
                 } else {
                     setError(result.error.message);
                 }
@@ -99,6 +113,7 @@ export default function GameSettings() {
                     maxDrinkingLevel,
                     maxSpiceLevel,
                     gameTags,
+                    includeGlobalCards,
                 });
                 if (result.ok) {
                     history.replace(`/game/${sessionId}`);
@@ -278,6 +293,36 @@ export default function GameSettings() {
                                     </div>
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    <div style={styles.divider} />
+
+                    {/* ── Deck composition ─────────────────────────────────── */}
+                    <div style={styles.section}>
+                        <p style={styles.sectionLabel}>DECK</p>
+                        <p style={styles.hint}>Control which cards enter the draw pool.</p>
+
+                        <div style={styles.toggleRow}>
+                            <div style={styles.toggleText}>
+                                <span style={styles.toggleTitle}>Global cards</span>
+                            </div>
+                            <div style={styles.selectorGroup}>
+                                <button
+                                    style={includeGlobalCards ? styles.toggleOn : styles.toggleOff}
+                                    onClick={() => setIncludeGlobalCards(true)}
+                                    disabled={isPending}
+                                >
+                                    Include
+                                </button>
+                                <button
+                                    style={!includeGlobalCards ? styles.toggleOn : styles.toggleOff}
+                                    onClick={() => setIncludeGlobalCards(false)}
+                                    disabled={isPending}
+                                >
+                                    Exclude
+                                </button>
+                            </div>
                         </div>
                     </div>
 

@@ -5,6 +5,9 @@ import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
 import type { Card, CardVersion, Game, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
+import imageCompression from "browser-image-compression";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Capacitor } from "@capacitor/core";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -47,6 +50,13 @@ export default function MyCards() {
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
 
+    // Edit image state
+    const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+    const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+    const [editImageId, setEditImageId] = useState<string | null>(null);
+    const [editImageUploading, setEditImageUploading] = useState(false);
+    const editFileInputRef = useRef<HTMLInputElement>(null);
+
     // ── Load my cards + available games on mount ──────────────────────────────
     useEffect(() => {
         if (!user) return;
@@ -60,6 +70,11 @@ export default function MyCards() {
             setGamesLoading(false);
         });
     }, [user]);
+
+    // Clear edit validation errors as soon as their condition is resolved
+    useEffect(() => {
+        if (editError === "Title is required." && editTitle.trim()) setEditError(null);
+    }, [editTitle]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Load all cards when admin tab is active ───────────────────────────────
     useEffect(() => {
@@ -99,6 +114,11 @@ export default function MyCards() {
         setShowVersionHistory(false);
         setShowPreviewNote(false);
         setVersions([]);
+        const existingImageUrl = v.imageUrl ?? null;
+        setEditImageUrl(existingImageUrl);
+        setEditImagePreview(existingImageUrl ? apiClient.resolveImageUrl(existingImageUrl) : null);
+        setEditImageId(null);
+        setEditImageUploading(false);
         modalRef.current?.present();
         apiClient.getCardVersions(card.id).then((r) => {
             if (r.ok) setVersions(r.data);
@@ -117,6 +137,67 @@ export default function MyCards() {
         );
     }
 
+    // ── Image handlers ────────────────────────────────────────────────────────
+
+    async function handleEditPickImage() {
+        setEditError(null);
+        let file: File;
+
+        try {
+            if (Capacitor.isNativePlatform()) {
+                const photo = await Camera.getPhoto({
+                    source: CameraSource.Photos,
+                    resultType: CameraResultType.Uri,
+                    allowEditing: false,
+                });
+                const response = await fetch(photo.webPath!);
+                const blob = await response.blob();
+                file = new File([blob], "image.jpg", { type: blob.type || "image/jpeg" });
+            } else {
+                file = await new Promise<File>((resolve, reject) => {
+                    const input = editFileInputRef.current!;
+                    input.value = "";
+                    input.onchange = () => {
+                        const f = input.files?.[0];
+                        f ? resolve(f) : reject(new Error("No file selected"));
+                    };
+                    input.click();
+                });
+            }
+        } catch {
+            return;
+        }
+
+        setEditImagePreview(URL.createObjectURL(file));
+        setEditImageId(null);
+        setEditImageUploading(true);
+
+        const compressed = await imageCompression(file, {
+            maxSizeMB: 4,
+            maxWidthOrHeight: 1600,
+            useWebWorker: true,
+            fileType: "image/jpeg",
+        });
+
+        const result = await apiClient.uploadImage(
+            new File([compressed], file.name, { type: "image/jpeg" })
+        );
+        setEditImageUploading(false);
+
+        if (result.ok) {
+            setEditImageId(result.data.imageId);
+        } else {
+            setEditError(result.error.message);
+            setEditImagePreview(null);
+        }
+    }
+
+    function handleEditRemoveImage() {
+        setEditImagePreview(null);
+        setEditImageUrl(null);
+        setEditImageId(null);
+    }
+
     // ── Mutations ─────────────────────────────────────────────────────────────
 
     function handleSave() {
@@ -128,6 +209,12 @@ export default function MyCards() {
             return;
         }
         startTransition(async () => {
+            const imageUrl = editImageId
+                ? `/api/images/${editImageId}`
+                : editImagePreview !== null
+                  ? (editImageUrl ?? undefined)
+                  : undefined;
+
             const req: SubmitCardRequest = {
                 title: trimmedTitle,
                 description: editDesc.trim(),
@@ -137,6 +224,7 @@ export default function MyCards() {
                 isGameChanger: selectedCard?.cardType === "reparations" ? false : editGameChanger,
                 cardType: selectedCard?.cardType ?? "standard",
                 gameTags: editGameTags,
+                imageUrl,
             };
             const result = await apiClient.updateCard(selectedCard.id, req);
             if (result.ok) {
@@ -401,6 +489,14 @@ export default function MyCards() {
                                 )}
                             </div>
 
+                            {/* Hidden file input for web image picking */}
+                            <input
+                                ref={editFileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif"
+                                style={{ display: "none" }}
+                            />
+
                             {/* ── Card content ──────────────────────────────── */}
                             <div style={styles.modalSection}>
                                 <p style={styles.sectionLabel}>CARD CONTENT</p>
@@ -438,6 +534,46 @@ export default function MyCards() {
                                         {editHiddenDesc ? "ON" : "OFF"}
                                     </button>
                                 </div>
+                            </div>
+
+                            <div style={styles.divider} />
+
+                            {/* ── Image ─────────────────────────────────────── */}
+                            <div style={styles.modalSection}>
+                                <p style={styles.sectionLabel}>IMAGE (OPTIONAL)</p>
+                                {editImagePreview ? (
+                                    <div style={styles.imagePreviewRow}>
+                                        <img
+                                            src={editImagePreview}
+                                            alt="Card image"
+                                            style={styles.imageThumb}
+                                        />
+                                        <div style={styles.imagePreviewMeta}>
+                                            {editImageUploading ? (
+                                                <span style={styles.imageStatus}>Uploading…</span>
+                                            ) : editImageId ? (
+                                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                                    ✓ Ready
+                                                </span>
+                                            ) : null}
+                                            <button
+                                                style={styles.imageClearBtn}
+                                                onClick={handleEditRemoveImage}
+                                                disabled={isPending}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        style={styles.toggleOff}
+                                        onClick={() => void handleEditPickImage()}
+                                        disabled={isPending || editImageUploading}
+                                    >
+                                        Add image
+                                    </button>
+                                )}
                             </div>
 
                             <div style={styles.divider} />
@@ -1148,6 +1284,43 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+    },
+
+    // Image picker
+    imagePreviewRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-4)",
+    },
+    imageThumb: {
+        width: "100px",
+        height: "100px",
+        objectFit: "cover" as const,
+        border: "1px solid var(--color-border)",
+        flexShrink: 0,
+    },
+    imagePreviewMeta: {
+        display: "flex",
+        flexDirection: "column" as const,
+        gap: "var(--space-2)",
+    },
+    imageStatus: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+    },
+    imageClearBtn: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        cursor: "pointer",
+        padding: 0,
+        textAlign: "left" as const,
+        minHeight: "44px",
+        display: "flex",
+        alignItems: "center",
     },
 
     // Game chips

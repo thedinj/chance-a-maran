@@ -5,6 +5,8 @@
         "preinstall": "only-allow pnpm",
         "dev": "turbo dev",
         "build": "turbo build",
+        "build:core": "pnpm --filter @chance/core build",
+        "db:seed": "pnpm --filter backend db:seed",
         "test": "turbo test",
         "lint": "turbo lint",
         "typecheck": "turbo typecheck",

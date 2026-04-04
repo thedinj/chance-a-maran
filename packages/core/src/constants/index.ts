@@ -20,8 +20,6 @@ export const UPVOTE_BONUS = 0.2;
 export const UPVOTE_BONUS_CAP = 2.0;
 /** Net-downvoted cards have their weight multiplied by 0.5. */
 export const DOWNVOTE_MULTIPLIER = 0.5;
-/** Recently drawn cards have their weight multiplied by 0.1. */
-export const RECENTLY_DRAWN_SUPPRESSION = 0.1;
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 

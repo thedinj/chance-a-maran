@@ -6,12 +6,28 @@ import { useSession } from "../session/useSession";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
 
 // ── CardBack ──────────────────────────────────────────────────────────────────
-// Static card back face. Size the container; this fills it at 412:581 aspect ratio.
+// Static card back face. Size the container; this fills it at 412:581 aspect ratio (or 433:609 for reparations cards).
 
-export function CardBack(): React.JSX.Element {
+interface CardBackProps {
+    event: DrawEvent;
+}
+
+export function CardBack({ event }: CardBackProps): React.JSX.Element {
+    const isReparations = event.card.cardType === "reparations";
+
     return (
-        <div style={styles.revealBackFace}>
-            <div style={styles.revealBackFrame} />
+        <div
+            style={{
+                ...styles.revealBackFace,
+                ...(isReparations ? styles.revealBackFaceReparations : undefined),
+            }}
+        >
+            <div
+                style={{
+                    ...styles.revealBackFrame,
+                    ...(isReparations ? styles.revealBackFrameReparations : undefined),
+                }}
+            />
             <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>◆</span>
             <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>◆</span>
             <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>◆</span>
@@ -94,7 +110,7 @@ export function CardFront({
                         <div style={styles.revealImageSlot}>
                             {cv.imageUrl ? (
                                 <img
-                                    src={cv.imageUrl}
+                                    src={apiClient.resolveImageUrl(cv.imageUrl) ?? cv.imageUrl}
                                     alt={cv.title}
                                     style={{
                                         width: "100%",
@@ -105,7 +121,9 @@ export function CardFront({
                             ) : (
                                 <>
                                     <div style={styles.revealImageEmblem}>C</div>
-                                    <p style={styles.revealImageSlotLabel}>IMAGE SLOT</p>
+                                    <p style={styles.revealImageSlotLabel}>
+                                        Consider yourself warned.
+                                    </p>
                                 </>
                             )}
                         </div>
@@ -252,7 +270,7 @@ export function FlippingCard({
             >
                 {/* Back face — initially visible */}
                 <div style={styles.revealFlipFace}>
-                    <CardBack />
+                    <CardBack event={event} />
                 </div>
 
                 {/* Front face — initially hidden (rotated 180deg away from viewer) */}
@@ -295,6 +313,12 @@ const styles: Record<string, React.CSSProperties> = {
         gap: "var(--space-2)",
         position: "relative",
     },
+    revealBackFaceReparations: {
+        backgroundImage: "url(/img/reparations.png)",
+        aspectRatio: "433 / 609",
+        boxShadow:
+            "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-amber) 68%, var(--color-border) 32%), 0 28px 64px -28px color-mix(in srgb, var(--color-accent-amber) 58%, transparent)",
+    },
     revealBackFrame: {
         position: "absolute",
         inset: "14px",
@@ -302,6 +326,10 @@ const styles: Record<string, React.CSSProperties> = {
         clipPath:
             "polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0% calc(100% - 6px), 0% 6px)",
         pointerEvents: "none",
+    },
+    revealBackFrameReparations: {
+        inset: "16px",
+        border: "1px solid color-mix(in srgb, var(--color-accent-amber) 74%, var(--color-border) 26%)",
     },
     revealBackLogo: {
         display: "none",

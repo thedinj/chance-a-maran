@@ -21,6 +21,7 @@ import type {
     RegisterRequest,
     Session,
     SessionState,
+    SessionSummary,
     SubmitCardRequest,
     UpdateUserRequest,
     User,
@@ -84,7 +85,7 @@ const DEMO_CARD_VERSION: CardVersion = {
     imageUrl: null,
     drinkingLevel: 0,
     spiceLevel: 0,
-    isGameChanger: true,
+    isGameChanger: false,
     gameTags: [],
     authoredByUserId: "user-demo",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -202,11 +203,119 @@ const DEMO_SESSION: Session = {
         maxDrinkingLevel: 3,
         maxSpiceLevel: 2,
         gameTags: [],
+        includeGlobalCards: true,
     },
     status: "active",
     createdAt: "2026-02-15T18:30:00.000Z",
     expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    endedAt: null,
 };
+
+// ─── Demo session history ─────────────────────────────────────────────────────
+
+const DEMO_PAST_SESSION_1: SessionSummary = {
+    id: "session-past-1",
+    hostPlayerId: DEMO_HOST_PLAYER.id,
+    name: "Friday Night Chaos",
+    joinCode: "PAST1",
+    filterSettings: {
+        maxDrinkingLevel: 2,
+        maxSpiceLevel: 1,
+        gameTags: [],
+        includeGlobalCards: true,
+    },
+    status: "ended",
+    createdAt: "2026-03-28T20:00:00.000Z",
+    expiresAt: "2026-04-13T20:00:00.000Z",
+    endedAt: "2026-03-28T22:14:00.000Z",
+    playerCount: 5,
+    drawCount: 18,
+};
+
+const DEMO_PAST_SESSION_2: SessionSummary = {
+    id: "session-past-2",
+    hostPlayerId: DEMO_HOST_PLAYER.id,
+    name: "Catan Night",
+    joinCode: "PAST2",
+    filterSettings: {
+        maxDrinkingLevel: 1,
+        maxSpiceLevel: 0,
+        gameTags: ["catan"],
+        includeGlobalCards: true,
+    },
+    status: "expired",
+    createdAt: "2026-03-14T19:00:00.000Z",
+    expiresAt: "2026-03-30T19:00:00.000Z",
+    endedAt: null,
+    playerCount: 4,
+    drawCount: 11,
+};
+
+const DEMO_PAST_DRAW_EVENTS: DrawEvent[] = [
+    {
+        id: "de-past-1-1",
+        sessionId: "session-past-1",
+        playerId: "player-past-alex",
+        cardVersionId: DEMO_CARD_VERSION.id,
+        cardVersion: DEMO_CARD_VERSION,
+        card: DEMO_CARD,
+        drawnAt: "2026-03-28T22:10:00.000Z",
+        revealedToAllAt: "2026-03-28T22:10:03.000Z",
+        descriptionShared: false,
+        resolved: true,
+    },
+    {
+        id: "de-past-1-2",
+        sessionId: "session-past-1",
+        playerId: "player-past-jordan",
+        cardVersionId: DEMO_CARD_2_V2.id,
+        cardVersion: DEMO_CARD_2_V2,
+        card: DEMO_CARD_2,
+        drawnAt: "2026-03-28T22:05:00.000Z",
+        revealedToAllAt: "2026-03-28T22:05:03.000Z",
+        descriptionShared: true,
+        resolved: false,
+    },
+    {
+        id: "de-past-1-3",
+        sessionId: "session-past-1",
+        playerId: "player-past-host",
+        cardVersionId: DEMO_CARD_3_V1.id,
+        cardVersion: DEMO_CARD_3_V1,
+        card: DEMO_CARD_3,
+        drawnAt: "2026-03-28T22:00:00.000Z",
+        revealedToAllAt: "2026-03-28T22:00:03.000Z",
+        descriptionShared: false,
+        resolved: false,
+    },
+];
+
+const DEMO_PAST_PLAYERS: Player[] = [
+    {
+        id: "player-past-host",
+        sessionId: "session-past-1",
+        displayName: "Demo Host",
+        userId: DEMO_USER.id,
+        active: false,
+        cardSharing: "network",
+    },
+    {
+        id: "player-past-alex",
+        sessionId: "session-past-1",
+        displayName: "Alex",
+        userId: null,
+        active: false,
+        cardSharing: null,
+    },
+    {
+        id: "player-past-jordan",
+        sessionId: "session-past-1",
+        displayName: "Jordan",
+        userId: null,
+        active: false,
+        cardSharing: null,
+    },
+];
 
 // ─── In-memory state ─────────────────────────────────────────────────────────
 
@@ -349,6 +458,7 @@ export class FakeApiClient implements ApiClient {
             status: "active",
             createdAt: ts(),
             expiresAt: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString(),
+            endedAt: null,
         };
         state.sessions.set(sessionId, session);
         state.players.set(sessionId, [hostPlayer]);
@@ -439,15 +549,56 @@ export class FakeApiClient implements ApiClient {
     }
 
     async getSessionState(sessionId: string, _since?: string): Promise<ApiResult<SessionState>> {
-        const session = state.sessions.get(sessionId);
-        if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
-        return ok({
-            session,
-            players: state.players.get(sessionId) ?? [],
-            drawEvents: state.drawEvents.get(sessionId) ?? [],
-            pendingTransfers: state.transfers.get(sessionId) ?? [],
-            serverTimestamp: ts(),
-        });
+        // Check live sessions first, then past sessions
+        const liveSession = state.sessions.get(sessionId);
+        if (liveSession) {
+            return ok({
+                session: liveSession,
+                players: state.players.get(sessionId) ?? [],
+                drawEvents: state.drawEvents.get(sessionId) ?? [],
+                pendingTransfers: state.transfers.get(sessionId) ?? [],
+                serverTimestamp: ts(),
+            });
+        }
+        // Past demo sessions
+        if (sessionId === DEMO_PAST_SESSION_1.id) {
+            return ok({
+                session: DEMO_PAST_SESSION_1,
+                players: DEMO_PAST_PLAYERS,
+                drawEvents: DEMO_PAST_DRAW_EVENTS,
+                pendingTransfers: [],
+                serverTimestamp: ts(),
+            });
+        }
+        if (sessionId === DEMO_PAST_SESSION_2.id) {
+            return ok({
+                session: DEMO_PAST_SESSION_2,
+                players: [],
+                drawEvents: [],
+                pendingTransfers: [],
+                serverTimestamp: ts(),
+            });
+        }
+        return fail("NOT_FOUND_ERROR", "Session not found.");
+    }
+
+    async getSessionHistory(): Promise<ApiResult<SessionSummary[]>> {
+        if (!state.currentUser) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        return ok([DEMO_PAST_SESSION_1, DEMO_PAST_SESSION_2]);
+    }
+
+    async getActiveSessions(): Promise<ApiResult<SessionSummary[]>> {
+        if (!state.currentUser) return fail("AUTHENTICATION_ERROR", "Not authenticated.");
+        const activeSummaries: SessionSummary[] = [];
+        for (const session of state.sessions.values()) {
+            if (session.status !== "active") continue;
+            const players = state.players.get(session.id) ?? [];
+            const isParticipant = players.some((p) => p.userId === state.currentUser!.id);
+            if (!isParticipant) continue;
+            const drawCount = (state.drawEvents.get(session.id) ?? []).length;
+            activeSummaries.push({ ...session, playerCount: players.length, drawCount });
+        }
+        return ok(activeSummaries);
     }
 
     async updateSessionFilters(
@@ -464,6 +615,7 @@ export class FakeApiClient implements ApiClient {
         const session = state.sessions.get(sessionId);
         if (!session) return fail("NOT_FOUND_ERROR", "Session not found.");
         session.status = "ended";
+        session.endedAt = new Date().toISOString();
         return ok(undefined);
     }
 
@@ -485,6 +637,7 @@ export class FakeApiClient implements ApiClient {
             playerId,
             cardVersionId: DEMO_CARD_VERSION.id,
             cardVersion: DEMO_CARD_VERSION,
+            card: DEMO_CARD,
             drawnAt: ts(),
             revealedToAllAt: null,
             descriptionShared: false,
@@ -637,7 +790,10 @@ export class FakeApiClient implements ApiClient {
         return ok(transfer);
     }
 
-    async acceptTransfer(transferId: string, _acceptingPlayerId: string): Promise<ApiResult<DrawEvent>> {
+    async acceptTransfer(
+        transferId: string,
+        _acceptingPlayerId: string
+    ): Promise<ApiResult<DrawEvent>> {
         for (const [sid, transfers] of state.transfers.entries()) {
             const idx = transfers.findIndex((t) => t.id === transferId);
             if (idx === -1) continue;
@@ -663,7 +819,10 @@ export class FakeApiClient implements ApiClient {
         return fail("NOT_FOUND_ERROR", "Transfer not found.");
     }
 
-    async cancelTransfer(transferId: string, _requestingPlayerId: string): Promise<ApiResult<void>> {
+    async cancelTransfer(
+        transferId: string,
+        _requestingPlayerId: string
+    ): Promise<ApiResult<void>> {
         for (const transfers of state.transfers.values()) {
             const idx = transfers.findIndex((t) => t.id === transferId);
             if (idx !== -1) {
@@ -718,6 +877,18 @@ export class FakeApiClient implements ApiClient {
         }
         state.playerTokens.delete(playerId);
         return ok(undefined);
+    }
+
+    // ── Images ────────────────────────────────────────────────────────────────
+
+    async uploadImage(_file: File): Promise<ApiResult<{ imageId: string }>> {
+        return ok({ imageId: `fake-img-${Date.now()}` });
+    }
+
+    resolveImageUrl(imagePath: string | null): string | null {
+        if (!imagePath) return null;
+        // In the fake client there's no real base URL — return the path as-is.
+        return imagePath;
     }
 
     // ── Games ─────────────────────────────────────────────────────────────────

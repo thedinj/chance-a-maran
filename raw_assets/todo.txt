@@ -1,0 +1,4 @@
+Fake -> Real, delete Fake
+App title (HTML head)
+Mobile/Android version
+Timing of sfx

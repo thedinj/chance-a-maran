@@ -112,14 +112,36 @@ ion-item {
 
 /* ─── Player token animations ───────────────────────────────────────── */
 @keyframes playerTokenGlow {
-    0%, 100% { box-shadow: 0 0 6px 1px rgba(212, 168, 71, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35); }
-    50%       { box-shadow: 0 0 16px 4px rgba(212, 168, 71, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35); }
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(139, 127, 232, 0.28)); }
+    50%       { filter: drop-shadow(0 0 18px rgba(139, 127, 232, 0.62)); }
+}
+
+@keyframes pillActivate {
+    from { transform: scale(0.86) translateY(2px); opacity: 0.4; }
+    to   { transform: scale(1)    translateY(0);   opacity: 1;   }
 }
 
 /* ─── Game screen animations ────────────────────────────────────────── */
 @keyframes drawButtonGlow {
-    0%, 100% { box-shadow: 0 0 8px 0 color-mix(in srgb, var(--color-accent-primary) 10%, transparent); }
-    50%       { box-shadow: 0 0 18px 4px color-mix(in srgb, var(--color-accent-primary) 22%, transparent); }
+    0%, 100% { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--color-accent-primary) 18%, transparent); }
+    50%       { box-shadow: 0 0 32px 10px color-mix(in srgb, var(--color-accent-primary) 42%, transparent); }
+}
+
+@keyframes drawButtonCharging {
+    0%, 100% { box-shadow: 0 0 20px 5px color-mix(in srgb, var(--color-accent-primary) 45%, transparent); }
+    50%       { box-shadow: 0 0 52px 18px color-mix(in srgb, var(--color-accent-primary) 75%, transparent); }
+}
+
+@keyframes drawButtonFire {
+    0%   { box-shadow: 0 0 24px 8px color-mix(in srgb, var(--color-accent-green) 80%, transparent); }
+    50%  { box-shadow: 0 0 56px 22px color-mix(in srgb, var(--color-accent-green) 55%, transparent); }
+    100% { box-shadow: 0 0 10px 2px color-mix(in srgb, var(--color-accent-green) 18%, transparent); }
+}
+
+@keyframes drawFillFlash {
+    0%   { opacity: 0.7; }
+    25%  { opacity: 0.88; }
+    100% { opacity: 0; }
 }
 
 @keyframes drawButtonPulse {

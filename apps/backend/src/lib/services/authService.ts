@@ -5,7 +5,6 @@ import {
     ConflictError,
     InvitationCodeError,
     NotFoundError,
-    ValidationError,
 } from "@chance/core";
 import type { LoginRequest, RegisterRequest, User } from "@chance/core";
 import {
@@ -19,7 +18,6 @@ import * as invitationCodeRepo from "../repos/invitationCodeRepo";
 import * as refreshTokenRepo from "../repos/refreshTokenRepo";
 import * as userRepo from "../repos/userRepo";
 import * as playerRepo from "../repos/playerRepo";
-import * as sessionRepo from "../repos/sessionRepo";
 import { db } from "../db/db";
 
 const BCRYPT_ROUNDS = 12;
@@ -51,7 +49,6 @@ export async function register(
     const code = invitationCodeRepo.findByCode(req.invitationCode);
     if (!code) throw new InvitationCodeError("Invitation code not found");
     if (!code.is_active) throw new InvitationCodeError("Invitation code has been deactivated");
-    if (code.used_by_user_id) throw new InvitationCodeError("Invitation code has already been used");
     if (code.expires_at && new Date(code.expires_at) < new Date()) {
         throw new InvitationCodeError("Invitation code has expired");
     }
@@ -64,17 +61,13 @@ export async function register(
     const passwordHash = await hash(req.password, BCRYPT_ROUNDS);
     const userId = randomUUID();
 
-    // Atomic: create user + consume invite code in one transaction
-    db.transaction(() => {
-        userRepo.create({
-            id: userId,
-            email: req.email,
-            displayName: req.displayName,
-            passwordHash,
-            invitationCodeId: code.id,
-        });
-        invitationCodeRepo.consume(code.id, userId);
-    })();
+    userRepo.create({
+        id: userId,
+        email: req.email,
+        displayName: req.displayName,
+        passwordHash,
+        invitationCodeId: code.id,
+    });
 
     const user = userRepo.findById(userId)!;
     const tokens = issueTokenPair(user);

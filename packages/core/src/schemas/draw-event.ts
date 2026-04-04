@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CardVersionSchema } from "./card";
+import { CardSchema, CardVersionSchema } from "./card";
 
 export const DrawEventSchema = z.object({
     id: z.string(),
@@ -7,6 +7,7 @@ export const DrawEventSchema = z.object({
     playerId: z.string(),
     cardVersionId: z.string(),
     cardVersion: CardVersionSchema,
+    card: CardSchema,
     drawnAt: z.string(),
     /** Set after REVEAL_DELAY_MS — when all other players' clients show the card. */
     revealedToAllAt: z.string().nullable(),

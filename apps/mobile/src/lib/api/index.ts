@@ -21,6 +21,7 @@ export type {
     JoinByCodeResponse,
     SubmitCardRequest,
 } from "./types";
+export { SubmitCardRequestSchema } from "./types";
 
 const useFake = import.meta.env.VITE_USE_FAKE_API === "true";
 

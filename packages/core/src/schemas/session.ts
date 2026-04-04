@@ -15,6 +15,12 @@ export const FilterSettingsSchema = z.object({
     maxSpiceLevel: z.number().int().min(0).max(3),
     /** One or more game names. Empty array = any game. */
     gameTags: z.array(z.string()),
+    /**
+     * Whether global (admin-promoted) cards are included in the draw pool.
+     * Defaults to true. Set to false to restrict the deck to session-local and
+     * player-contributed cards only.
+     */
+    includeGlobalCards: z.boolean().default(true),
 });
 
 export type FilterSettings = z.infer<typeof FilterSettingsSchema>;
@@ -30,6 +36,8 @@ export const SessionSchema = z.object({
     createdAt: z.string(),
     /** Sessions expire automatically after 16 days. */
     expiresAt: z.string(),
+    /** Set when the host explicitly ends the session. Null for active/expired sessions. */
+    endedAt: z.string().nullable(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

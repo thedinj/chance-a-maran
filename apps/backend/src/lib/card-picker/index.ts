@@ -1,12 +1,11 @@
+import type { FilterSettings } from "@chance/core";
 import {
     BASE_WEIGHT,
+    DOWNVOTE_MULTIPLIER,
     SESSION_CARD_BOOST,
     UPVOTE_BONUS,
     UPVOTE_BONUS_CAP,
-    DOWNVOTE_MULTIPLIER,
-    RECENTLY_DRAWN_SUPPRESSION,
 } from "@chance/core";
-import type { FilterSettings } from "@chance/core";
 import * as cardRepo from "../repos/cardRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
 
@@ -24,11 +23,7 @@ function weightedRandom(weights: number[]): number {
 
 // ─── Weight calculator ────────────────────────────────────────────────────────
 
-function calculateWeight(
-    entry: cardRepo.DrawPoolEntry,
-    sessionId: string,
-    drawnCardIds: Set<string>
-): number {
+function calculateWeight(entry: cardRepo.DrawPoolEntry, sessionId: string): number {
     let weight = BASE_WEIGHT;
 
     // Session-born cards get a draw boost
@@ -43,11 +38,6 @@ function calculateWeight(
         weight *= DOWNVOTE_MULTIPLIER;
     }
 
-    // Recency suppression
-    if (drawnCardIds.has(entry.cardId)) {
-        weight *= RECENTLY_DRAWN_SUPPRESSION;
-    }
-
     return Math.max(weight, 0);
 }
 
@@ -60,10 +50,7 @@ function calculateWeight(
  *
  * Cards WITH game tags are excluded from sessions with no game filter.
  */
-function passesGameTagFilter(
-    gameTagIds: string[],
-    sessionGameTagIds: string[]
-): boolean {
+function passesGameTagFilter(gameTagIds: string[], sessionGameTagIds: string[]): boolean {
     if (gameTagIds.length === 0) return true; // universal card
     if (sessionGameTagIds.length === 0) return false; // session has no game filter → exclude tagged cards
     return gameTagIds.some((id) => sessionGameTagIds.includes(id));
@@ -79,7 +66,11 @@ export function pick(
     // 1. Fetch candidates from DB
     const candidates = cardRepo.getDrawPool(
         sessionId,
-        { maxDrinkingLevel: filterSettings.maxDrinkingLevel, maxSpiceLevel: filterSettings.maxSpiceLevel },
+        {
+            maxDrinkingLevel: filterSettings.maxDrinkingLevel,
+            maxSpiceLevel: filterSettings.maxSpiceLevel,
+            includeGlobalCards: filterSettings.includeGlobalCards ?? true,
+        },
         cardType
     );
 
@@ -90,17 +81,18 @@ export function pick(
 
     if (eligible.length === 0) return null;
 
-    // 3. Get set of already-drawn card IDs (for recency suppression)
+    // 3. Get set of already-drawn card IDs and exclude them entirely
     const drawnCardIds = drawEventRepo.getDrawnCardIds(sessionId);
+    const undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
+
+    if (undrawn.length === 0) return null;
 
     // 4. Calculate weights
-    const weights = eligible.map((entry) =>
-        calculateWeight(entry, sessionId, drawnCardIds)
-    );
+    const weights = undrawn.map((entry) => calculateWeight(entry, sessionId));
 
     // 5. Weighted random selection
     const idx = weightedRandom(weights);
-    const selected = eligible[idx]!;
+    const selected = undrawn[idx]!;
 
     return { cardId: selected.cardId, cardVersionId: selected.cardVersionId };
 }

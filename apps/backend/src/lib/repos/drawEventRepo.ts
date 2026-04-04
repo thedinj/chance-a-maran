@@ -1,7 +1,7 @@
 import { db } from "../db/db";
 import { intToBool } from "../db/boolBridge";
 import type { DrawEvent } from "@chance/core";
-import { findVersionById } from "./cardRepo";
+import { findById as findCardById, findVersionById } from "./cardRepo";
 
 // ─── DB type ──────────────────────────────────────────────────────────────────
 
@@ -16,16 +16,28 @@ export interface DbDrawEvent {
     resolved: number;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getCardIdForVersion(cardVersionId: string): string | null {
+    const row = db
+        .prepare("SELECT card_id FROM card_versions WHERE id = ?")
+        .get(cardVersionId) as { card_id: string } | undefined;
+    return row?.card_id ?? null;
+}
+
 // ─── Mapping ──────────────────────────────────────────────────────────────────
 
 export function mapDrawEvent(row: DbDrawEvent): DrawEvent {
     const cardVersion = findVersionById(row.card_version_id)!;
+    const cardId = getCardIdForVersion(row.card_version_id)!;
+    const card = findCardById(cardId)!;
     return {
         id: row.id,
         sessionId: row.session_id,
         playerId: row.player_id,
         cardVersionId: row.card_version_id,
         cardVersion,
+        card,
         drawnAt: row.drawn_at,
         revealedToAllAt: row.revealed_to_all_at,
         descriptionShared: intToBool(row.description_shared),

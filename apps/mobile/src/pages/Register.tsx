@@ -1,16 +1,14 @@
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import { motion } from "motion/react";
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { useAppConfig } from "../hooks/useAppConfig";
-import { useAppHeader } from "../hooks/useAppHeader";
 
 export default function Register() {
     const history = useHistory();
-    const { setShowBack } = useAppHeader();
     const { register } = useAuth();
     const { data: appConfig } = useAppConfig();
 
@@ -22,16 +20,12 @@ export default function Register() {
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    useEffect(() => {
-        setShowBack(true);
-        return () => setShowBack(false);
-    }, [setShowBack]);
-
     const inviteRequired = appConfig.inviteCodeRequired;
 
     function validate(): string | null {
         if (!displayName.trim()) return "Display name is required.";
-        if (!z.string().email().safeParse(email.trim()).success) return "Enter a valid email address.";
+        if (!z.string().email().safeParse(email.trim()).success)
+            return "Enter a valid email address.";
         if (!password) return "Password is required.";
         if (password !== confirmPassword) return "Passwords don't match.";
         if (inviteRequired && !inviteCode.trim()) return "An invitation code is required.";
@@ -75,14 +69,11 @@ export default function Register() {
             <AppHeader />
             <IonContent>
                 <div style={styles.root}>
-                    <div style={styles.header}>
-                        <span style={styles.ornament}>◆</span>
-                        <h1 style={styles.title}>Register</h1>
-                        <p style={styles.subtitle}>
-                            {inviteRequired
-                                ? "An invitation gets you in the door."
-                                : "Join the table."}
-                        </p>
+                    <div style={styles.pageHeader}>
+                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                            «
+                        </button>
+                        <h1 style={styles.heading}>Register</h1>
                     </div>
 
                     <div style={styles.dividerRow}>
@@ -135,7 +126,9 @@ export default function Register() {
                                     ease: [0.4, 0, 0.2, 1],
                                 }}
                             >
-                                <p style={styles.inviteLabel}>◆&nbsp;&nbsp;BY INVITATION&nbsp;&nbsp;◆</p>
+                                <p style={styles.inviteLabel}>
+                                    ◆&nbsp;&nbsp;BY INVITATION&nbsp;&nbsp;◆
+                                </p>
                                 <IonInput
                                     style={styles.inviteInput}
                                     placeholder="Invitation code"
@@ -181,39 +174,42 @@ export default function Register() {
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        backgroundColor: "var(--color-bg)",
-        padding: "var(--space-5)",
-        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
-    },
-    header: {
-        paddingTop: "var(--space-12)",
-        paddingBottom: "var(--space-6)",
         display: "flex",
         flexDirection: "column",
+        backgroundColor: "var(--color-bg)",
+        paddingTop: "var(--space-5)",
+        paddingLeft: "var(--space-5)",
+        paddingRight: "var(--space-5)",
+        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
+    },
+    pageHeader: {
+        display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        gap: "var(--space-3)",
+        padding: "0 0 var(--space-2)",
     },
-    ornament: {
+    backLink: {
+        background: "none",
+        border: "none",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-accent-amber)",
-        letterSpacing: "0.3em",
+        fontSize: "var(--text-subheading)",
+        color: "var(--color-accent-primary)",
+        cursor: "pointer",
+        padding: 0,
+        lineHeight: 1,
+        minHeight: "44px",
+        minWidth: "44px",
+        display: "flex",
+        alignItems: "center",
     },
-    title: {
+    heading: {
         fontFamily: "var(--font-display)",
-        fontSize: "var(--text-display)",
-        fontWeight: 700,
+        fontSize: "var(--text-heading)",
+        fontWeight: 600,
         color: "var(--color-text-primary)",
         letterSpacing: "-0.02em",
-        margin: 0,
         lineHeight: 1.2,
-    },
-    subtitle: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        color: "var(--color-text-secondary)",
         margin: 0,
-        textAlign: "center",
     },
     dividerRow: {
         display: "flex",

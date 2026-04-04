@@ -11,6 +11,12 @@
 // User-facing content limits
 export const MAX_NAME_LENGTH = 100; // Names: users, households, stores, aisles, sections, items
 export const MAX_EMAIL_LENGTH = 255; // Email addresses
+export const MAX_DISPLAY_NAME_LENGTH = 30; // Player/user display names
+export const MIN_PASSWORD_LENGTH = 8; // Minimum password length
+
+// Card content limits
+export const MAX_CARD_TITLE_LENGTH = 80;
+export const MAX_CARD_DESCRIPTION_LENGTH = 500;
 
 // System field limits
 export const MAX_TOKEN_LENGTH = 255; // Refresh tokens, invitation tokens

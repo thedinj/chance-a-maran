@@ -6,6 +6,12 @@ import { SessionSchema, FilterSettingsSchema } from "./session";
 import { CardSchema } from "./card";
 import { DrawEventSchema } from "./draw-event";
 import { CardTransferSchema } from "./card-transfer";
+import {
+    MAX_DISPLAY_NAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MAX_CARD_TITLE_LENGTH,
+    MAX_CARD_DESCRIPTION_LENGTH,
+} from "../constants/textLimits";
 
 // ─── Response envelope ────────────────────────────────────────────────────────
 
@@ -122,24 +128,34 @@ export type SessionState = z.infer<typeof SessionStateSchema>;
 // ─── User management schemas ──────────────────────────────────────────────────
 
 export const UpdateUserRequestSchema = z.object({
-    displayName: z.string().min(1).max(30).optional(),
+    displayName: z.string().min(1).max(MAX_DISPLAY_NAME_LENGTH).optional(),
     email: z.string().email().optional(),
 });
 export type UpdateUserRequest = z.infer<typeof UpdateUserRequestSchema>;
 
 export const ChangePasswordRequestSchema = z.object({
     currentPassword: z.string(),
-    newPassword: z.string().min(8),
+    newPassword: z.string().min(MIN_PASSWORD_LENGTH),
 });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 
 // ─── Card submission schema ───────────────────────────────────────────────────
 
+// ─── Session history schemas ──────────────────────────────────────────────────
+
+export const SessionSummarySchema = SessionSchema.extend({
+    playerCount: z.number().int().nonnegative(),
+    drawCount: z.number().int().nonnegative(),
+});
+export type SessionSummary = z.infer<typeof SessionSummarySchema>;
+
+// ─── Card submission schema ───────────────────────────────────────────────────
+
 export const SubmitCardRequestSchema = z.object({
-    title: z.string(),
-    description: z.string(),
+    title: z.string().min(1, "Title is required.").max(MAX_CARD_TITLE_LENGTH),
+    description: z.string().min(1, "Description is required.").max(MAX_CARD_DESCRIPTION_LENGTH),
     hiddenDescription: z.boolean(),
-    imageUrl: z.string().url().optional(),
+    imageUrl: z.string().optional(),
     drinkingLevel: z.number().int().min(0).max(3),
     spiceLevel: z.number().int().min(0).max(3),
     /**

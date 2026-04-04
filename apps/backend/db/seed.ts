@@ -5,6 +5,7 @@ import { resolve } from "path";
 import { initializeDatabase } from "../src/db/init";
 import { db } from "../src/lib/db/db";
 import * as invitationCodeRepo from "../src/lib/repos/invitationCodeRepo";
+import { setAppSetting } from "../src/lib/repos/referenceRepo";
 
 // Load .env from the backend app root
 config({ path: resolve(__dirname, "../.env") });
@@ -27,23 +28,15 @@ async function upsertUser(
     // Ensure the invite code exists (upsert so seed is idempotent)
     const code = invitationCodeRepo.upsertSeeded(inviteCode);
 
-    if (code.used_by_user_id) {
-        console.log(`Invite code "${inviteCode}" already consumed — creating user without consuming again.`);
-    }
-
     const passwordHash = await hash(password, BCRYPT_ROUNDS);
     const userId = randomUUID();
 
-    db.transaction(() => {
-        db.prepare(`
-            INSERT INTO users (id, email, display_name, password_hash, is_admin, invitation_code_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-        `).run(userId, email, displayName, passwordHash, isAdmin ? 1 : 0, code.id);
-
-        if (!code.used_by_user_id) {
-            invitationCodeRepo.consume(code.id, userId);
-        }
-    })();
+    db.prepare(
+        `
+        INSERT INTO users (id, email, display_name, password_hash, is_admin, invitation_code_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `
+    ).run(userId, email, displayName, passwordHash, isAdmin ? 1 : 0, code.id);
 
     console.log(`Created ${isAdmin ? "admin" : "user"}: ${email} (ID: ${userId})`);
     return true;
@@ -66,19 +59,20 @@ async function main() {
     console.log("Initializing database...");
     initializeDatabase();
 
+    setAppSetting("REGISTRATION_INVITATION_CODE", inviteCode);
+
     await upsertUser(adminEmail, adminPassword, adminName, true, inviteCode);
 
     // Optional second test user
     const secondEmail = process.env.SECOND_USER_EMAIL;
     const secondPassword = process.env.SECOND_USER_PASSWORD;
     const secondName = process.env.SECOND_USER_NAME || "Test User";
-    const secondCode = process.env.SECOND_USER_INVITATION_CODE;
 
-    if (secondEmail && secondPassword && secondCode) {
-        await upsertUser(secondEmail, secondPassword, secondName, false, secondCode);
+    if (secondEmail && secondPassword) {
+        await upsertUser(secondEmail, secondPassword, secondName, false, inviteCode);
     } else if (secondEmail || secondPassword) {
         console.log(
-            "SECOND_USER_* vars partially set — need SECOND_USER_EMAIL, SECOND_USER_PASSWORD, and SECOND_USER_INVITATION_CODE. Skipping."
+            "SECOND_USER_* vars partially set — need SECOND_USER_EMAIL and SECOND_USER_PASSWORD. Skipping."
         );
     }
 

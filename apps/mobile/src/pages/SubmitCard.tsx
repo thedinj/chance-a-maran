@@ -1,11 +1,17 @@
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
 import { AppHeader } from "../components/AppHeader";
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { useAppHeader } from "../hooks/useAppHeader";
 import { useSession } from "../session/useSession";
-import { apiClient } from "../lib/api";
-import type { Game } from "../lib/api/types";
+import { apiClient, SubmitCardRequestSchema } from "../lib/api";
+import type { Game, SubmitCardRequest } from "../lib/api/types";
+import imageCompression from "browser-image-compression";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Capacitor } from "@capacitor/core";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -13,20 +19,48 @@ export default function SubmitCard() {
     const { user, isInitializing } = useAuth();
     const { session } = useSession();
     const history = useHistory();
+    const { setShowBack } = useAppHeader();
     const [isPending, startTransition] = useTransition();
 
-    // Form state
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [hiddenDescription, setHiddenDescription] = useState(false);
-    const [drinkingLevel, setDrinkingLevel] = useState<0 | 1 | 2 | 3>(0);
-    const [spiceLevel, setSpiceLevel] = useState<0 | 1 | 2 | 3>(0);
-    const [cardType, setCardType] = useState<"standard" | "reparations">("standard");
-    const [isGameChanger, setIsGameChanger] = useState(false);
-    const [gameTags, setGameTags] = useState<string[]>([]);
+    useEffect(() => {
+        setShowBack(true);
+        return () => setShowBack(false);
+    }, [setShowBack]);
+
+    // RHF form
+    const {
+        register,
+        handleSubmit,
+        control,
+        watch,
+        formState: { errors },
+    } = useForm<SubmitCardRequest>({
+        resolver: zodResolver(SubmitCardRequestSchema),
+        mode: "onChange",
+        defaultValues: {
+            title: "",
+            description: "",
+            hiddenDescription: false,
+            drinkingLevel: 0,
+            spiceLevel: 0,
+            cardType: "standard",
+            isGameChanger: false,
+            gameTags: [],
+        },
+    });
+
+    const cardType = watch("cardType");
+
+    // Non-form state
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    // Image state (async side-effectful — kept outside RHF)
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const [imageId, setImageId] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         apiClient.getGames().then((result) => {
@@ -43,36 +77,75 @@ export default function SubmitCard() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function toggleGame(gameId: string) {
-        setGameTags((prev) =>
-            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
+    async function handlePickImage() {
+        setSubmitError(null);
+        let file: File;
+
+        try {
+            if (Capacitor.isNativePlatform()) {
+                const photo = await Camera.getPhoto({
+                    source: CameraSource.Photos,
+                    resultType: CameraResultType.Uri,
+                    allowEditing: false,
+                });
+                const response = await fetch(photo.webPath!);
+                const blob = await response.blob();
+                file = new File([blob], "image.jpg", { type: blob.type || "image/jpeg" });
+            } else {
+                file = await new Promise<File>((resolve, reject) => {
+                    const input = fileInputRef.current!;
+                    input.value = "";
+                    input.onchange = () => {
+                        const f = input.files?.[0];
+                        f ? resolve(f) : reject(new Error("No file selected"));
+                    };
+                    input.click();
+                });
+            }
+        } catch {
+            // User cancelled picker — no error shown
+            return;
+        }
+
+        const preview = URL.createObjectURL(file);
+        setImagePreview(preview);
+        setImageId(null);
+        setImageUploading(true);
+
+        const compressed = await imageCompression(file, {
+            maxSizeMB: 4,
+            maxWidthOrHeight: 1600,
+            useWebWorker: true,
+            fileType: "image/jpeg",
+        });
+
+        const result = await apiClient.uploadImage(
+            new File([compressed], file.name, { type: "image/jpeg" })
         );
+        setImageUploading(false);
+
+        if (result.ok) {
+            setImageId(result.data.imageId);
+        } else {
+            setSubmitError(result.error.message);
+            setImagePreview(null);
+        }
     }
 
-    function handleSubmit() {
-        setError(null);
+    function handleRemoveImage() {
+        setImagePreview(null);
+        setImageId(null);
+    }
 
-        const trimmedTitle = title.trim();
-        const trimmedDescription = description.trim();
-
-        if (!trimmedTitle) {
-            setError("Title is required.");
-            return;
-        }
-        if (!trimmedDescription) {
-            setError("Description is required.");
-            return;
-        }
+    function onValid(data: SubmitCardRequest) {
+        setSubmitError(null);
 
         const req = {
-            title: trimmedTitle,
-            description: trimmedDescription,
-            hiddenDescription,
-            drinkingLevel,
-            spiceLevel,
-            isGameChanger: cardType === "reparations" ? false : isGameChanger,
-            cardType,
-            gameTags,
+            ...data,
+            title: data.title.trim(),
+            description: data.description.trim(),
+            isGameChanger: data.cardType === "reparations" ? false : data.isGameChanger,
+            imageUrl: imageId ? `/api/images/${imageId}` : undefined,
         };
 
         startTransition(async () => {
@@ -83,7 +156,7 @@ export default function SubmitCard() {
             if (result.ok) {
                 history.goBack();
             } else {
-                setError(result.error.message);
+                setSubmitError(result.error.message);
             }
         });
     }
@@ -107,6 +180,14 @@ export default function SubmitCard() {
                         <h1 style={styles.heading}>Submit card</h1>
                     </div>
 
+                    {/* Hidden file input for web image picking */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif"
+                        style={{ display: "none" }}
+                    />
+
                     {/* ── Card content ────────────────────────────────────── */}
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>CARD CONTENT</p>
@@ -114,40 +195,89 @@ export default function SubmitCard() {
                         <input
                             style={styles.textInput}
                             placeholder="Title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
                             maxLength={80}
                             autoComplete="off"
                             disabled={isPending}
+                            {...register("title")}
                         />
+                        {errors.title && <p style={styles.fieldError}>{errors.title.message}</p>}
 
                         <textarea
                             style={styles.textArea}
                             placeholder="Description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
                             maxLength={500}
                             disabled={isPending}
                             rows={4}
+                            {...register("description")}
                         />
+                        {errors.description && (
+                            <p style={styles.fieldError}>{errors.description.message}</p>
+                        )}
 
                         <div style={styles.rowDivider} />
 
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Hidden description</span>
-                                <span style={styles.toggleSub}>
-                                    Only the drawing player sees this initially
-                                </span>
+                        <Controller
+                            name="hiddenDescription"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Hidden description</span>
+                                        <span style={styles.toggleSub}>
+                                            Only the drawing player sees this initially
+                                        </span>
+                                    </div>
+                                    <button
+                                        style={field.value ? styles.toggleOn : styles.toggleOff}
+                                        onClick={() => field.onChange(!field.value)}
+                                        disabled={isPending}
+                                    >
+                                        {field.value ? "ON" : "OFF"}
+                                    </button>
+                                </div>
+                            )}
+                        />
+                    </div>
+
+                    <div style={styles.divider} />
+
+                    {/* ── Image ────────────────────────────────────────────── */}
+                    <div style={styles.section}>
+                        <p style={styles.sectionLabel}>IMAGE (OPTIONAL)</p>
+
+                        {imagePreview ? (
+                            <div style={styles.imagePreviewRow}>
+                                <img
+                                    src={imagePreview}
+                                    alt="Card image preview"
+                                    style={styles.imageThumb}
+                                />
+                                <div style={styles.imagePreviewMeta}>
+                                    {imageUploading ? (
+                                        <span style={styles.imageStatus}>Uploading…</span>
+                                    ) : imageId ? (
+                                        <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                            ✓ Ready
+                                        </span>
+                                    ) : null}
+                                    <button
+                                        style={styles.imageClearBtn}
+                                        onClick={handleRemoveImage}
+                                        disabled={isPending}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
                             </div>
+                        ) : (
                             <button
-                                style={hiddenDescription ? styles.toggleOn : styles.toggleOff}
-                                onClick={() => setHiddenDescription((v) => !v)}
-                                disabled={isPending}
+                                style={styles.toggleOff}
+                                onClick={() => void handlePickImage()}
+                                disabled={isPending || imageUploading}
                             >
-                                {hiddenDescription ? "ON" : "OFF"}
+                                Add image
                             </button>
-                        </div>
+                        )}
                     </div>
 
                     <div style={styles.divider} />
@@ -158,24 +288,30 @@ export default function SubmitCard() {
                         <p style={styles.hint}>
                             How much drinking this card involves for the drawing player.
                         </p>
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
-                                ([label, val]) => (
-                                    <button
-                                        key={val}
-                                        style={
-                                            drinkingLevel === val
-                                                ? styles.toggleOn
-                                                : styles.toggleOff
-                                        }
-                                        onClick={() => setDrinkingLevel(val)}
-                                        disabled={isPending}
-                                    >
-                                        {label}
-                                    </button>
-                                )
+                        <Controller
+                            name="drinkingLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                    {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
+                                        ([label, val]) => (
+                                            <button
+                                                key={val}
+                                                style={
+                                                    field.value === val
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(val)}
+                                                disabled={isPending}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
                             )}
-                        </div>
+                        />
                     </div>
 
                     <div style={styles.divider} />
@@ -185,57 +321,77 @@ export default function SubmitCard() {
                         <div style={styles.section}>
                             <p style={styles.sectionLabel}>GAME</p>
                             <p style={styles.hint}>Tag specific games or leave empty for any game.</p>
-                            <div style={styles.tagList}>
-                                {availableGames.map((game) => {
-                                    const selected = gameTags.includes(game.id);
-                                    return (
-                                        <button
-                                            key={game.id}
-                                            style={
-                                                (selected
-                                                    ? styles.gameChipOn
-                                                    : styles.gameChipOff) as React.CSSProperties
-                                            }
-                                            onClick={() => toggleGame(game.id)}
-                                            disabled={isPending}
-                                        >
-                                            {game.name}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            <Controller
+                                name="gameTags"
+                                control={control}
+                                render={({ field }) => (
+                                    <div style={styles.tagList}>
+                                        {availableGames.map((game) => {
+                                            const selected = field.value.includes(game.id);
+                                            return (
+                                                <button
+                                                    key={game.id}
+                                                    style={
+                                                        (selected
+                                                            ? styles.gameChipOn
+                                                            : styles.gameChipOff) as React.CSSProperties
+                                                    }
+                                                    onClick={() =>
+                                                        field.onChange(
+                                                            selected
+                                                                ? field.value.filter((id) => id !== game.id)
+                                                                : [...field.value, game.id]
+                                                        )
+                                                    }
+                                                    disabled={isPending}
+                                                >
+                                                    {game.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            />
                         </div>
                     )}
 
-                    {(!gamesLoading && availableGames.length > 0) && <div style={styles.divider} />}
+                    {!gamesLoading && availableGames.length > 0 && <div style={styles.divider} />}
 
                     {/* ── Flags ────────────────────────────────────────────── */}
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>CARD TYPE</p>
 
-                        <button
-                            style={cardType === "standard" ? styles.radioRowSelected : styles.radioRow}
-                            onClick={() => setCardType("standard")}
-                            disabled={isPending}
-                        >
-                            <span style={cardType === "standard" ? styles.radioDotActive : styles.radioDot} />
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Standard</span>
-                                <span style={styles.toggleSub}>Normal draw pool</span>
-                            </div>
-                        </button>
+                        <Controller
+                            name="cardType"
+                            control={control}
+                            render={({ field }) => (
+                                <>
+                                    <button
+                                        style={field.value === "standard" ? styles.radioRowSelected : styles.radioRow}
+                                        onClick={() => field.onChange("standard")}
+                                        disabled={isPending}
+                                    >
+                                        <span style={field.value === "standard" ? styles.radioDotActive : styles.radioDot} />
+                                        <div style={styles.toggleText}>
+                                            <span style={styles.toggleTitle}>Standard</span>
+                                            <span style={styles.toggleSub}>Normal draw pool</span>
+                                        </div>
+                                    </button>
 
-                        <button
-                            style={cardType === "reparations" ? styles.radioRowSelected : styles.radioRow}
-                            onClick={() => setCardType("reparations")}
-                            disabled={isPending}
-                        >
-                            <span style={cardType === "reparations" ? styles.radioDotActive : styles.radioDot} />
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Reparations</span>
-                                <span style={styles.toggleSub}>Penalty card, drawn when rules are violated</span>
-                            </div>
-                        </button>
+                                    <button
+                                        style={field.value === "reparations" ? styles.radioRowSelected : styles.radioRow}
+                                        onClick={() => field.onChange("reparations")}
+                                        disabled={isPending}
+                                    >
+                                        <span style={field.value === "reparations" ? styles.radioDotActive : styles.radioDot} />
+                                        <div style={styles.toggleText}>
+                                            <span style={styles.toggleTitle}>Reparations</span>
+                                            <span style={styles.toggleSub}>Penalty card, drawn when rules are violated</span>
+                                        </div>
+                                    </button>
+                                </>
+                            )}
+                        />
 
                         {cardType === "reparations" && (
                             <p style={styles.hint}>
@@ -246,56 +402,68 @@ export default function SubmitCard() {
                         <div style={styles.rowDivider} />
 
                         <p style={styles.sectionLabel}>CONTENT RATING</p>
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
-                                ([label, val]) => (
-                                    <button
-                                        key={val}
-                                        style={
-                                            spiceLevel === val ? styles.toggleOn : styles.toggleOff
-                                        }
-                                        onClick={() => setSpiceLevel(val)}
-                                        disabled={isPending}
-                                    >
-                                        {label}
-                                    </button>
-                                )
+                        <Controller
+                            name="spiceLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                    {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
+                                        ([label, val]) => (
+                                            <button
+                                                key={val}
+                                                style={
+                                                    field.value === val ? styles.toggleOn : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(val)}
+                                                disabled={isPending}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
                             )}
-                        </div>
+                        />
 
                         {cardType === "standard" && (
                             <>
                                 <div style={styles.rowDivider} />
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Game Changer</span>
-                                        <span style={styles.toggleSub}>
-                                            Triggers a dramatic reveal with intro sequence
-                                        </span>
-                                    </div>
-                                    <button
-                                        style={isGameChanger ? styles.toggleOnViolet : styles.toggleOff}
-                                        onClick={() => setIsGameChanger((v) => !v)}
-                                        disabled={isPending}
-                                    >
-                                        {isGameChanger ? "ON" : "OFF"}
-                                    </button>
-                                </div>
+                                <Controller
+                                    name="isGameChanger"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <div style={styles.toggleRow}>
+                                            <div style={styles.toggleText}>
+                                                <span style={styles.toggleTitle}>Game Changer</span>
+                                                <span style={styles.toggleSub}>
+                                                    Triggers a dramatic reveal with intro sequence
+                                                </span>
+                                            </div>
+                                            <button
+                                                style={field.value ? styles.toggleOnViolet : styles.toggleOff}
+                                                onClick={() => field.onChange(!field.value)}
+                                                disabled={isPending}
+                                            >
+                                                {field.value ? "ON" : "OFF"}
+                                            </button>
+                                        </div>
+                                    )}
+                                />
                             </>
                         )}
                     </div>
 
-                    {error && <p style={styles.error}>{error}</p>}
                 </div>
             </IonContent>
 
             {/* Bottom-anchored submit action */}
             <IonFooter>
                 <div style={styles.footer}>
+                    {submitError && <p style={styles.error}>{submitError}</p>}
                     <IonButton
                         expand="block"
                         style={styles.saveButton as React.CSSProperties}
-                        onClick={handleSubmit}
+                        onClick={() => void handleSubmit(onValid)()}
                         disabled={isPending}
                     >
                         Submit card
@@ -550,7 +718,52 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
     },
 
-    // Error
+    // Image picker
+    imagePreviewRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-4)",
+    },
+    imageThumb: {
+        width: "100px",
+        height: "100px",
+        objectFit: "cover" as const,
+        border: "1px solid var(--color-border)",
+        flexShrink: 0,
+    },
+    imagePreviewMeta: {
+        display: "flex",
+        flexDirection: "column" as const,
+        gap: "var(--space-2)",
+    },
+    imageStatus: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+    },
+    imageClearBtn: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        cursor: "pointer",
+        padding: 0,
+        textAlign: "left" as const,
+        minHeight: "44px",
+        display: "flex",
+        alignItems: "center",
+    },
+
+    // Field-level validation error
+    fieldError: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        margin: "calc(-1 * var(--space-1)) 0 0",
+    },
+
+    // Server/submit error
     error: {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",

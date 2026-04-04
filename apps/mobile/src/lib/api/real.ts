@@ -19,6 +19,7 @@ import type {
     RegisterRequest,
     Session,
     SessionState,
+    SessionSummary,
     SubmitCardRequest,
     UpdateUserRequest,
     User,
@@ -28,7 +29,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 function resolveBaseUrl(): string {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
-    if (import.meta.env.DEV) return "http://10.0.2.2:3000";
+    if (import.meta.env.DEV) return "http://localhost:3000";
     return "https://api.chance.app";
 }
 
@@ -97,6 +98,10 @@ export class RealApiClient implements ApiClient {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+        // FormData: let the browser set Content-Type (includes the multipart boundary).
+        // Everything else: JSON.
+        const isFormData = body instanceof FormData;
+
         let res: Response;
         try {
             res = await fetch(`${this.baseUrl}${path}`, {
@@ -104,10 +109,10 @@ export class RealApiClient implements ApiClient {
                 signal: controller.signal,
                 credentials: "include", // always send HttpOnly cookie cross-origin (web)
                 headers: {
-                    "Content-Type": "application/json",
+                    ...(isFormData ? {} : { "Content-Type": "application/json" }),
                     ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
                 },
-                body: body !== undefined ? JSON.stringify(body) : undefined,
+                body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
             });
         } catch (err) {
             clearTimeout(timeout);
@@ -127,11 +132,7 @@ export class RealApiClient implements ApiClient {
         }
 
         // Auto-refresh on 401 with X-Token-Status: invalid (once per request)
-        if (
-            res.status === 401 &&
-            res.headers.get("X-Token-Status") === "invalid" &&
-            !isRetry
-        ) {
+        if (res.status === 401 && res.headers.get("X-Token-Status") === "invalid" && !isRetry) {
             const refreshed = await this.tryRefreshToken();
             if (refreshed) {
                 return this.request<T>(method, path, body, true);
@@ -169,7 +170,10 @@ export class RealApiClient implements ApiClient {
                 if (result.ok) {
                     this.accessToken = result.data.accessToken;
                     this.refreshToken = result.data.refreshToken;
-                    await this.onTokenRefreshed?.(result.data.accessToken, result.data.refreshToken);
+                    await this.onTokenRefreshed?.(
+                        result.data.accessToken,
+                        result.data.refreshToken
+                    );
                     return true;
                 }
                 this.clearTokens();
@@ -241,6 +245,14 @@ export class RealApiClient implements ApiClient {
         return this.request<SessionState>("GET", `/api/sessions/${sessionId}/state${query}`);
     }
 
+    getSessionHistory() {
+        return this.request<SessionSummary[]>("GET", "/api/sessions/history");
+    }
+
+    getActiveSessions() {
+        return this.request<SessionSummary[]>("GET", "/api/sessions/active");
+    }
+
     updateSessionFilters(sessionId: string, filterSettings: FilterSettings) {
         return this.request<Session>("PATCH", `/api/sessions/${sessionId}/filters`, {
             filterSettings,
@@ -262,11 +274,9 @@ export class RealApiClient implements ApiClient {
     }
 
     drawReparationsCard(sessionId: string, playerId: string) {
-        return this.request<DrawEvent>(
-            "POST",
-            `/api/sessions/${sessionId}/draw-reparations`,
-            { playerId }
-        );
+        return this.request<DrawEvent>("POST", `/api/sessions/${sessionId}/draw-reparations`, {
+            playerId,
+        });
     }
 
     submitCard(sessionId: string, req: SubmitCardRequest) {
@@ -328,7 +338,11 @@ export class RealApiClient implements ApiClient {
         playerId: string,
         patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" }
     ) {
-        return this.request<Player>("PATCH", `/api/sessions/${sessionId}/players/${playerId}`, patch);
+        return this.request<Player>(
+            "PATCH",
+            `/api/sessions/${sessionId}/players/${playerId}`,
+            patch
+        );
     }
 
     // ── User management ───────────────────────────────────────────────────────
@@ -339,6 +353,23 @@ export class RealApiClient implements ApiClient {
 
     changePassword(req: ChangePasswordRequest) {
         return this.request<void>("POST", "/api/users/me/change-password", req);
+    }
+
+    // ── Images ────────────────────────────────────────────────────────────────
+
+    uploadImage(file: File) {
+        const form = new FormData();
+        form.append("file", file);
+        return this.request<{ imageId: string }>("POST", "/api/images", form);
+    }
+
+    /**
+     * Converts a stored image path ("/api/images/{id}") to a fully-qualified URL
+     * by prepending the configured API base URL. Returns null for null input.
+     */
+    resolveImageUrl(imagePath: string | null): string | null {
+        if (!imagePath) return null;
+        return `${this.baseUrl}${imagePath}`;
     }
 
     // ── Games ─────────────────────────────────────────────────────────────────

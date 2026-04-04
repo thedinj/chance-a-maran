@@ -1,7 +1,6 @@
 import { IonButton, IonContent, IonInput, IonModal, IonPage, IonSpinner } from "@ionic/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
-import { useAppHeader } from "../hooks/useAppHeader";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { apiClient } from "../lib/api";
@@ -9,7 +8,6 @@ import { apiClient } from "../lib/api";
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppSettings() {
-    const { setShowBack } = useAppHeader();
     const { user, logout, updateCurrentUser } = useAuth();
     const history = useHistory();
 
@@ -30,11 +28,6 @@ export default function AppSettings() {
     const [isPasswordPending, startPasswordTransition] = useTransition();
 
     const currentPasswordRef = useRef<HTMLIonInputElement>(null);
-
-    useEffect(() => {
-        setShowBack(true);
-        return () => setShowBack(false);
-    }, [setShowBack]);
 
     // Focus current-password input when modal opens
     useEffect(() => {
@@ -128,6 +121,13 @@ export default function AppSettings() {
             <AppHeader />
             <IonContent scrollY={true}>
                 <div style={styles.root}>
+                    {" "}
+                    <div style={styles.pageHeader}>
+                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                            «
+                        </button>
+                        <h1 style={styles.pageTitle}>Settings</h1>
+                    </div>
                     {/* ── Profile ─────────────────────────────────────────────── */}
                     <section style={styles.section}>
                         <h2 style={styles.sectionHeading}>Profile</h2>
@@ -186,9 +186,7 @@ export default function AppSettings() {
                             )}
                         </IonButton>
                     </section>
-
                     <div style={styles.divider} />
-
                     {/* ── Security ─────────────────────────────────────────────── */}
                     <section style={styles.section}>
                         <h2 style={styles.sectionHeading}>Security</h2>
@@ -201,9 +199,7 @@ export default function AppSettings() {
                             Change password
                         </IonButton>
                     </section>
-
                     <div style={styles.divider} />
-
                     {/* ── Session ──────────────────────────────────────────────── */}
                     <section style={styles.section}>
                         <h2 style={styles.sectionHeading}>Account</h2>
@@ -316,11 +312,41 @@ export default function AppSettings() {
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        padding: "var(--space-5)",
-        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
+        backgroundColor: "var(--color-bg)",
+        paddingTop: "var(--space-5)",
+        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
         gap: "var(--space-5)",
+    },
+    pageHeader: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-3)",
+        padding: "0 var(--space-5) var(--space-2)",
+    },
+    backLink: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-subheading)",
+        color: "var(--color-accent-primary)",
+        cursor: "pointer",
+        padding: 0,
+        lineHeight: 1,
+        minHeight: "44px",
+        minWidth: "44px",
+        display: "flex",
+        alignItems: "center",
+    },
+    pageTitle: {
+        fontFamily: "var(--font-display)",
+        fontSize: "var(--text-heading)",
+        fontWeight: 600,
+        color: "var(--color-text-primary)",
+        letterSpacing: "-0.02em",
+        lineHeight: 1.2,
+        margin: 0,
     },
 
     // ── Sections ───────────────────────────────────────────────────────────────

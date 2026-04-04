@@ -1,10 +1,12 @@
 import { IonButton, IonContent, IonPage, IonSpinner } from "@ionic/react";
 import { motion, useReducedMotion } from "motion/react";
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { hapticLight, hapticMedium } from "../lib/haptics";
+import { apiClient } from "../lib/api";
+import type { SessionSummary } from "../lib/api/types";
 import { useSession } from "../session/useSession";
 import "./Home.css";
 
@@ -44,13 +46,22 @@ const actionsVariants = {
 
 export default function Home() {
     const { user, isGuest, isInitializing } = useAuth();
-    const { session } = useSession();
+    const { session, initSession } = useSession();
     const history = useHistory();
     const prefersReducedMotion = useReducedMotion();
 
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
+    const [activeGames, setActiveGames] = useState<SessionSummary[]>([]);
+    const [activeGamesError, setActiveGamesError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!user) return;
+        apiClient.getActiveSessions().then((r) => {
+            if (r.ok) setActiveGames(r.data);
+        });
+    }, [user]);
 
     const hasAccount = Boolean(user);
     const hasCode = joinCode.trim().length >= 1;
@@ -73,6 +84,39 @@ export default function Home() {
         });
     }
 
+    function handleJoinActiveGame(summary: SessionSummary) {
+        if (!user) return;
+        // Already the active session on this device — just navigate.
+        if (session?.id === summary.id) {
+            void hapticLight();
+            history.push(`/game/${summary.id}`);
+            return;
+        }
+        setActiveGamesError(null);
+        void hapticMedium();
+        startTransition(async () => {
+            const joinResult = await apiClient.joinByCode({
+                joinCode: summary.joinCode,
+                displayName: user.displayName,
+            });
+            if (!joinResult.ok) {
+                setActiveGamesError(joinResult.error.message);
+                // Refresh the list — session may no longer be active
+                const refresh = await apiClient.getActiveSessions();
+                if (refresh.ok) setActiveGames(refresh.data);
+                return;
+            }
+            const { session: joinedSession, player } = joinResult.data;
+            const stateResult = await apiClient.getSessionState(joinedSession.id);
+            if (!stateResult.ok) {
+                setActiveGamesError("Could not load game state. Please try again.");
+                return;
+            }
+            initSession(stateResult.data, player.id);
+            history.push(`/game/${joinedSession.id}`);
+        });
+    }
+
     if (isInitializing) {
         return (
             <IonPage>
@@ -85,11 +129,23 @@ export default function Home() {
         );
     }
 
+    function formatSessionDate(createdAt: string): string {
+        return new Date(createdAt).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+        });
+    }
+
+    const hasPastGames = !!user && activeGames.length > 0;
+
     return (
         <IonPage>
             <AppHeader />
-            <IonContent scrollY={false}>
-                <div style={styles.root}>
+            <IonContent scrollY={hasPastGames}>
+                <div style={hasPastGames ? styles.rootScrollable : styles.root}>
+                    {/* ── Above-the-fold wrapper (always viewport height) ────── */}
+                    <div style={hasPastGames ? styles.aboveFold : styles.aboveFoldFill}>
                     {/* ── Background layers ──────────────────────────────────── */}
 
                     {/* Image fades in slowly — atmospheric reveal */}
@@ -264,6 +320,35 @@ export default function Home() {
                             </div>
                         )}
                     </motion.div>
+                    </div>{/* end aboveFold wrapper */}
+
+                    {/* ── Past Games ──────────────────────────────────────── */}
+                    {hasPastGames && (
+                        <div style={styles.pastGames}>
+                            <p style={styles.sectionLabel}>MY GAMES</p>
+                            {activeGamesError && (
+                                <p style={styles.activeGamesError}>{activeGamesError}</p>
+                            )}
+                            {activeGames.map((g) => (
+                                <button
+                                    key={g.id}
+                                    style={styles.pastGameRow}
+                                    disabled={isPending}
+                                    onClick={() => handleJoinActiveGame(g)}
+                                >
+                                    <div style={styles.pastGameMain}>
+                                        <span style={styles.pastGameName}>{g.name}</span>
+                                        <span style={styles.pastGameMeta}>
+                                            {g.playerCount} players · {g.drawCount} cards
+                                        </span>
+                                    </div>
+                                    <span style={styles.pastGameDate}>
+                                        {formatSessionDate(g.createdAt)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </IonContent>
         </IonPage>
@@ -280,6 +365,26 @@ const styles: Record<string, React.CSSProperties> = {
         inset: 0,
         overflow: "hidden",
         backgroundColor: "var(--color-bg)",
+    },
+    // When past games are present, the container needs to grow beyond the viewport
+    rootScrollable: {
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100%",
+        position: "relative",
+        backgroundColor: "var(--color-bg)",
+    },
+    // Above-fold section that mimics original root when inside rootScrollable
+    aboveFold: {
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100svh",
+        position: "relative",
+        overflow: "hidden",
+    },
+    // Used when no past games — matches original root behavior (fills the wrapper)
+    aboveFoldFill: {
+        display: "contents", // transparent passthrough — no extra layout box
     },
     center: {
         display: "flex",
@@ -476,5 +581,71 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
         textAlign: "center" as const,
         letterSpacing: "0.03em",
+    },
+
+    // ── Past Games section ────────────────────────────────────────────────────
+
+    pastGames: {
+        padding: "var(--space-6) var(--space-5)",
+        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
+        borderTop: "1px solid var(--color-border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-1)",
+    },
+    sectionLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 600,
+        letterSpacing: "0.12em",
+        color: "var(--color-text-secondary)",
+        margin: 0,
+        marginBottom: "var(--space-3)",
+    },
+    pastGameRow: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "var(--space-3)",
+        background: "none",
+        border: "none",
+        borderBottom: "1px solid var(--color-border)",
+        padding: "var(--space-3) 0",
+        cursor: "pointer",
+        textAlign: "left" as const,
+        width: "100%",
+    },
+    pastGameMain: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "2px",
+        minWidth: 0,
+    },
+    pastGameName: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-primary)",
+        fontWeight: 500,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap" as const,
+    },
+    pastGameMeta: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+    },
+    pastGameDate: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        flexShrink: 0,
+    },
+    activeGamesError: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        margin: 0,
+        marginBottom: "var(--space-2)",
     },
 };

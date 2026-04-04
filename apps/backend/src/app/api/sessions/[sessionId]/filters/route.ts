@@ -1,5 +1,4 @@
-import { AuthorizationError, NotFoundError, ValidationError } from "@chance/core";
-import type { FilterSettings } from "@chance/core";
+import { AuthorizationError, FilterSettingsSchema, NotFoundError, ValidationError } from "@chance/core";
 import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as sessionRepo from "@/lib/repos/sessionRepo";
@@ -12,8 +11,12 @@ export const PATCH = withAuth(async (req, { params }) => {
     try {
         const { sessionId } = await params;
         const body = await req.json();
-        const { filterSettings } = body as { filterSettings?: FilterSettings };
-        if (!filterSettings) throw new ValidationError("filterSettings is required");
+        const { filterSettings: rawFilterSettings } = body as { filterSettings?: unknown };
+        if (!rawFilterSettings) throw new ValidationError("filterSettings is required");
+
+        const parsed = FilterSettingsSchema.safeParse(rawFilterSettings);
+        if (!parsed.success) throw new ValidationError("Invalid filterSettings", parsed.error.flatten());
+        const filterSettings = parsed.data;
 
         const session = sessionRepo.findById(sessionId);
         if (!session) throw new NotFoundError("Session not found");

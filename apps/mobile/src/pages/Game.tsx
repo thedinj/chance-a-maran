@@ -9,7 +9,7 @@ import {
 } from "@ionic/react";
 import { Carousel } from "@mantine/carousel";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { useCards } from "../cards/useCards";
 import { LoginForm } from "../components/LoginForm";
@@ -39,6 +39,26 @@ interface DrawDrama {
     flipMs: number;
     /** Optional label badge shown during the back phase (e.g. "GAME CHANGER") */
     preFlipLabel?: string;
+}
+
+// Preload all drama sounds at module load so they play without delay.
+const preloadedAudio: Record<string, HTMLAudioElement> = {};
+function preloadSound(src: string): void {
+    if (typeof window === "undefined") return;
+    const el = new Audio(src);
+    el.preload = "auto";
+    preloadedAudio[src] = el;
+}
+["/sound/drumrollloop.mp3", "/sound/drama.mp3", "/sound/cymbal.mp3"].forEach(preloadSound);
+
+function getAudio(src: string): HTMLAudioElement {
+    // Return a clone so the same sound can overlap / restart cleanly.
+    const cached = preloadedAudio[src];
+    if (cached) {
+        const clone = cached.cloneNode() as HTMLAudioElement;
+        return clone;
+    }
+    return new Audio(src);
 }
 
 const STANDARD_DRAW_DRAMA: DrawDrama = {
@@ -138,7 +158,7 @@ function DevicePlayerPill({
         <div style={{ position: "relative", display: "inline-flex" }}>
             <button
                 style={isActive ? styles.pillActive : styles.pillInactive}
-                className={isActive ? undefined : "pill-inactive"}
+                className={isActive ? "pill-active" : "pill-inactive"}
                 onContextMenuCapture={suppressContextMenu}
                 onContextMenu={suppressContextMenu}
                 onClick={(event) => {
@@ -154,9 +174,6 @@ function DevicePlayerPill({
                 aria-pressed={isActive}
                 {...(isHost ? {} : longPress)}
             >
-                <span style={isActive ? styles.avatarActive : styles.avatarInactive}>
-                    {getInitials(player.displayName)}
-                </span>
                 <span style={styles.pillName}>{player.displayName}</span>
             </button>
             {hasNotification && (
@@ -217,19 +234,17 @@ function GameHeader({
             <style>{SCROLLBAR_CSS}</style>
             <style>{`
                 .pill-inactive:not(:disabled):hover {
-                    border-color: color-mix(in srgb, var(--color-accent-primary) 70%, transparent) !important;
+                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-primary) 70%, transparent) !important;
                     color: var(--color-text-primary) !important;
                     opacity: 1 !important;
                 }
                 .pill-add:not(:disabled):hover {
                     background: color-mix(in srgb, var(--color-accent-primary) 15%, transparent) !important;
-                    border-color: var(--color-accent-primary) !important;
-                    border-style: solid !important;
+                    box-shadow: inset 0 0 0 1.5px var(--color-accent-primary) !important;
                     opacity: 1 !important;
                 }
                 .pill-non-device:not(:disabled):hover {
                     opacity: 0.9 !important;
-                    border-style: solid !important;
                 }
                 .pill-left:not(:disabled):hover {
                     opacity: 0.65 !important;
@@ -239,6 +254,12 @@ function GameHeader({
                 }
                 .pill-add:active {
                     transform: scale(0.92) !important;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    @keyframes pillActivate {
+                        from { opacity: 0.4; }
+                        to   { opacity: 1;   }
+                    }
                 }
             `}</style>
             <IonHeader>
@@ -300,7 +321,7 @@ function GameHeader({
                                 <button
                                     key={p.id}
                                     style={isActive ? styles.pillLeftActive : styles.pillLeft}
-                                    className={isActive ? undefined : "pill-left"}
+                                    className={isActive ? "pill-active" : "pill-left"}
                                     onContextMenuCapture={suppressContextMenu}
                                     onContextMenu={suppressContextMenu}
                                     onClick={() => {
@@ -309,13 +330,6 @@ function GameHeader({
                                     }}
                                     aria-pressed={isActive}
                                 >
-                                    <span
-                                        style={
-                                            isActive ? styles.avatarLeftActive : styles.avatarLeft
-                                        }
-                                    >
-                                        {getInitials(p.displayName)}
-                                    </span>
                                     <span style={styles.pillName}>{p.displayName}</span>
                                 </button>
                             );
@@ -334,7 +348,7 @@ function GameHeader({
                                                 ? styles.pillNonDeviceActive
                                                 : styles.pillNonDevice
                                         }
-                                        className={isActive ? undefined : "pill-non-device"}
+                                        className={isActive ? "pill-active" : "pill-non-device"}
                                         onContextMenuCapture={suppressContextMenu}
                                         onContextMenu={suppressContextMenu}
                                         onClick={() => {
@@ -343,15 +357,6 @@ function GameHeader({
                                         }}
                                         aria-pressed={isActive}
                                     >
-                                        <span
-                                            style={
-                                                isActive
-                                                    ? styles.avatarNonDeviceActive
-                                                    : styles.avatarNonDevice
-                                            }
-                                        >
-                                            {getInitials(p.displayName)}
-                                        </span>
                                         <span style={styles.pillName}>{p.displayName}</span>
                                     </button>
                                 );
@@ -477,11 +482,7 @@ interface CardCarouselProps {
     viewingPlayerName?: string | null;
 }
 
-function CardCarousel({
-    events,
-    onCardTap,
-    viewingPlayerName,
-}: CardCarouselProps) {
+function CardCarousel({ events, onCardTap, viewingPlayerName }: CardCarouselProps) {
     const isLandscape = useIsLandscape();
 
     if (events.length === 0) {
@@ -540,30 +541,63 @@ interface DrawButtonProps {
     onDraw: () => void;
 }
 
-function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
-    const [flashing, setFlashing] = useState(false);
+const HOLD_DURATION_MS = 600;
 
-    function handleClick() {
+function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
+    const [holdState, setHoldState] = useState<"idle" | "holding" | "flashing">("idle");
+    const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    function cancelHold() {
+        if (holdTimerRef.current !== null) {
+            clearTimeout(holdTimerRef.current);
+            holdTimerRef.current = null;
+        }
+        setHoldState("idle");
+    }
+
+    function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
         if (!isEnabled || isPending) return;
-        setFlashing(true);
-        setTimeout(() => setFlashing(false), 220);
-        onDraw();
+        (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+        setHoldState("holding");
+        holdTimerRef.current = setTimeout(() => {
+            holdTimerRef.current = null;
+            setHoldState("flashing");
+            setTimeout(() => setHoldState("idle"), 320);
+            onDraw();
+        }, HOLD_DURATION_MS);
+    }
+
+    function handlePointerUp() {
+        cancelHold();
     }
 
     let borderColor = "var(--color-accent-primary)";
     let labelColor = "var(--color-text-primary)";
-    let animName = "drawButtonGlow";
+    let animationValue = "drawButtonGlow 4s ease-in-out infinite";
+    let label = "HOLD TO DRAW";
 
     if (!isEnabled) {
         borderColor = "var(--color-border)";
         labelColor = "var(--color-text-secondary)";
-        animName = "none";
+        animationValue = "none";
     } else if (isPending) {
-        animName = "drawButtonPulse";
-    } else if (flashing) {
+        animationValue = "drawButtonPulse 1s ease-in-out infinite";
+        label = "DRAWING…";
+    } else if (holdState === "holding") {
+        animationValue = "drawButtonCharging 0.4s ease-in-out infinite";
+    } else if (holdState === "flashing") {
         borderColor = "var(--color-accent-green)";
-        animName = "none";
+        animationValue = "drawButtonFire 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards";
+        label = "DRAW";
     }
+
+    // Fill overlay: gradient fill scaleX 0→1 during hold (600ms linear), green burst on flash.
+    const fillIsFlashing = holdState === "flashing";
+    const fillGradient =
+        "linear-gradient(90deg, rgba(139, 127, 232, 0.22) 0%, rgba(139, 127, 232, 0.65) 68%, rgba(240, 237, 228, 0.45) 100%)";
+    const fillTransition =
+        holdState === "holding" ? `transform ${HOLD_DURATION_MS}ms linear` : "none";
+    const fillScale = holdState === "holding" || fillIsFlashing ? 1 : 0;
 
     return (
         <button
@@ -571,14 +605,37 @@ function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
                 ...styles.drawButton,
                 borderColor,
                 color: labelColor,
-                animation: `${animName} ${isPending ? "1s" : "4s"} ease-in-out infinite`,
+                animation: animationValue,
                 opacity: !isEnabled ? 0.6 : 1,
                 cursor: !isEnabled ? "default" : "pointer",
+                position: "relative",
+                overflow: "hidden",
+                userSelect: "none",
             }}
-            onClick={handleClick}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onContextMenu={suppressContextMenu}
+            onContextMenuCapture={suppressContextMenu}
             disabled={!isEnabled && !isPending}
         >
-            DRAW
+            <div
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: fillIsFlashing ? "var(--color-accent-green)" : fillGradient,
+                    opacity: fillIsFlashing ? 1 : holdState === "holding" ? 1 : 0,
+                    transform: `scaleX(${fillScale})`,
+                    transformOrigin: "left center",
+                    transition: fillTransition,
+                    animation: fillIsFlashing
+                        ? "drawFillFlash 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards"
+                        : "none",
+                    pointerEvents: "none",
+                }}
+            />
+            {label}
         </button>
     );
 }
@@ -593,11 +650,12 @@ interface CardRevealOverlayProps {
 
 function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) {
     const loopRef = useRef<HTMLAudioElement | null>(null);
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
         if (!drama) return;
 
-        const loop = new Audio(drama.loopSound);
+        const loop = getAudio(drama.loopSound);
         loop.loop = true;
         loop.play().catch(() => {});
         loopRef.current = loop;
@@ -605,7 +663,9 @@ function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) 
         const hitTimer = window.setTimeout(() => {
             loopRef.current?.pause();
             loopRef.current = null;
-            new Audio(drama.hitSound).play().catch(() => {});
+            getAudio(drama.hitSound)
+                .play()
+                .catch(() => {});
         }, drama.hitSoundAt);
 
         return () => {
@@ -616,17 +676,30 @@ function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) 
     }, [drama]);
 
     return (
-        <div style={styles.overlayBackdrop} onClick={onDismiss}>
-            <div style={{ ...styles.revealCardWrap, position: "relative" }} onClick={(e) => e.stopPropagation()}>
-                {drama?.preFlipLabel && (
-                    <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>
-                )}
+        <div
+            style={{ ...styles.overlayBackdrop, pointerEvents: ready ? "auto" : "none" }}
+            onClick={ready ? onDismiss : undefined}
+        >
+            <div
+                style={{ ...styles.revealCardWrap, position: "relative", pointerEvents: "auto" }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                {drama?.preFlipLabel && <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>}
                 <FlippingCard
                     event={event}
                     dramaDelayMs={drama?.backMs}
                     overrideDuration={drama?.flipMs}
+                    onFlipComplete={() => setReady(true)}
                 />
-                <p style={styles.revealDismissHint}>Tap outside to dismiss</p>
+                <p
+                    style={{
+                        ...styles.revealDismissHint,
+                        opacity: ready ? 0.5 : 0,
+                        transition: ready ? "opacity 280ms ease" : "none",
+                    }}
+                >
+                    Tap outside to dismiss
+                </p>
             </div>
         </div>
     );
@@ -850,11 +923,7 @@ function CardDetailOverlay({
                 </button>
 
                 {/* Resolve */}
-                <button
-                    style={styles.actionBtn}
-                    onClick={handleResolve}
-                    disabled={resolvePending}
-                >
+                <button style={styles.actionBtn} onClick={handleResolve} disabled={resolvePending}>
                     <span
                         style={{
                             ...styles.actionIcon,
@@ -872,10 +941,7 @@ function CardDetailOverlay({
 
                 {/* Transfer / Retract */}
                 {pendingTransfer ? (
-                    <button
-                        style={styles.actionBtn}
-                        onClick={() => setShowRetractConfirm(true)}
-                    >
+                    <button style={styles.actionBtn} onClick={() => setShowRetractConfirm(true)}>
                         <span
                             style={{
                                 ...styles.actionIcon,
@@ -981,6 +1047,7 @@ const joinCodeShownSessions = new Set<string>();
 
 export default function Game() {
     const history = useHistory();
+    const location = useLocation<{ newSession?: boolean }>();
     const exitSession = useExitSession();
     const {
         session,
@@ -1005,6 +1072,8 @@ export default function Game() {
     const [showResolved, setShowResolved] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [drawPending, startDrawTransition] = useTransition();
+    const [reparationsPending, startReparationsTransition] = useTransition();
+    const [showReparationsConfirm, setShowReparationsConfirm] = useState(false);
     const [actionSheetTarget, setActionSheetTarget] = useState<Player | null>(null);
     const { isGuest, accessToken } = useAuth();
 
@@ -1036,12 +1105,12 @@ export default function Game() {
         }
     }, [session, history]);
 
-    // Auto-show join code for host only the first time they enter this session
+    // Auto-show join code only when the host creates a brand-new session
     useEffect(() => {
         if (
             session &&
             localPlayer?.id === session.hostPlayerId &&
-            drawHistory.length === 0 &&
+            location.state?.newSession === true &&
             !joinCodeShownSessions.has(session.id)
         ) {
             joinCodeShownSessions.add(session.id);
@@ -1050,11 +1119,12 @@ export default function Game() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.id]);
 
-    // Session polling
+    // Session polling — fires immediately on mount, then every 5s
     useEffect(() => {
         if (!session) return;
-        const intervalId = setInterval(async () => {
-            const result = await apiClient.getSessionState(session.id);
+
+        async function poll() {
+            const result = await apiClient.getSessionState(session!.id);
             if (!result.ok) return;
             setSession(result.data);
             for (const event of result.data.drawEvents ?? []) {
@@ -1068,7 +1138,10 @@ export default function Game() {
                     devicePlayerIds.includes(t.toPlayerId)
             );
             setPendingTransfers(relevant);
-        }, 5000);
+        }
+
+        poll();
+        const intervalId = setInterval(poll, 5000);
         return () => clearInterval(intervalId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.id]);
@@ -1121,10 +1194,31 @@ export default function Game() {
                 typeof window !== "undefined" &&
                 window.matchMedia("(prefers-reduced-motion: reduce)").matches;
             const isGameChanger = Boolean(result.data.cardVersion.isGameChanger);
-            setRevealDrama(prefersReduced ? null : isGameChanger ? GAME_CHANGER_DRAMA : STANDARD_DRAW_DRAMA);
+            setRevealDrama(
+                prefersReduced ? null : isGameChanger ? GAME_CHANGER_DRAMA : STANDARD_DRAW_DRAMA
+            );
             setRevealCard(result.data);
         });
     }, [activePlayerId, addDrawEvent, session, startDrawTransition]);
+
+    const handleDrawReparations = useCallback(() => {
+        if (!session || !activePlayerId) return;
+        setError(null);
+        hapticMedium();
+        startReparationsTransition(async () => {
+            const result = await apiClient.drawReparationsCard(session.id, activePlayerId);
+            if (!result.ok) {
+                setError(result.error.message);
+                return;
+            }
+            addDrawEvent(result.data);
+            const prefersReduced =
+                typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            setRevealDrama(prefersReduced ? null : STANDARD_DRAW_DRAMA);
+            setRevealCard(result.data);
+        });
+    }, [activePlayerId, addDrawEvent, session, startReparationsTransition]);
 
     const handleVote = useCallback(async (cardId: string, direction: "up" | "down" | null) => {
         if (direction === null) {
@@ -1260,6 +1354,18 @@ export default function Game() {
                         })()}
                     />
 
+                    {session.status !== "active" && (
+                        <div style={styles.endedBanner}>
+                            <p style={styles.endedTitle}>This game has ended</p>
+                            <button
+                                style={styles.recapLink}
+                                onClick={() => history.push(`/history/${session.id}`)}
+                            >
+                                View recap →
+                            </button>
+                        </div>
+                    )}
+
                     {error && (
                         <p style={styles.error}>
                             {error}{" "}
@@ -1279,14 +1385,30 @@ export default function Game() {
                             style={styles.resolvedToggle}
                             onClick={() => setShowResolved((v) => !v)}
                         >
-                            {showResolved ? "Hide resolved" : `Show ${resolvedCards.length} resolved`}
+                            {showResolved
+                                ? "Hide resolved"
+                                : `Show ${resolvedCards.length} resolved`}
                         </button>
                     )}
                     <DrawButton
-                        isEnabled={isActivePlayerOnDevice && !drawPending}
+                        isEnabled={
+                            isActivePlayerOnDevice && !drawPending && session.status === "active"
+                        }
                         isPending={drawPending}
                         onDraw={handleDraw}
                     />
+                    {session.status === "active" && (
+                        <button
+                            style={{
+                                ...styles.reparationsLink,
+                                opacity: reparationsPending ? 0.5 : 1,
+                            }}
+                            onClick={() => setShowReparationsConfirm(true)}
+                            disabled={reparationsPending || !isActivePlayerOnDevice}
+                        >
+                            {reparationsPending ? "Drawing…" : "Draw reparations card"}
+                        </button>
+                    )}
                 </div>
             </IonFooter>
 
@@ -1340,6 +1462,30 @@ export default function Game() {
             )}
 
             {showClaim && <ClaimAccountModal onClose={() => setShowClaim(false)} />}
+
+            {showReparationsConfirm && (
+                <AppDialog
+                    title="Draw Reparations?"
+                    message="A reparations card is drawn as a penalty. Once drawn, it's yours. Are you sure?"
+                    accent="danger"
+                    onDismiss={() => setShowReparationsConfirm(false)}
+                    buttons={[
+                        {
+                            label: "Cancel",
+                            variant: "ghost",
+                            onClick: () => setShowReparationsConfirm(false),
+                        },
+                        {
+                            label: "Draw",
+                            variant: "danger",
+                            onClick: () => {
+                                setShowReparationsConfirm(false);
+                                handleDrawReparations();
+                            },
+                        },
+                    ]}
+                />
+            )}
 
             <IonActionSheet
                 isOpen={actionSheetTarget !== null}
@@ -1460,31 +1606,36 @@ const styles: Record<string, React.CSSProperties> = {
         display: "flex",
         flexDirection: "row",
         overflowX: "auto",
-        gap: "var(--space-3)",
-        padding: "var(--space-3) var(--space-4)",
+        gap: "var(--space-2)",
+        padding: "var(--space-2) var(--space-4)",
         WebkitOverflowScrolling: "touch",
+        alignItems: "center",
     },
     // ── Shared pill base ──────────────────────────────────────────────────────
     pillActive: {
         background: "var(--color-accent-primary)",
-        border: "1.5px solid var(--color-accent-amber)",
-        color: "var(--color-text-primary)",
+        clipPath:
+            "polygon(4px 0%, calc(100% - 4px) 0%, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0% calc(100% - 4px), 0% 4px)",
+        boxShadow:
+            "inset 0 1.5px 0 0 rgba(240, 237, 228, 0.22), inset 0 0 0 1.5px rgba(212, 168, 71, 0.45)",
+        color: "var(--color-bg)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-subheading)",
-        fontWeight: 600,
-        letterSpacing: "0.01em",
-        padding: "0 var(--space-4) 0 var(--space-2)",
-        height: "44px",
+        fontWeight: 700,
+        letterSpacing: "-0.01em",
+        padding: "0 var(--space-5)",
+        height: "48px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
-        animation: "playerTokenGlow 2.4s ease-in-out infinite",
-        transition: "all 200ms var(--ease)",
-        minWidth: "64px",
-        borderRadius: "6px",
+        animation:
+            "pillActivate 220ms cubic-bezier(0.22, 1, 0.36, 1) both, playerTokenGlow 2.4s ease-in-out infinite 220ms",
+        transition:
+            "color 200ms cubic-bezier(0.22, 1, 0.36, 1), background 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        minWidth: "72px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
@@ -1492,23 +1643,25 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pillInactive: {
         background: "var(--color-surface-elevated)",
-        border: "1px solid color-mix(in srgb, var(--color-accent-primary) 35%, transparent)",
+        clipPath:
+            "polygon(3px 0%, calc(100% - 3px) 0%, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0% calc(100% - 3px), 0% 3px)",
+        boxShadow:
+            "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-primary) 45%, transparent)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 400,
-        padding: "0 var(--space-3) 0 var(--space-2)",
-        height: "40px",
+        padding: "0 var(--space-3)",
+        height: "38px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
-        opacity: 0.85,
-        transition: "all 200ms var(--ease)",
+        transition:
+            "color 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease), opacity 200ms var(--ease)",
         minWidth: "52px",
-        borderRadius: "5px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
@@ -1517,146 +1670,95 @@ const styles: Record<string, React.CSSProperties> = {
     pillNonDevice: {
         background:
             "color-mix(in srgb, var(--color-accent-amber) 7%, var(--color-surface-elevated))",
-        border: "1px dashed color-mix(in srgb, var(--color-accent-amber) 70%, transparent)",
+        clipPath:
+            "polygon(3px 0%, calc(100% - 3px) 0%, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0% calc(100% - 3px), 0% 3px)",
+        boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-amber) 35%, transparent)",
         color: "var(--color-accent-amber)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 400,
-        padding: "0 var(--space-3) 0 var(--space-2)",
+        padding: "0 var(--space-3)",
         height: "40px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
         opacity: 0.65,
-        transition: "all 200ms var(--ease)",
+        transition:
+            "color 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease), opacity 200ms var(--ease)",
         minWidth: "52px",
-        borderRadius: "5px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
         touchAction: "manipulation",
     },
     pillNonDeviceActive: {
-        background:
-            "color-mix(in srgb, var(--color-accent-amber) 15%, var(--color-surface-elevated))",
-        border: "1.5px solid var(--color-accent-amber)",
-        color: "var(--color-accent-amber)",
+        background: "var(--color-accent-amber)",
+        clipPath:
+            "polygon(4px 0%, calc(100% - 4px) 0%, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0% calc(100% - 4px), 0% 4px)",
+        boxShadow:
+            "inset 0 1.5px 0 0 rgba(240, 237, 228, 0.18), inset 0 0 0 1.5px rgba(240, 237, 228, 0.12)",
+        filter: "drop-shadow(0 0 16px rgba(212, 168, 71, 0.55))",
+        animation: "pillActivate 220ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        color: "var(--color-bg)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-subheading)",
-        fontWeight: 600,
-        letterSpacing: "0.01em",
-        padding: "0 var(--space-4) 0 var(--space-2)",
-        height: "44px",
+        fontWeight: 700,
+        letterSpacing: "-0.01em",
+        padding: "0 var(--space-5)",
+        height: "48px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
         opacity: 1,
-        transition: "all 200ms var(--ease)",
-        minWidth: "64px",
-        borderRadius: "6px",
+        transition:
+            "color 200ms cubic-bezier(0.22, 1, 0.36, 1), background 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        minWidth: "72px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
-        boxShadow: "0 0 14px 3px rgba(212, 168, 71, 0.3), 0 2px 6px rgba(0,0,0,0.35)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
         touchAction: "manipulation",
     },
     pillName: {
-        fontFamily: '"Playfair Display", Georgia, serif',
+        fontFamily: "var(--font-display)",
+        fontSize: "inherit",
+        letterSpacing: "-0.02em",
+        fontStyle: "italic",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
     },
-    // Avatar initials badges
-    avatarActive: {
-        width: "26px",
-        height: "26px",
-        borderRadius: "50%",
-        background: "var(--color-accent-amber)",
-        color: "var(--color-bg)",
-        fontSize: "11px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
-    avatarInactive: {
-        width: "22px",
-        height: "22px",
-        borderRadius: "50%",
-        background: "color-mix(in srgb, var(--color-accent-primary) 28%, var(--color-surface))",
-        color: "var(--color-text-secondary)",
-        fontSize: "10px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
-    avatarNonDevice: {
-        width: "22px",
-        height: "22px",
-        borderRadius: "50%",
-        background: "color-mix(in srgb, var(--color-accent-amber) 22%, var(--color-surface))",
-        color: "var(--color-accent-amber)",
-        fontSize: "10px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
-    avatarNonDeviceActive: {
-        width: "26px",
-        height: "26px",
-        borderRadius: "50%",
-        background: "var(--color-accent-amber)",
-        color: "var(--color-bg)",
-        fontSize: "11px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
+    avatarActive: {},
+    avatarInactive: {},
+    avatarNonDevice: {},
+    avatarNonDeviceActive: {},
     // Left (inactive) device player pills
     pillLeft: {
         background: "var(--color-surface)",
-        border: "1px dashed color-mix(in srgb, var(--color-border) 80%, transparent)",
+        clipPath:
+            "polygon(3px 0%, calc(100% - 3px) 0%, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0% calc(100% - 3px), 0% 3px)",
+        boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--color-border) 40%, transparent)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 400,
-        padding: "0 var(--space-3) 0 var(--space-2)",
+        padding: "0 var(--space-3)",
         height: "36px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
         opacity: 0.45,
-        transition: "all 200ms var(--ease)",
+        transition:
+            "color 200ms var(--ease), background 200ms var(--ease), opacity 200ms var(--ease)",
         minWidth: "52px",
-        borderRadius: "5px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
@@ -1664,60 +1766,32 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pillLeftActive: {
         background: "color-mix(in srgb, var(--color-text-secondary) 8%, var(--color-surface))",
-        border: "1px solid color-mix(in srgb, var(--color-border) 120%, transparent)",
+        clipPath:
+            "polygon(3px 0%, calc(100% - 3px) 0%, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0% calc(100% - 3px), 0% 3px)",
+        boxShadow: "inset 0 0 0 1px var(--color-border)",
         color: "var(--color-text-secondary)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 500,
-        padding: "0 var(--space-3) 0 var(--space-2)",
+        padding: "0 var(--space-3)",
         height: "40px",
         whiteSpace: "nowrap",
         cursor: "pointer",
         flexShrink: 0,
         opacity: 0.7,
-        transition: "all 200ms var(--ease)",
+        transition:
+            "color 200ms var(--ease), background 200ms var(--ease), opacity 200ms var(--ease)",
         minWidth: "52px",
-        borderRadius: "5px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        justifyContent: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
         touchAction: "manipulation",
     },
-    avatarLeft: {
-        width: "20px",
-        height: "20px",
-        borderRadius: "50%",
-        background: "color-mix(in srgb, var(--color-border) 60%, var(--color-surface))",
-        color: "var(--color-text-secondary)",
-        fontSize: "9px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
-    avatarLeftActive: {
-        width: "22px",
-        height: "22px",
-        borderRadius: "50%",
-        background: "color-mix(in srgb, var(--color-border) 80%, var(--color-surface))",
-        color: "var(--color-text-secondary)",
-        fontSize: "10px",
-        fontFamily: '"Playfair Display", Georgia, serif',
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-        lineHeight: 1,
-    },
+    avatarLeft: {},
+    avatarLeftActive: {},
     viewingBanner: {
         textAlign: "center",
         fontSize: "var(--text-caption)",
@@ -1731,20 +1805,23 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pillAdd: {
         background: "transparent",
-        border: "1.5px dashed color-mix(in srgb, var(--color-accent-primary) 55%, transparent)",
+        clipPath:
+            "polygon(3px 0%, calc(100% - 3px) 0%, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0% calc(100% - 3px), 0% 3px)",
+        boxShadow:
+            "inset 0 0 0 1.5px color-mix(in srgb, var(--color-accent-primary) 50%, transparent)",
         color: "color-mix(in srgb, var(--color-accent-primary) 70%, transparent)",
         fontSize: "22px",
         fontWeight: 300,
         lineHeight: 1,
-        width: "40px",
-        height: "40px",
+        width: "38px",
+        height: "38px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         cursor: "pointer",
         flexShrink: 0,
-        borderRadius: "5px",
-        transition: "all 200ms var(--ease)",
+        transition:
+            "color 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease), opacity 200ms var(--ease)",
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
@@ -1933,6 +2010,20 @@ const styles: Record<string, React.CSSProperties> = {
         letterSpacing: "0.15em",
         transition: "border-color 220ms var(--ease), color 220ms var(--ease)",
     },
+    reparationsLink: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        opacity: 0.6,
+        cursor: "pointer",
+        padding: "var(--space-2) 0 0",
+        textAlign: "center" as const,
+        width: "100%",
+        letterSpacing: "0.04em",
+        transition: "opacity 160ms var(--ease)",
+    },
 
     // Error
     error: {
@@ -1951,6 +2042,34 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: "pointer",
         padding: 0,
         textDecoration: "underline",
+    },
+    endedBanner: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        padding: "var(--space-4) var(--space-5)",
+        margin: "var(--space-4) 0",
+        border: "1px solid var(--color-border)",
+        borderRadius: "4px",
+        backgroundColor: "var(--color-surface)",
+    },
+    endedTitle: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-secondary)",
+        margin: 0,
+        letterSpacing: "0.04em",
+    },
+    recapLink: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-accent-amber)",
+        cursor: "pointer",
+        padding: 0,
+        letterSpacing: "0.04em",
     },
 
     // Overlays — shared
@@ -1979,8 +2098,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 700,
         letterSpacing: "0.2em",
         padding: "6px var(--space-3)",
-        boxShadow:
-            "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
+        boxShadow: "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
         animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
         whiteSpace: "nowrap" as const,
     },
@@ -2065,7 +2183,6 @@ const styles: Record<string, React.CSSProperties> = {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         color: "var(--color-text-secondary)",
-        opacity: 0.5,
         margin: 0,
         textAlign: "center",
     },

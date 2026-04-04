@@ -18,11 +18,7 @@ import * as cardPicker from "../card-picker";
 
 // ─── Card submission ──────────────────────────────────────────────────────────
 
-export function submitCard(
-    userId: string,
-    sessionId: string | null,
-    req: SubmitCardRequest
-): Card {
+export function submitCard(userId: string, sessionId: string | null, req: SubmitCardRequest): Card {
     return cardRepo.create({
         authorUserId: userId,
         cardType: req.cardType,
@@ -87,11 +83,7 @@ export function reactivateCard(userId: string, cardId: string, isAdmin: boolean)
 
 // ─── Votes ────────────────────────────────────────────────────────────────────
 
-export function voteCard(
-    userId: string,
-    cardId: string,
-    direction: "up" | "down"
-): void {
+export function voteCard(userId: string, cardId: string, direction: "up" | "down"): void {
     if (!cardRepo.findById(cardId)) throw new NotFoundError("Card not found");
     cardVoteRepo.upsert(cardId, userId, direction);
 }
@@ -139,6 +131,7 @@ function drawFromPool(
         maxDrinkingLevel: number;
         maxSpiceLevel: number;
         gameTags: string[];
+        includeGlobalCards: boolean;
     };
 
     const selected = cardPicker.pick(sessionId, filterSettings, cardType);
