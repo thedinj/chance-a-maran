@@ -34,6 +34,10 @@ export type {
     // User management
     UpdateUserRequest,
     ChangePasswordRequest,
+    // App config & image upload
+    AppConfig,
+    ImageUploadResponse,
+    GetAllCardsFilters,
 } from "@chance/core";
 export { SubmitCardRequestSchema } from "@chance/core";
 
@@ -59,19 +63,10 @@ import type {
     SubmitCardRequest,
     UpdateUserRequest,
     ChangePasswordRequest,
+    AppConfig,
+    ImageUploadResponse,
+    GetAllCardsFilters,
 } from "@chance/core";
-
-// ─── Local types ─────────────────────────────────────────────────────────────
-
-export interface AppConfig {
-    inviteCodeRequired: boolean;
-}
-
-export interface GetAllCardsFilters {
-    search?: string;
-    active?: boolean;
-    isGlobal?: boolean;
-}
 
 // ─── ApiClient interface ─────────────────────────────────────────────────────
 
@@ -132,7 +127,7 @@ export interface ApiClient {
      * Upload an image file. Returns imageId; construct display URL via resolveImageUrl.
      * Registered users only.
      */
-    uploadImage(file: File): Promise<ApiResult<{ imageId: string }>>;
+    uploadImage(file: File): Promise<ApiResult<ImageUploadResponse>>;
     /**
      * Converts a stored image path ("/api/images/{id}") to a fully-qualified URL.
      * Returns null for null input.

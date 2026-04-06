@@ -1,6 +1,6 @@
-import { IonButton, IonContent, IonPage, IonSpinner } from "@ionic/react";
+import { IonButton, IonContent, IonPage, IonSpinner, useIonViewDidEnter } from "@ionic/react";
 import { motion, useReducedMotion } from "motion/react";
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
@@ -56,12 +56,15 @@ export default function Home() {
     const [activeGames, setActiveGames] = useState<SessionSummary[]>([]);
     const [activeGamesError, setActiveGamesError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchActiveSessions = useCallback(() => {
         if (!user) return;
         apiClient.getActiveSessions().then((r) => {
             if (r.ok) setActiveGames(r.data);
         });
     }, [user]);
+
+    useEffect(fetchActiveSessions, [user]);
+    useIonViewDidEnter(fetchActiveSessions);
 
     const hasAccount = Boolean(user);
     const hasCode = joinCode.trim().length >= 1;

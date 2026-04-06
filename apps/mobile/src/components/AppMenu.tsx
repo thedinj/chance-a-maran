@@ -148,7 +148,7 @@ export function AppMenu() {
                             <NavRow item={item} active={isActive(item.path)} />
                         </IonMenuToggle>
                     ))}
-                    {session && !isHost && (
+                    {session && (
                         <IonMenuToggle autoHide={false}>
                             <IonItem
                                 button

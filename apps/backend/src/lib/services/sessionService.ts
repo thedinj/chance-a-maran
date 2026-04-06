@@ -76,7 +76,7 @@ export function createSession(userId: string, req: CreateSessionRequest): Sessio
 export function joinByCode(
     auth: JwtPayload | null,
     req: JoinByCodeRequest
-): { session: Session; player: playerRepo.DbPlayer; accessToken: string; playerToken: string | null } {
+): { session: Session; player: Player; accessToken: string; playerToken: string | null } {
     const session = sessionRepo.findByJoinCode(normalizeJoinCode(req.joinCode));
     if (!session) throw new NotFoundError("Session not found for that join code");
     if (session.status !== "active") throw new ConflictError("Session is no longer active");
@@ -115,7 +115,7 @@ export function joinByCode(
             scopes: userRow.is_admin ? ["admin"] : [],
         });
 
-        return { session: sessionRepo.mapSession(session), player, accessToken, playerToken: null };
+        return { session: sessionRepo.mapSession(session), player: playerRepo.mapPlayer(player), accessToken, playerToken: null };
     }
 
     // ── Guest join / rejoin ───────────────────────────────────────────────
@@ -138,7 +138,7 @@ export function joinByCode(
                 });
                 return {
                     session: sessionRepo.mapSession(session),
-                    player: existing,
+                    player: playerRepo.mapPlayer(existing),
                     accessToken,
                     playerToken: existing.player_token,
                 };
@@ -165,7 +165,7 @@ export function joinByCode(
         playerToken,
     });
 
-    return { session: sessionRepo.mapSession(session), player, accessToken, playerToken };
+    return { session: sessionRepo.mapSession(session), player: playerRepo.mapPlayer(player), accessToken, playerToken };
 }
 
 export function getSessionHistory(userId: string): SessionSummary[] {

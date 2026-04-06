@@ -168,3 +168,49 @@ export const SubmitCardRequestSchema = z.object({
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequestSchema>;
 
+// ─── App config schema ────────────────────────────────────────────────────────
+
+export const AppConfigSchema = z.object({
+    inviteCodeRequired: z.boolean(),
+});
+export type AppConfig = z.infer<typeof AppConfigSchema>;
+
+// ─── Image upload response ────────────────────────────────────────────────────
+
+export const ImageUploadResponseSchema = z.object({
+    imageId: z.string(),
+});
+export type ImageUploadResponse = z.infer<typeof ImageUploadResponseSchema>;
+
+// ─── Card query filters ───────────────────────────────────────────────────────
+
+export const GetAllCardsFiltersSchema = z.object({
+    search: z.string().optional(),
+    active: z.boolean().optional(),
+    isGlobal: z.boolean().optional(),
+});
+export type GetAllCardsFilters = z.infer<typeof GetAllCardsFiltersSchema>;
+
+// ─── Session leave request ────────────────────────────────────────────────────
+
+export const LeaveSessionRequestSchema = z.object({
+    playerId: z.string(),
+});
+export type LeaveSessionRequest = z.infer<typeof LeaveSessionRequestSchema>;
+
+// ─── Card vote request ────────────────────────────────────────────────────────
+
+export const VoteRequestSchema = z.object({
+    direction: z.enum(["up", "down"]),
+});
+export type VoteRequest = z.infer<typeof VoteRequestSchema>;
+
+// ─── Image upload constraints ─────────────────────────────────────────────────
+
+/** Maximum image file size accepted by POST /api/images (bytes). */
+export const IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+/** MIME types accepted by POST /api/images. */
+export const IMAGE_UPLOAD_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif"] as const;
+export type ImageMimeType = (typeof IMAGE_UPLOAD_ALLOWED_TYPES)[number];
+

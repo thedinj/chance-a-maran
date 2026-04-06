@@ -4,10 +4,8 @@ import { useHistory } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
-import type { Card, CardVersion, Game, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
-import imageCompression from "browser-image-compression";
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { Capacitor } from "@capacitor/core";
+import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
+import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -33,31 +31,14 @@ export default function MyCards() {
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const modalRef = useRef<HTMLIonModalElement>(null);
+    const editorRef = useRef<CardEditorHandle>(null);
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [versions, setVersions] = useState<CardVersion[]>([]);
     const [showVersionHistory, setShowVersionHistory] = useState(false);
     const [showPreviewNote, setShowPreviewNote] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
 
-    // Edit form
-    const [editTitle, setEditTitle] = useState("");
-    const [editDesc, setEditDesc] = useState("");
-    const [editHiddenDesc, setEditHiddenDesc] = useState(false);
-    const [editDrinkingLevel, setEditDrinkingLevel] = useState<0 | 1 | 2 | 3>(0);
-    const [editSpiceLevel, setEditSpiceLevel] = useState<0 | 1 | 2 | 3>(0);
-    const [editGameChanger, setEditGameChanger] = useState(false);
-    const [editGameTags, setEditGameTags] = useState<string[]>([]);
-    const [availableGames, setAvailableGames] = useState<Game[]>([]);
-    const [gamesLoading, setGamesLoading] = useState(true);
-
-    // Edit image state
-    const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
-    const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
-    const [editImageId, setEditImageId] = useState<string | null>(null);
-    const [editImageUploading, setEditImageUploading] = useState(false);
-    const editFileInputRef = useRef<HTMLInputElement>(null);
-
-    // ── Load my cards + available games on mount ──────────────────────────────
+    // ── Load my cards on mount ────────────────────────────────────────────────
     useEffect(() => {
         if (!user) return;
         apiClient.getMyCards().then((result) => {
@@ -65,16 +46,7 @@ export default function MyCards() {
             else setLoadError(result.error.message);
             setIsLoading(false);
         });
-        apiClient.getGames().then((result) => {
-            if (result.ok) setAvailableGames(result.data);
-            setGamesLoading(false);
-        });
     }, [user]);
-
-    // Clear edit validation errors as soon as their condition is resolved
-    useEffect(() => {
-        if (editError === "Title is required." && editTitle.trim()) setEditError(null);
-    }, [editTitle]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Load all cards when admin tab is active ───────────────────────────────
     useEffect(() => {
@@ -101,24 +73,11 @@ export default function MyCards() {
     // ── Modal handlers ────────────────────────────────────────────────────────
 
     function openCard(card: Card) {
-        const v = card.currentVersion;
         setSelectedCard(card);
-        setEditTitle(v.title);
-        setEditDesc(v.description ?? "");
-        setEditHiddenDesc(v.hiddenDescription);
-        setEditDrinkingLevel(v.drinkingLevel as 0 | 1 | 2 | 3);
-        setEditSpiceLevel(v.spiceLevel as 0 | 1 | 2 | 3);
-        setEditGameChanger(v.isGameChanger);
-        setEditGameTags(v.gameTags.map((g) => g.id));
         setEditError(null);
         setShowVersionHistory(false);
         setShowPreviewNote(false);
         setVersions([]);
-        const existingImageUrl = v.imageUrl ?? null;
-        setEditImageUrl(existingImageUrl);
-        setEditImagePreview(existingImageUrl ? apiClient.resolveImageUrl(existingImageUrl) : null);
-        setEditImageId(null);
-        setEditImageUploading(false);
         modalRef.current?.present();
         apiClient.getCardVersions(card.id).then((r) => {
             if (r.ok) setVersions(r.data);
@@ -129,113 +88,27 @@ export default function MyCards() {
         modalRef.current?.dismiss();
     }
 
-    // ── Handlers ─────────────────────────────────────────────────────────────
-
-    function toggleGame(gameId: string) {
-        setEditGameTags((prev) =>
-            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
-        );
-    }
-
-    // ── Image handlers ────────────────────────────────────────────────────────
-
-    async function handleEditPickImage() {
-        setEditError(null);
-        let file: File;
-
-        try {
-            if (Capacitor.isNativePlatform()) {
-                const photo = await Camera.getPhoto({
-                    source: CameraSource.Photos,
-                    resultType: CameraResultType.Uri,
-                    allowEditing: false,
-                });
-                const response = await fetch(photo.webPath!);
-                const blob = await response.blob();
-                file = new File([blob], "image.jpg", { type: blob.type || "image/jpeg" });
-            } else {
-                file = await new Promise<File>((resolve, reject) => {
-                    const input = editFileInputRef.current!;
-                    input.value = "";
-                    input.onchange = () => {
-                        const f = input.files?.[0];
-                        f ? resolve(f) : reject(new Error("No file selected"));
-                    };
-                    input.click();
-                });
-            }
-        } catch {
-            return;
-        }
-
-        setEditImagePreview(URL.createObjectURL(file));
-        setEditImageId(null);
-        setEditImageUploading(true);
-
-        const compressed = await imageCompression(file, {
-            maxSizeMB: 4,
-            maxWidthOrHeight: 1600,
-            useWebWorker: true,
-            fileType: "image/jpeg",
-        });
-
-        const result = await apiClient.uploadImage(
-            new File([compressed], file.name, { type: "image/jpeg" })
-        );
-        setEditImageUploading(false);
-
-        if (result.ok) {
-            setEditImageId(result.data.imageId);
-        } else {
-            setEditError(result.error.message);
-            setEditImagePreview(null);
-        }
-    }
-
-    function handleEditRemoveImage() {
-        setEditImagePreview(null);
-        setEditImageUrl(null);
-        setEditImageId(null);
-    }
-
     // ── Mutations ─────────────────────────────────────────────────────────────
 
-    function handleSave() {
-        if (!selectedCard) return;
-        setEditError(null);
-        const trimmedTitle = editTitle.trim();
-        if (!trimmedTitle) {
-            setEditError("Title is required.");
-            return;
-        }
-        startTransition(async () => {
-            const imageUrl = editImageId
-                ? `/api/images/${editImageId}`
-                : editImagePreview !== null
-                  ? (editImageUrl ?? undefined)
-                  : undefined;
-
-            const req: SubmitCardRequest = {
-                title: trimmedTitle,
-                description: editDesc.trim(),
-                hiddenDescription: editHiddenDesc,
-                drinkingLevel: editDrinkingLevel,
-                spiceLevel: editSpiceLevel,
-                isGameChanger: selectedCard?.cardType === "reparations" ? false : editGameChanger,
-                cardType: selectedCard?.cardType ?? "standard",
-                gameTags: editGameTags,
-                imageUrl,
-            };
-            const result = await apiClient.updateCard(selectedCard.id, req);
-            if (result.ok) {
-                const updated = result.data;
-                setMyCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-                setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-                closeModal();
-            } else {
-                setEditError(result.error.message);
-            }
-        });
+    async function onEditValidSubmit(
+        data: SubmitCardRequest,
+        imageUrl: string | undefined
+    ): Promise<string | null> {
+        if (!selectedCard) return null;
+        const req: SubmitCardRequest = {
+            ...data,
+            title: data.title.trim(),
+            description: data.description.trim(),
+            isGameChanger: data.cardType === "reparations" ? false : data.isGameChanger,
+            imageUrl,
+        };
+        const result = await apiClient.updateCard(selectedCard.id, req);
+        if (!result.ok) return result.error.message;
+        const updated = result.data;
+        setMyCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        closeModal();
+        return null;
     }
 
     function handleDeactivate() {
@@ -489,194 +362,25 @@ export default function MyCards() {
                                 )}
                             </div>
 
-                            {/* Hidden file input for web image picking */}
-                            <input
-                                ref={editFileInputRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/gif"
-                                style={{ display: "none" }}
+                            {/* ── Card form ─────────────────────────────────── */}
+                            <CardEditor
+                                key={selectedCard.id}
+                                ref={editorRef}
+                                defaultValues={{
+                                    title: selectedCard.currentVersion.title,
+                                    description: selectedCard.currentVersion.description ?? "",
+                                    hiddenDescription: selectedCard.currentVersion.hiddenDescription,
+                                    drinkingLevel: selectedCard.currentVersion.drinkingLevel as 0 | 1 | 2 | 3,
+                                    spiceLevel: selectedCard.currentVersion.spiceLevel as 0 | 1 | 2 | 3,
+                                    isGameChanger: selectedCard.currentVersion.isGameChanger,
+                                    cardType: selectedCard.cardType,
+                                    gameTags: selectedCard.currentVersion.gameTags.map((g) => g.id),
+                                    imageUrl: selectedCard.currentVersion.imageUrl ?? undefined,
+                                }}
+                                showCardTypeSelector={false}
+                                onValidSubmit={onEditValidSubmit}
+                                disabled={isPending}
                             />
-
-                            {/* ── Card content ──────────────────────────────── */}
-                            <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>CARD CONTENT</p>
-                                <input
-                                    style={styles.textInput}
-                                    placeholder="Title"
-                                    value={editTitle}
-                                    onChange={(e) => setEditTitle(e.target.value)}
-                                    maxLength={80}
-                                    autoComplete="off"
-                                    disabled={isPending}
-                                />
-                                <textarea
-                                    style={styles.textArea}
-                                    placeholder="Description"
-                                    value={editDesc}
-                                    onChange={(e) => setEditDesc(e.target.value)}
-                                    maxLength={500}
-                                    disabled={isPending}
-                                    rows={4}
-                                />
-                                <div style={styles.rowDivider} />
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Hidden description</span>
-                                        <span style={styles.toggleSub}>
-                                            Only the drawing player sees this initially
-                                        </span>
-                                    </div>
-                                    <button
-                                        style={editHiddenDesc ? styles.toggleOn : styles.toggleOff}
-                                        onClick={() => setEditHiddenDesc((v) => !v)}
-                                        disabled={isPending}
-                                    >
-                                        {editHiddenDesc ? "ON" : "OFF"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div style={styles.divider} />
-
-                            {/* ── Image ─────────────────────────────────────── */}
-                            <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>IMAGE (OPTIONAL)</p>
-                                {editImagePreview ? (
-                                    <div style={styles.imagePreviewRow}>
-                                        <img
-                                            src={editImagePreview}
-                                            alt="Card image"
-                                            style={styles.imageThumb}
-                                        />
-                                        <div style={styles.imagePreviewMeta}>
-                                            {editImageUploading ? (
-                                                <span style={styles.imageStatus}>Uploading…</span>
-                                            ) : editImageId ? (
-                                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
-                                                    ✓ Ready
-                                                </span>
-                                            ) : null}
-                                            <button
-                                                style={styles.imageClearBtn}
-                                                onClick={handleEditRemoveImage}
-                                                disabled={isPending}
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button
-                                        style={styles.toggleOff}
-                                        onClick={() => void handleEditPickImage()}
-                                        disabled={isPending || editImageUploading}
-                                    >
-                                        Add image
-                                    </button>
-                                )}
-                            </div>
-
-                            <div style={styles.divider} />
-
-                            {/* ── Drinking ──────────────────────────────────── */}
-                            <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>DRINKING</p>
-                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                    {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
-                                        ([label, val]) => (
-                                            <button
-                                                key={val}
-                                                style={
-                                                    editDrinkingLevel === val
-                                                        ? styles.toggleOn
-                                                        : styles.toggleOff
-                                                }
-                                                onClick={() => setEditDrinkingLevel(val)}
-                                                disabled={isPending}
-                                            >
-                                                {label}
-                                            </button>
-                                        )
-                                    )}
-                                </div>
-                            </div>
-
-                            <div style={styles.divider} />
-
-                            {/* ── Game tags ─────────────────────────────────── */}
-                            {!gamesLoading && availableGames.length > 0 && (
-                                <div style={styles.modalSection}>
-                                    <p style={styles.sectionLabel}>GAME</p>
-                                    <div style={styles.tagList}>
-                                        {availableGames.map((game) => {
-                                            const selected = editGameTags.includes(game.id);
-                                            return (
-                                                <button
-                                                    key={game.id}
-                                                    style={
-                                                        (selected
-                                                            ? styles.gameChipOn
-                                                            : styles.gameChipOff) as React.CSSProperties
-                                                    }
-                                                    onClick={() => toggleGame(game.id)}
-                                                    disabled={isPending}
-                                                >
-                                                    {game.name}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div style={styles.divider} />
-
-                            {/* ── Flags ─────────────────────────────────────── */}
-                            <div style={styles.modalSection}>
-                                <p style={styles.sectionLabel}>CONTENT RATING</p>
-                                <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                    {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
-                                        ([label, val]) => (
-                                            <button
-                                                key={val}
-                                                style={
-                                                    editSpiceLevel === val
-                                                        ? styles.toggleOn
-                                                        : styles.toggleOff
-                                                }
-                                                onClick={() => setEditSpiceLevel(val)}
-                                                disabled={isPending}
-                                            >
-                                                {label}
-                                            </button>
-                                        )
-                                    )}
-                                </div>
-                                {selectedCard?.cardType !== "reparations" && (
-                                    <>
-                                        <div style={styles.rowDivider} />
-                                        <div style={styles.toggleRow}>
-                                            <div style={styles.toggleText}>
-                                                <span style={styles.toggleTitle}>Game Changer</span>
-                                                <span style={styles.toggleSub}>
-                                                    Triggers a dramatic reveal
-                                                </span>
-                                            </div>
-                                            <button
-                                                style={
-                                                    editGameChanger
-                                                        ? styles.toggleOnViolet
-                                                        : styles.toggleOff
-                                                }
-                                                onClick={() => setEditGameChanger((v) => !v)}
-                                                disabled={isPending}
-                                            >
-                                                {editGameChanger ? "ON" : "OFF"}
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
 
                             <div style={styles.divider} />
 
@@ -803,7 +507,7 @@ export default function MyCards() {
                         <IonButton
                             expand="block"
                             style={styles.saveButton as React.CSSProperties}
-                            onClick={handleSave}
+                            onClick={() => editorRef.current?.submitForm()}
                             disabled={isPending}
                         >
                             Save changes
@@ -1189,172 +893,6 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: "var(--color-border)",
         margin: "0 var(--space-5)",
     },
-    rowDivider: {
-        height: "1px",
-        backgroundColor: "var(--color-border)",
-    },
-
-    // Text inputs
-    textInput: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        padding: "var(--space-3) var(--space-4)",
-        outline: "none",
-        width: "100%",
-        boxSizing: "border-box",
-    },
-    textArea: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        padding: "var(--space-3) var(--space-4)",
-        outline: "none",
-        width: "100%",
-        boxSizing: "border-box",
-        resize: "vertical",
-        lineHeight: 1.5,
-    },
-
-    // Toggles
-    toggleRow: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "var(--space-4)",
-    },
-    toggleText: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-1)",
-        flex: 1,
-    },
-    toggleTitle: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        color: "var(--color-text-primary)",
-    },
-    toggleSub: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-    },
-    toggleOff: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-secondary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-3)",
-        cursor: "pointer",
-        minWidth: "52px",
-        minHeight: "44px",
-        textAlign: "center",
-    },
-    toggleOn: {
-        background: "var(--color-surface)",
-        border: "1.5px solid var(--color-accent-amber)",
-        color: "var(--color-accent-amber)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-3)",
-        cursor: "pointer",
-        minWidth: "52px",
-        minHeight: "44px",
-        textAlign: "center",
-    },
-    toggleOnViolet: {
-        background: "var(--color-surface)",
-        border: "1.5px solid var(--color-accent-primary)",
-        color: "var(--color-accent-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.15em",
-        padding: "var(--space-2) var(--space-3)",
-        cursor: "pointer",
-        minWidth: "52px",
-        minHeight: "44px",
-        textAlign: "center",
-    },
-
-    // Image picker
-    imagePreviewRow: {
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-4)",
-    },
-    imageThumb: {
-        width: "100px",
-        height: "100px",
-        objectFit: "cover" as const,
-        border: "1px solid var(--color-border)",
-        flexShrink: 0,
-    },
-    imagePreviewMeta: {
-        display: "flex",
-        flexDirection: "column" as const,
-        gap: "var(--space-2)",
-    },
-    imageStatus: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-    },
-    imageClearBtn: {
-        background: "none",
-        border: "none",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-danger)",
-        cursor: "pointer",
-        padding: 0,
-        textAlign: "left" as const,
-        minHeight: "44px",
-        display: "flex",
-        alignItems: "center",
-    },
-
-    // Game chips
-    tagList: {
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "var(--space-2)",
-    },
-    gameChipOff: {
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-secondary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        padding: "var(--space-2) var(--space-3)",
-        cursor: "pointer",
-        minHeight: "36px",
-        display: "inline-flex",
-        alignItems: "center",
-    },
-    gameChipOn: {
-        background: "var(--color-surface)",
-        border: "1.5px solid var(--color-accent-primary)",
-        color: "var(--color-accent-primary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        fontWeight: 500,
-        padding: "var(--space-2) var(--space-3)",
-        cursor: "pointer",
-        minHeight: "36px",
-        display: "inline-flex",
-        alignItems: "center",
-    },
-
     // Preview card link
     previewLink: {
         background: "none",

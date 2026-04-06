@@ -1,5 +1,5 @@
-import { AuthorizationError, NotFoundError, ValidationError } from "@chance/core";
-import { handleError, ok } from "@/lib/auth/response";
+import { AuthorizationError, LeaveSessionRequestSchema, NotFoundError, ValidationError } from "@chance/core";
+import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as sessionRepo from "@/lib/repos/sessionRepo";
 import * as playerRepo from "@/lib/repos/playerRepo";
@@ -11,8 +11,9 @@ export const POST = withAuth(async (req, { params }) => {
     try {
         const { sessionId } = await params;
         const body = await req.json();
-        const { playerId } = body as { playerId?: string };
-        if (!playerId) throw new ValidationError("playerId is required");
+        const parsed = LeaveSessionRequestSchema.safeParse(body);
+        if (!parsed.success) throw new ValidationError("playerId is required");
+        const { playerId } = parsed.data;
 
         const session = sessionRepo.findById(sessionId);
         if (!session) throw new NotFoundError("Session not found");

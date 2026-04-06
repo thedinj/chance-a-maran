@@ -284,6 +284,52 @@ ion-content.game-content::part(scroll) {
     background: var(--color-accent-amber);
 }
 
+/* ─── PageSkeleton & BackendErrorPage animations ───────────────────── */
+@keyframes chanceGlowPulse {
+    0%, 100% { opacity: 0.08; }
+    50%       { opacity: 0.32; }
+}
+
+@keyframes chanceSweep {
+    0%   { transform: translateX(-150%) skewX(-20deg); }
+    100% { transform: translateX(400%)  skewX(-20deg); }
+}
+
+.chance-glow-layer {
+    animation: chanceGlowPulse 4s ease-in-out infinite;
+}
+
+.chance-shimmer-rule {
+    position: relative;
+    overflow: hidden;
+}
+
+.chance-shimmer-rule::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 40%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(212, 168, 71, 0.65) 50%,
+        transparent 100%
+    );
+    animation: chanceSweep 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chance-shimmer-rule::after {
+        display: none;
+    }
+    .chance-glow-layer {
+        animation: none;
+        opacity: 0.15;
+    }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *,

@@ -12,6 +12,7 @@ import type {
     FilterSettings,
     Game,
     GetAllCardsFilters,
+    ImageUploadResponse,
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
@@ -91,7 +92,8 @@ export class RealApiClient implements ApiClient {
     ): Promise<ApiResult<T>> {
         // Non-auth routes wait until the hydration/silent-refresh attempt is done
         // so they don't fire before the access token is restored.
-        if (!path.startsWith("/api/auth/")) {
+        // /api/config is auth-free and needed before AuthContext mounts — skip the gate.
+        if (!path.startsWith("/api/auth/") && path !== "/api/config") {
             await this.authReadyPromise;
         }
 
@@ -360,7 +362,7 @@ export class RealApiClient implements ApiClient {
     uploadImage(file: File) {
         const form = new FormData();
         form.append("file", file);
-        return this.request<{ imageId: string }>("POST", "/api/images", form);
+        return this.request<ImageUploadResponse>("POST", "/api/images", form);
     }
 
     /**

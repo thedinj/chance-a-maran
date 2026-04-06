@@ -1,4 +1,4 @@
-import { AuthorizationError, ValidationError } from "@chance/core";
+import { AuthorizationError, ValidationError, VoteRequestSchema } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as cardService from "@/lib/services/cardService";
@@ -14,11 +14,12 @@ export const POST = withAuth(async (req, { params }) => {
 
         const { cardId } = await params;
         const body = await req.json();
-        if (body.direction !== "up" && body.direction !== "down") {
+        const parsed = VoteRequestSchema.safeParse(body);
+        if (!parsed.success) {
             return fail(new ValidationError("direction must be 'up' or 'down'"));
         }
 
-        cardService.voteCard(req.auth.sub, cardId, body.direction);
+        cardService.voteCard(req.auth.sub, cardId, parsed.data.direction);
         return ok(undefined);
     } catch (err) {
         return handleError(err);

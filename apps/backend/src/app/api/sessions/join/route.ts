@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
             parsed.data
         );
 
-        return ok({ session, player: { ...player }, accessToken, playerToken });
+        return ok({ session, player, accessToken, playerToken });
     } catch (err) {
         return handleError(err);
     }
