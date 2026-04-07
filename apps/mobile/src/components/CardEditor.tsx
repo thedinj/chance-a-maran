@@ -12,6 +12,8 @@ import type { Game, SubmitCardRequest } from "../lib/api/types";
 export interface CardEditorHandle {
     /** Triggers RHF validation, then calls onValidSubmit if valid. */
     submitForm(): void;
+    /** Resets the form to its initial empty state. */
+    reset(): void;
 }
 
 export interface CardEditorProps {
@@ -45,6 +47,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         control,
         watch,
         setValue,
+        reset: resetForm,
         formState: { errors },
     } = useForm<SubmitCardRequest>({
         resolver: zodResolver(SubmitCardRequestSchema),
@@ -104,6 +107,12 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 setIsSaving(false);
                 if (error) setSubmitError(error);
             })(),
+        reset: () => {
+            resetForm();
+            setImagePreview(null);
+            setPendingImageId(null);
+            setSubmitError(null);
+        },
     }));
 
     // ── Image handlers ────────────────────────────────────────────────────────

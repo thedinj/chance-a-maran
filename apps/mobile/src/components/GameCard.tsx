@@ -51,7 +51,7 @@ export function CardBack({ event }: CardBackProps): React.JSX.Element {
 }
 
 // ── CardFront ─────────────────────────────────────────────────────────────────
-// Static card front face. Reads players/activePlayerId from SessionContext.
+// Static card front face. Reads activePlayerId from SessionContext.
 // Manages its own description reveal and share state.
 
 interface CardFrontProps {
@@ -68,7 +68,7 @@ export function CardFront({
     readOnly = false,
 }: CardFrontProps): React.JSX.Element {
     const cv = event.cardVersion;
-    const { players, activePlayerId } = useSession();
+    const { activePlayerId } = useSession();
     const { updateDrawEvent } = useCards();
 
     const isDrawer = event.playerId === activePlayerId;
@@ -141,10 +141,7 @@ export function CardFront({
                         </div>
 
                         <p style={styles.revealHeroTitle}>{cv.title}</p>
-                        <p style={styles.revealHeroMeta}>
-                            {players.find((p) => p.id === cv.authoredByUserId)?.displayName ??
-                                "Unknown Author"}
-                        </p>
+                        <p style={styles.revealHeroMeta}>{cv.authorDisplayName}</p>
 
                         {descrRevealed ? (
                             <p

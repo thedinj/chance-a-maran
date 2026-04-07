@@ -1,4 +1,4 @@
-import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
+import { IonButton, IonContent, IonFooter, IonPage, useIonViewWillEnter } from "@ionic/react";
 import React, { useRef } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
@@ -17,6 +17,10 @@ export default function SubmitCard() {
     const history = useHistory();
     const editorRef = useRef<CardEditorHandle>(null);
     const goToHomeBase = useGoToHomeBase();
+
+    useIonViewWillEnter(() => {
+        editorRef.current?.reset();
+    });
 
     // Registered-only page
     if (!user) {

@@ -28,6 +28,8 @@ export const CardVersionSchema = z.object({
     /** Empty = universal (eligible for any session). */
     gameTags: z.array(GameSchema),
     authoredByUserId: z.string(),
+    /** Denormalised display name of the authoring user at the time the version is served. */
+    authorDisplayName: z.string(),
     createdAt: z.string(),
 });
 

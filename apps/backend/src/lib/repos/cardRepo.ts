@@ -28,6 +28,7 @@ export interface DbCardVersion {
     spice_level: number;
     is_game_changer: number;
     authored_by_user_id: string;
+    author_display_name: string;
     created_at: string;
 }
 
@@ -69,6 +70,7 @@ export function mapCardVersion(row: DbCardVersion): CardVersion {
         isGameChanger: intToBool(row.is_game_changer),
         gameTags: getGameTagsForVersion(row.id),
         authoredByUserId: row.authored_by_user_id,
+        authorDisplayName: row.author_display_name,
         createdAt: row.created_at,
     };
 }
@@ -96,7 +98,12 @@ function findRawById(id: string): DbCard | null {
 function findRawVersionById(id: string): DbCardVersion | null {
     return (
         (db
-            .prepare("SELECT * FROM card_versions WHERE id = ?")
+            .prepare(
+                `SELECT cv.*, u.display_name AS author_display_name
+                 FROM card_versions cv
+                 JOIN users u ON u.id = cv.authored_by_user_id
+                 WHERE cv.id = ?`
+            )
             .get(id) as DbCardVersion | undefined) ?? null
     );
 }
@@ -120,7 +127,11 @@ export function findVersionById(cvId: string): CardVersion | null {
 export function findVersionsByCardId(cardId: string): CardVersion[] {
     const rows = db
         .prepare(
-            "SELECT * FROM card_versions WHERE card_id = ? ORDER BY version_number ASC"
+            `SELECT cv.*, u.display_name AS author_display_name
+             FROM card_versions cv
+             JOIN users u ON u.id = cv.authored_by_user_id
+             WHERE cv.card_id = ?
+             ORDER BY cv.version_number ASC`
         )
         .all(cardId) as DbCardVersion[];
     return rows.map(mapCardVersion);
@@ -128,9 +139,7 @@ export function findVersionsByCardId(cardId: string): CardVersion[] {
 
 export function findByAuthorUserId(userId: string): Card[] {
     const cards = db
-        .prepare(
-            "SELECT * FROM cards WHERE author_user_id = ? ORDER BY created_at DESC"
-        )
+        .prepare("SELECT * FROM cards WHERE author_user_id = ? ORDER BY created_at DESC")
         .all(userId) as DbCard[];
     return cards.flatMap((card) => {
         const version = findRawVersionById(card.current_version_id);
@@ -243,7 +252,9 @@ export function createVersion(
     const now = new Date().toISOString();
 
     const maxRow = db
-        .prepare("SELECT COALESCE(MAX(version_number), 0) AS max FROM card_versions WHERE card_id = ?")
+        .prepare(
+            "SELECT COALESCE(MAX(version_number), 0) AS max FROM card_versions WHERE card_id = ?"
+        )
         .get(cardId) as { max: number };
     const nextVersionNumber = maxRow.max + 1;
 
@@ -331,12 +342,12 @@ export function getDrawPool(
             sessionId,
             sessionId
         ) as Array<{
-            card_id: string;
-            card_version_id: string;
-            created_in_session_id: string | null;
-            net_votes: number;
-            game_tag_ids: string | null;
-        }>;
+        card_id: string;
+        card_version_id: string;
+        created_in_session_id: string | null;
+        net_votes: number;
+        game_tag_ids: string | null;
+    }>;
 
     return rows.map((r) => ({
         cardId: r.card_id,

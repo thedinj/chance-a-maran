@@ -1,3 +1,10 @@
+Transfer button doesn't appear to work (even though it does)
+No Transfer button if no other players
 Timing of sfx
-Mobile/Android version
+Allow editing of game name (and maybe other stuff?)?
 Lots of places need useCallback
+Setup/update scripts
+DDNS
+
+Mobile/Android version
+
