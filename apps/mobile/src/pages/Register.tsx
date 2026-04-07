@@ -1,6 +1,9 @@
+import { RegisterRequestSchema, MIN_PASSWORD_LENGTH } from "@chance/core";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import { motion } from "motion/react";
-import React, { useState, useTransition } from "react";
+import React, { useTransition } from "react";
+import { useForm } from "react-hook-form";
 import { useHistory } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
@@ -8,63 +11,74 @@ import { AppHeader } from "../components/AppHeader";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 
+// ─── Form schema ──────────────────────────────────────────────────────────────
+
+const RegisterFormBaseSchema = RegisterRequestSchema.extend({
+    displayName: z.string().trim().min(1, "Display name is required."),
+    email: z.string().trim().email("Enter a valid email address."),
+    password: z
+        .string()
+        .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`),
+    invitationCode: z.string(),
+    confirmPassword: z.string(),
+});
+
+const RegisterFormSchema = RegisterFormBaseSchema.refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+});
+
+const RegisterFormSchemaWithInvite = RegisterFormBaseSchema.extend({
+    invitationCode: z.string().trim().min(1, "An invitation code is required."),
+}).refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+});
+
+type RegisterFormValues = z.infer<typeof RegisterFormSchema>;
+
 export default function Register() {
     const history = useHistory();
     const { register } = useAuth();
     const { data: appConfig } = useAppConfig();
-
-    const [displayName, setDisplayName] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [inviteCode, setInviteCode] = useState("");
-    const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
     const goToHomeBase = useGoToHomeBase();
 
     const inviteRequired = appConfig.inviteCodeRequired;
 
-    function validate(): string | null {
-        if (!displayName.trim()) return "Display name is required.";
-        if (!z.string().email().safeParse(email.trim()).success)
-            return "Enter a valid email address.";
-        if (!password) return "Password is required.";
-        if (password !== confirmPassword) return "Passwords don't match.";
-        if (inviteRequired && !inviteCode.trim()) return "An invitation code is required.";
-        return null;
-    }
+    const {
+        register: rhfRegister,
+        handleSubmit,
+        setError,
+        formState: { errors },
+    } = useForm<RegisterFormValues>({
+        resolver: zodResolver(inviteRequired ? RegisterFormSchemaWithInvite : RegisterFormSchema),
+        defaultValues: {
+            displayName: "",
+            email: "",
+            password: "",
+            confirmPassword: "",
+            invitationCode: "",
+        },
+    });
 
-    function handleSubmit() {
-        const validationError = validate();
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-        setError(null);
+    function onSubmit(values: RegisterFormValues) {
         startTransition(async () => {
             const result = await register(
-                email.trim(),
-                password,
-                displayName.trim(),
-                inviteRequired ? inviteCode.trim() : ""
+                values.email.trim(),
+                values.password,
+                values.displayName.trim(),
+                inviteRequired ? values.invitationCode.trim() : ""
             );
             if (result.ok) {
                 history.replace("/");
             } else if (result.error.code === "INVITATION_CODE_ERROR") {
-                setError("That code doesn't look right.");
+                setError("invitationCode", { message: "That code doesn't look right." });
             } else {
-                setError(result.error.message);
+                setError("root", { message: result.error.message });
             }
         });
     }
-
-    const isSubmitDisabled =
-        isPending ||
-        !displayName.trim() ||
-        !email.trim() ||
-        !password ||
-        !confirmPassword ||
-        (inviteRequired && !inviteCode.trim());
 
     return (
         <IonPage>
@@ -88,36 +102,64 @@ export default function Register() {
                         <IonInput
                             style={styles.input}
                             placeholder="Display name"
-                            value={displayName}
-                            onIonInput={(e) => setDisplayName(String(e.detail.value ?? ""))}
                             autocomplete="nickname"
+                            {...rhfRegister("displayName")}
+                            onIonInput={(e) =>
+                                rhfRegister("displayName").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {errors.displayName && (
+                            <p style={styles.fieldError}>{errors.displayName.message}</p>
+                        )}
+
                         <IonInput
                             style={styles.input}
                             type="email"
                             placeholder="Email"
-                            value={email}
-                            onIonInput={(e) => setEmail(String(e.detail.value ?? ""))}
                             autocomplete="email"
                             inputmode="email"
+                            {...rhfRegister("email")}
+                            onIonInput={(e) =>
+                                rhfRegister("email").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {errors.email && <p style={styles.fieldError}>{errors.email.message}</p>}
+
                         <IonInput
                             style={styles.input}
                             type="password"
                             placeholder="Password"
-                            value={password}
-                            onIonInput={(e) => setPassword(String(e.detail.value ?? ""))}
                             autocomplete="new-password"
+                            {...rhfRegister("password")}
+                            onIonInput={(e) =>
+                                rhfRegister("password").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {errors.password && (
+                            <p style={styles.fieldError}>{errors.password.message}</p>
+                        )}
+
                         <IonInput
                             style={styles.input}
                             type="password"
                             placeholder="Confirm password"
-                            value={confirmPassword}
-                            onIonInput={(e) => setConfirmPassword(String(e.detail.value ?? ""))}
-                            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                             autocomplete="new-password"
+                            {...rhfRegister("confirmPassword")}
+                            onIonInput={(e) =>
+                                rhfRegister("confirmPassword").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {errors.confirmPassword && (
+                            <p style={styles.fieldError}>{errors.confirmPassword.message}</p>
+                        )}
 
                         {inviteRequired && (
                             <motion.div
@@ -134,22 +176,28 @@ export default function Register() {
                                 <IonInput
                                     style={styles.inviteInput}
                                     placeholder="Invitation code"
-                                    value={inviteCode}
-                                    onIonInput={(e) => setInviteCode(String(e.detail.value ?? ""))}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                                     autocomplete="off"
                                     autocapitalize="characters"
+                                    {...rhfRegister("invitationCode")}
+                                    onIonInput={(e) =>
+                                        rhfRegister("invitationCode").onChange({
+                                            target: { value: String(e.detail.value ?? "") },
+                                        })
+                                    }
                                 />
+                                {errors.invitationCode && (
+                                    <p style={styles.fieldError}>{errors.invitationCode.message}</p>
+                                )}
                             </motion.div>
                         )}
 
-                        {error && <p style={styles.error}>{error}</p>}
+                        {errors.root && <p style={styles.error}>{errors.root.message}</p>}
 
                         <IonButton
                             expand="block"
                             style={styles.submitButton}
-                            onClick={handleSubmit}
-                            disabled={isSubmitDisabled}
+                            onClick={() => void handleSubmit(onSubmit)()}
+                            disabled={isPending}
                         >
                             {isPending ? (
                                 <IonSpinner name="dots" style={{ width: 20, height: 20 }} />
@@ -268,6 +316,12 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-caption)",
         color: "var(--color-danger)",
         margin: 0,
+    },
+    fieldError: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        margin: "calc(-1 * var(--space-1)) 0 0",
     },
     submitButton: {
         "--background": "var(--color-surface)",

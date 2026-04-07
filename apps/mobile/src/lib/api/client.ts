@@ -87,7 +87,8 @@ export class ApiClient {
         method: string,
         path: string,
         body?: unknown,
-        isRetry = false
+        isRetry = false,
+        skipAuth = false
     ): Promise<ApiResult<T>> {
         // Non-auth routes wait until the hydration/silent-refresh attempt is done
         // so they don't fire before the access token is restored.
@@ -111,7 +112,9 @@ export class ApiClient {
                 credentials: "include", // always send HttpOnly cookie cross-origin (web)
                 headers: {
                     ...(isFormData ? {} : { "Content-Type": "application/json" }),
-                    ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+                    ...(!skipAuth && this.accessToken
+                        ? { Authorization: `Bearer ${this.accessToken}` }
+                        : {}),
                 },
                 body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
             });
@@ -136,7 +139,7 @@ export class ApiClient {
         if (res.status === 401 && res.headers.get("X-Token-Status") === "invalid" && !isRetry) {
             const refreshed = await this.tryRefreshToken();
             if (refreshed) {
-                return this.request<T>(method, path, body, true);
+                return this.request<T>(method, path, body, true, skipAuth);
             }
             // Refresh failed — return the original 401
         }
@@ -239,6 +242,11 @@ export class ApiClient {
 
     joinByCode(req: JoinByCodeRequest) {
         return this.request<JoinByCodeResponse>("POST", "/api/sessions/join", req);
+    }
+
+    /** Join as a new guest regardless of the caller's current auth state. */
+    joinByCodeAsGuest(req: JoinByCodeRequest) {
+        return this.request<JoinByCodeResponse>("POST", "/api/sessions/join", req, false, true);
     }
 
     getSessionState(sessionId: string, since?: string) {

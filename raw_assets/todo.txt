@@ -1,9 +1,7 @@
-*Transfer button doesn't appear to work (even though it does)
-No Transfer button if no other players
 Timing of sfx
+convert old data
 Setup/update scripts
 DDNS
-useForm/Zod schema validation everywhere
 
 Mobile/Android version
 

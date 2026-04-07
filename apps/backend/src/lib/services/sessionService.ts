@@ -152,6 +152,21 @@ export function joinByCode(
             throw new ConflictError(
                 "This name is already taken. Ask the host to free it up if you need to rejoin."
             );
+        } else {
+            // Token was reset by host or player pre-dates the token system — issue a fresh token and claim the slot
+            const newToken = randomUUID();
+            playerRepo.update(existing.id, { playerToken: newToken, active: true });
+            const accessToken = generateGuestToken({
+                playerId: existing.id,
+                sessionId: session.id,
+                playerToken: newToken,
+            });
+            return {
+                session: sessionRepo.mapSession(session),
+                player: playerRepo.mapPlayer(playerRepo.findById(existing.id)!),
+                accessToken,
+                playerToken: newToken,
+            };
         }
     }
 

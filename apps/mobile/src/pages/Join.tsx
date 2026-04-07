@@ -1,7 +1,10 @@
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import { useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useRef, useState, useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useHistory, useParams } from "react-router-dom";
+import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { useCards } from "../cards/useCards";
 import { AppHeader } from "../components/AppHeader";
@@ -10,6 +13,19 @@ import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
 import { MAX_DISPLAY_NAME_LENGTH, MAX_JOIN_CODE_LENGTH } from "@chance/core";
+
+// ─── Form schema ──────────────────────────────────────────────────────────────
+
+const JoinNameSchema = z.object({
+    displayName: z
+        .string()
+        .trim()
+        .min(1, "Please enter a name to join.")
+        .max(MAX_DISPLAY_NAME_LENGTH),
+    cardSharing: z.enum(["none", "mine", "network"]),
+});
+
+type JoinNameValues = z.infer<typeof JoinNameSchema>;
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -52,14 +68,26 @@ export default function Join() {
     // If a code arrived via URL, jump straight to name entry
     const [step, setStep] = useState<Step>(urlCode ? "name" : "code");
     const [code, setCode] = useState(urlCode?.toUpperCase() ?? "");
-    // Pre-fill from registered user's display name — they can edit it if they want
-    const [displayName, setDisplayName] = useState(user?.displayName ?? "");
-    const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">("network");
-    const [error, setError] = useState<string | null>(null);
+    const [serverError, setServerError] = useState<string | null>(null);
     const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const nameInputRef = useRef<HTMLIonInputElement>(null);
+
+    const {
+        register: nameRegister,
+        handleSubmit,
+        control,
+        setError,
+        formState: { errors: nameErrors },
+    } = useForm<JoinNameValues>({
+        resolver: zodResolver(JoinNameSchema),
+        defaultValues: {
+            // Pre-fill from registered user's display name — they can edit it if they want
+            displayName: user?.displayName ?? "",
+            cardSharing: "network",
+        },
+    });
 
     // Focus the name input a tick after transitioning to it so the keyboard opens
     useEffect(() => {
@@ -75,7 +103,7 @@ export default function Join() {
         const trimmed = code.trim().toUpperCase();
         if (trimmed.length < 3) return;
         setCode(trimmed);
-        clearError();
+        clearServerError();
         setStep("name");
     }
 
@@ -87,19 +115,14 @@ export default function Join() {
         history.replace("/join");
         setCode("");
         setStep("code");
-        clearError();
+        clearServerError();
     }
 
-    function handleJoin() {
-        const trimmedName = displayName.trim();
-        if (!trimmedName) {
-            setError("Please enter a name to join.");
-            setErrorKind("other");
-            return;
-        }
-        clearError();
+    function onJoin(values: JoinNameValues) {
+        clearServerError();
 
         startTransition(async () => {
+            const trimmedName = values.displayName.trim();
             // Pass any stored device-binding token so the server can do a silent rejoin
             const savedToken = await playerTokenStore.get(code, trimmedName);
 
@@ -107,12 +130,12 @@ export default function Join() {
                 joinCode: code,
                 displayName: trimmedName,
                 playerToken: savedToken,
-                ...(user ? { cardSharing } : {}),
+                ...(user ? { cardSharing: values.cardSharing } : {}),
             });
 
             if (!joinResult.ok) {
                 const kind = errorKindFor(joinResult.error.code);
-                setError(joinResult.error.message);
+                setServerError(joinResult.error.message);
                 setErrorKind(kind);
 
                 // Code-level errors: put the user back at the code step
@@ -143,7 +166,7 @@ export default function Join() {
                 // The player record was created but we can't load the game. Show an
                 // error — the user can retry joining with the same code + name and will
                 // get a silent same-device resume via their stored player token.
-                setError(
+                setServerError(
                     "Joined the session, but could not load the game state. Please try again."
                 );
                 setErrorKind("other");
@@ -168,8 +191,8 @@ export default function Join() {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    function clearError() {
-        setError(null);
+    function clearServerError() {
+        setServerError(null);
         setErrorKind(null);
     }
 
@@ -185,20 +208,19 @@ export default function Join() {
                             code={code}
                             onCodeChange={(v) => setCode(v.toUpperCase())}
                             onContinue={handleContinue}
-                            error={error}
+                            error={serverError}
                         />
                     ) : (
                         <JoinDetailsStep
                             code={code}
-                            displayName={displayName}
-                            onDisplayNameChange={setDisplayName}
                             isRegistered={!!user}
-                            cardSharing={cardSharing}
-                            onCardSharingChange={setCardSharing}
-                            onJoin={handleJoin}
+                            nameField={nameRegister("displayName")}
+                            nameError={nameErrors.displayName?.message}
+                            control={control}
+                            onJoin={() => void handleSubmit(onJoin)()}
                             onChangeCode={handleChangeCode}
                             onSignIn={handleSignIn}
-                            error={error}
+                            error={serverError}
                             errorKind={errorKind}
                             isPending={isPending}
                             nameInputRef={nameInputRef}
@@ -262,11 +284,10 @@ function CodeStep({ code, onCodeChange, onContinue, error }: CodeStepProps) {
 
 interface JoinDetailsStepProps {
     code: string;
-    displayName: string;
-    onDisplayNameChange(value: string): void;
     isRegistered: boolean;
-    cardSharing: "none" | "mine" | "network";
-    onCardSharingChange(value: "none" | "mine" | "network"): void;
+    nameField: import("react-hook-form").UseFormRegisterReturn<"displayName">;
+    nameError: string | undefined;
+    control: import("react-hook-form").Control<JoinNameValues>;
     onJoin(): void;
     onChangeCode(): void;
     onSignIn(): void;
@@ -278,11 +299,10 @@ interface JoinDetailsStepProps {
 
 function JoinDetailsStep({
     code,
-    displayName,
-    onDisplayNameChange,
     isRegistered,
-    cardSharing,
-    onCardSharingChange,
+    nameField,
+    nameError,
+    control,
     onJoin,
     onChangeCode,
     onSignIn,
@@ -291,8 +311,6 @@ function JoinDetailsStep({
     isPending,
     nameInputRef,
 }: JoinDetailsStepProps) {
-    const canJoin = displayName.trim().length > 0 && !isPending;
-
     return (
         <>
             <div style={styles.headerArea}>
@@ -311,16 +329,25 @@ function JoinDetailsStep({
 
             <div style={styles.form}>
                 <IonInput
-                    ref={nameInputRef}
                     style={styles.input}
-                    value={displayName}
-                    onIonInput={(e) => onDisplayNameChange(String(e.detail.value ?? ""))}
-                    onKeyDown={(e) => e.key === "Enter" && canJoin && onJoin()}
                     placeholder="Your name"
                     maxlength={MAX_DISPLAY_NAME_LENGTH}
                     autocapitalize="words"
                     autocomplete="nickname"
+                    {...nameField}
+                    ref={(el) => {
+                        nameField.ref(el);
+                        (
+                            nameInputRef as React.MutableRefObject<HTMLIonInputElement | null>
+                        ).current = el;
+                    }}
+                    onIonInput={(e) =>
+                        nameField.onChange({
+                            target: { value: String(e.detail.value ?? "") },
+                        })
+                    }
                 />
+                {nameError && <p style={styles.errorText}>{nameError}</p>}
 
                 {isRegistered && (
                     <div style={styles.sharingSection}>
@@ -328,34 +355,42 @@ function JoinDetailsStep({
                         <p style={styles.sharingHint}>
                             How much of your library enters the draw pool.
                         </p>
-                        <div style={styles.radioStack}>
-                            {(["network", "mine", "none"] as const).map((level) => (
-                                <button
-                                    key={level}
-                                    style={
-                                        (cardSharing === level
-                                            ? styles.radioRowSelected
-                                            : styles.radioRow) as React.CSSProperties
-                                    }
-                                    onClick={() => onCardSharingChange(level)}
-                                    disabled={isPending}
-                                >
-                                    <div
-                                        style={
-                                            cardSharing === level
-                                                ? styles.radioDotActive
-                                                : styles.radioDot
-                                        }
-                                    />
-                                    <div>
-                                        <div style={styles.radioLabel}>{SHARING_LABELS[level]}</div>
-                                        <div style={styles.radioSub}>
-                                            {SHARING_DESCRIPTIONS[level]}
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
+                        <Controller
+                            name="cardSharing"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.radioStack}>
+                                    {(["network", "mine", "none"] as const).map((level) => (
+                                        <button
+                                            key={level}
+                                            style={
+                                                (field.value === level
+                                                    ? styles.radioRowSelected
+                                                    : styles.radioRow) as React.CSSProperties
+                                            }
+                                            onClick={() => field.onChange(level)}
+                                            disabled={isPending}
+                                        >
+                                            <div
+                                                style={
+                                                    field.value === level
+                                                        ? styles.radioDotActive
+                                                        : styles.radioDot
+                                                }
+                                            />
+                                            <div>
+                                                <div style={styles.radioLabel}>
+                                                    {SHARING_LABELS[level]}
+                                                </div>
+                                                <div style={styles.radioSub}>
+                                                    {SHARING_DESCRIPTIONS[level]}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        />
                     </div>
                 )}
 
@@ -374,7 +409,7 @@ function JoinDetailsStep({
                     expand="block"
                     style={styles.primaryButton}
                     onClick={onJoin}
-                    disabled={!canJoin}
+                    disabled={isPending}
                 >
                     {isPending ? (
                         <IonSpinner name="dots" style={{ width: 20, height: 20 }} />

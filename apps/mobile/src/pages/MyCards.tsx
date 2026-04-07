@@ -65,6 +65,9 @@ export default function MyCards() {
         });
     }, [activeTab, search, filterActive, filterGlobal, user?.isAdmin]);
 
+    // Must be called before any early return — hooks must not be conditional
+    const goToHomeBase = useGoToHomeBase();
+
     // Registered-only page
     if (!user) {
         if (!isInitializing) history.replace("/");
@@ -184,8 +187,6 @@ export default function MyCards() {
             </button>
         );
     }
-
-    const goToHomeBase = useGoToHomeBase();
 
     // ── Render ────────────────────────────────────────────────────────────────
 

@@ -1,8 +1,20 @@
+import { LoginRequestSchema } from "@chance/core";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonInput, IonSpinner } from "@ionic/react";
-import React, { useState, useTransition } from "react";
+import React, { useTransition } from "react";
+import { useForm } from "react-hook-form";
 import { useHistory } from "react-router-dom";
+import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
+
+// Strengthen email to trim and add user-facing message
+const LoginFormSchema = LoginRequestSchema.extend({
+    email: z.string().trim().email("Enter a valid email address."),
+    password: z.string().min(1, "Password is required."),
+});
+
+type LoginFormValues = z.infer<typeof LoginFormSchema>;
 
 interface LoginFormProps {
     onSuccess: () => void;
@@ -14,46 +26,47 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormProps) {
     const { login, isGuest, accessToken, upgradeFromGuest } = useAuth();
     const history = useHistory();
-
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    function handleSubmit() {
-        const trimmedEmail = email.trim();
-        if (!trimmedEmail || !password) {
-            setError("Email and password are required.");
-            return;
-        }
-        setError(null);
+    const {
+        register,
+        handleSubmit,
+        setError,
+        formState: { errors },
+    } = useForm<LoginFormValues>({
+        resolver: zodResolver(LoginFormSchema),
+        defaultValues: { email: "", password: "" },
+    });
+
+    function onSubmit(values: LoginFormValues) {
         startTransition(async () => {
             // When a guest session is active, route through the claim flow so prior
             // draws/votes are preserved and merged into the registered account.
             if (isGuest && accessToken) {
                 const result = await apiClient.claimAccount(accessToken, {
-                    email: trimmedEmail,
-                    password,
+                    email: values.email.trim(),
+                    password: values.password,
                 });
                 if (result.ok) {
                     upgradeFromGuest(result.data);
                     onSuccess();
                 } else {
                     if (result.error.code === "CONFLICT_ERROR") {
-                        setError(
-                            "That account is already in this game as another player. Each account can only appear once per session."
-                        );
+                        setError("root", {
+                            message:
+                                "That account is already in this game as another player. Each account can only appear once per session.",
+                        });
                     } else {
-                        setError(result.error.message);
+                        setError("root", { message: result.error.message });
                     }
                 }
                 return;
             }
-            const result = await login(trimmedEmail, password);
+            const result = await login(values.email.trim(), values.password);
             if (result.ok) {
                 onSuccess();
             } else {
-                setError(result.error.message);
+                setError("root", { message: result.error.message });
             }
         });
     }
@@ -64,28 +77,38 @@ export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormPr
                 style={styles.input}
                 type="email"
                 placeholder="Email"
-                value={email}
-                onIonInput={(e) => setEmail(String(e.detail.value ?? ""))}
                 autocomplete="email"
                 inputmode="email"
+                {...register("email")}
+                onIonInput={(e) =>
+                    register("email").onChange({
+                        target: { value: String(e.detail.value ?? "") },
+                    })
+                }
             />
+            {errors.email && <p style={styles.error}>{errors.email.message}</p>}
+
             <IonInput
                 style={styles.input}
                 type="password"
                 placeholder="Password"
-                value={password}
-                onIonInput={(e) => setPassword(String(e.detail.value ?? ""))}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 autocomplete="current-password"
+                {...register("password")}
+                onIonInput={(e) =>
+                    register("password").onChange({
+                        target: { value: String(e.detail.value ?? "") },
+                    })
+                }
             />
+            {errors.password && <p style={styles.error}>{errors.password.message}</p>}
 
-            {error && <p style={styles.error}>{error}</p>}
+            {errors.root && <p style={styles.error}>{errors.root.message}</p>}
 
             <IonButton
                 expand="block"
                 style={styles.submitButton}
-                onClick={handleSubmit}
-                disabled={isPending || !email.trim() || !password}
+                onClick={() => void handleSubmit(onSubmit)()}
+                disabled={isPending}
             >
                 {isPending ? (
                     <IonSpinner name="dots" style={{ width: 20, height: 20 }} />

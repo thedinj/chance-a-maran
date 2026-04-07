@@ -1,3 +1,5 @@
+import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
     IonActionSheet,
     IonContent,
@@ -9,21 +11,22 @@ import {
 } from "@ionic/react";
 import { Carousel } from "@mantine/carousel";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
 import { useHistory, useLocation } from "react-router-dom";
+import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { useCards } from "../cards/useCards";
+import { AppDialog } from "../components/AppDialog";
+import { CardFront, FlippingCard } from "../components/GameCard";
 import { LoginForm } from "../components/LoginForm";
-import type { DrawEvent, Player, Session } from "../lib/api";
+import type { CardTransfer, DrawEvent, Player, Session } from "../lib/api";
 import { apiClient } from "../lib/api";
 import { hapticLight, hapticMedium } from "../lib/haptics";
 import { playerTokenStore } from "../lib/playerTokenStore";
-import { SCROLLBAR_CSS, SCROLLBAR_CLASS, SCROLLBAR_FIREFOX_STYLES } from "../lib/scrollbars";
-import { useSession } from "../session/useSession";
-import { CardFront, FlippingCard } from "../components/GameCard";
+import { SCROLLBAR_CLASS, SCROLLBAR_CSS, SCROLLBAR_FIREFOX_STYLES } from "../lib/scrollbars";
 import { useExitSession } from "../session/useExitSession";
+import { useSession } from "../session/useSession";
 import { useTransfers } from "../transfers/useTransfers";
-import { AppDialog } from "../components/AppDialog";
-import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
 
 // ─── Draw Drama ──────────────────────────────────────────────────────────────
 
@@ -98,82 +101,37 @@ function getInitials(name: string): string {
     return name.trim()[0]!.toUpperCase();
 }
 
-function suppressContextMenu(event: React.MouseEvent<HTMLElement>) {
-    event.preventDefault();
-}
-
-function useLongPress(onLongPress: () => void, ms = 520) {
-    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const didLongPress = useRef(false);
-
-    const cancel = () => {
-        if (timer.current) {
-            clearTimeout(timer.current);
-            timer.current = null;
-        }
-    };
-
-    return {
-        didLongPress,
-        onPointerDown: () => {
-            cancel();
-            didLongPress.current = false;
-            timer.current = setTimeout(() => {
-                didLongPress.current = true;
-                onLongPress();
-            }, ms);
-        },
-        onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-            cancel();
-            if (didLongPress.current) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-        },
-        onPointerLeave: cancel,
-        onPointerCancel: cancel,
-    };
-}
-
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 interface DevicePlayerPillProps {
     player: Player;
     isActive: boolean;
-    isHost: boolean;
     hasNotification: boolean;
     onSwitch: (id: string) => void;
-    onLongPress: (player: Player) => void;
+    onAction: (player: Player) => void;
 }
 
 function DevicePlayerPill({
     player,
     isActive,
-    isHost,
     hasNotification,
     onSwitch,
-    onLongPress,
+    onAction,
 }: DevicePlayerPillProps) {
-    const longPress = useLongPress(() => onLongPress(player));
     return (
         <div style={{ position: "relative", display: "inline-flex" }}>
             <button
                 style={isActive ? styles.pillActive : styles.pillInactive}
                 className={isActive ? "pill-active" : "pill-inactive"}
-                onContextMenuCapture={suppressContextMenu}
-                onContextMenu={suppressContextMenu}
-                onClick={(event) => {
-                    if (longPress.didLongPress.current) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        longPress.didLongPress.current = false;
-                        return;
-                    }
+                onClick={() => {
                     hapticLight();
-                    onSwitch(player.id);
+                    if (isActive) {
+                        onAction(player);
+                    } else {
+                        onSwitch(player.id);
+                    }
                 }}
                 aria-pressed={isActive}
-                {...(isHost ? {} : longPress)}
             >
                 <span style={styles.pillName}>{player.displayName}</span>
             </button>
@@ -202,10 +160,9 @@ interface GameHeaderProps {
     players: Player[];
     devicePlayerIds: string[];
     activePlayerId: string | null;
-    hostPlayerId: string;
     onSwitchPlayer: (playerId: string) => void;
     onAddPlayer: () => void;
-    onLongPressPlayer: (player: Player) => void;
+    onActionPlayer: (player: Player) => void;
 }
 
 function GameHeader({
@@ -214,10 +171,9 @@ function GameHeader({
     players,
     devicePlayerIds,
     activePlayerId,
-    hostPlayerId,
     onSwitchPlayer,
     onAddPlayer,
-    onLongPressPlayer,
+    onActionPlayer,
 }: GameHeaderProps) {
     const { pendingTransfers } = useTransfers();
     const activeDevicePlayers = players
@@ -289,12 +245,11 @@ function GameHeader({
                                 key={p.id}
                                 player={p}
                                 isActive={p.id === activePlayerId}
-                                isHost={p.id === hostPlayerId}
                                 hasNotification={pendingTransfers.some(
                                     (t) => t.toPlayerId === p.id
                                 )}
                                 onSwitch={onSwitchPlayer}
-                                onLongPress={onLongPressPlayer}
+                                onAction={onActionPlayer}
                             />
                         ))}
 
@@ -303,8 +258,6 @@ function GameHeader({
                             <button
                                 style={styles.pillAdd}
                                 className="pill-add"
-                                onContextMenuCapture={suppressContextMenu}
-                                onContextMenu={suppressContextMenu}
                                 onClick={() => {
                                     hapticLight();
                                     onAddPlayer();
@@ -323,8 +276,6 @@ function GameHeader({
                                     key={p.id}
                                     style={isActive ? styles.pillLeftActive : styles.pillLeft}
                                     className={isActive ? "pill-active" : "pill-left"}
-                                    onContextMenuCapture={suppressContextMenu}
-                                    onContextMenu={suppressContextMenu}
                                     onClick={() => {
                                         hapticLight();
                                         onSwitchPlayer(p.id);
@@ -350,8 +301,6 @@ function GameHeader({
                                                 : styles.pillNonDevice
                                         }
                                         className={isActive ? "pill-active" : "pill-non-device"}
-                                        onContextMenuCapture={suppressContextMenu}
-                                        onContextMenu={suppressContextMenu}
                                         onClick={() => {
                                             hapticLight();
                                             onSwitchPlayer(p.id);
@@ -384,6 +333,19 @@ function GameHeader({
 
 // ── AddPlayerModal ────────────────────────────────────────────────────────────
 
+const AddPlayerSchema = z.object({
+    displayName: z
+        .string()
+        .trim()
+        .min(1, "Please enter a display name.")
+        .max(
+            MAX_DISPLAY_NAME_LENGTH,
+            `Name must be at most ${MAX_DISPLAY_NAME_LENGTH} characters.`
+        ),
+});
+
+type AddPlayerValues = z.infer<typeof AddPlayerSchema>;
+
 interface AddPlayerModalProps {
     session: Session;
     onClose: () => void;
@@ -391,39 +353,42 @@ interface AddPlayerModalProps {
 }
 
 function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
-    const [name, setName] = useState("");
-    const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
+    const {
+        register,
+        handleSubmit,
+        setError,
+        formState: { errors },
+    } = useForm<AddPlayerValues>({
+        resolver: zodResolver(AddPlayerSchema),
+        defaultValues: { displayName: "" },
+    });
 
-    const trimmed = name.trim();
-
-    function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!trimmed || pending) return;
-        setError(null);
+    async function onSubmit(values: AddPlayerValues) {
         startTransition(async () => {
-            const savedToken = await playerTokenStore.get(session.joinCode, trimmed);
-            const result = await apiClient.joinByCode({
+            const savedToken = await playerTokenStore.get(session.joinCode, values.displayName);
+            const result = await apiClient.joinByCodeAsGuest({
                 joinCode: session.joinCode,
-                displayName: trimmed,
+                displayName: values.displayName,
                 playerToken: savedToken,
             });
             if (!result.ok) {
                 const code = result.error.code;
                 if (code === "CONFLICT_ERROR") {
-                    setError("That name is in use on another device.");
+                    setError("root", { message: "That name is in use on another device." });
                 } else if (code === "AUTHENTICATION_ERROR") {
-                    setError(
-                        "This name belongs to a registered player. Ask them to join from their own device."
-                    );
+                    setError("root", {
+                        message:
+                            "This name belongs to a registered player. Ask them to join from their own device.",
+                    });
                 } else {
-                    setError(result.error.message);
+                    setError("root", { message: result.error.message });
                 }
                 return;
             }
             const { player, playerToken } = result.data;
             if (playerToken) {
-                playerTokenStore.set(session.joinCode, trimmed, playerToken);
+                await playerTokenStore.set(session.joinCode, values.displayName, playerToken);
             }
             onSuccess(player.id);
         });
@@ -436,24 +401,23 @@ function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
                 <p style={styles.addPlayerHint}>
                     Enter a display name. They'll take turns on this device.
                 </p>
-                <form onSubmit={handleSubmit} style={styles.addPlayerForm}>
+                <form onSubmit={handleSubmit(onSubmit)} style={styles.addPlayerForm}>
                     <input
                         style={styles.addPlayerInput}
                         type="text"
                         placeholder="Display name"
-                        value={name}
-                        onChange={(e) => {
-                            setName(e.target.value);
-                            setError(null);
-                        }}
                         autoFocus
                         maxLength={MAX_DISPLAY_NAME_LENGTH}
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="words"
                         spellCheck={false}
+                        {...register("displayName")}
                     />
-                    {error && <p style={styles.addPlayerError}>{error}</p>}
+                    {errors.displayName && (
+                        <p style={styles.addPlayerError}>{errors.displayName.message}</p>
+                    )}
+                    {errors.root && <p style={styles.addPlayerError}>{errors.root.message}</p>}
                     <div style={styles.addPlayerActions}>
                         <button type="button" style={styles.addPlayerCancel} onClick={onClose}>
                             Cancel
@@ -462,9 +426,9 @@ function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
                             type="submit"
                             style={{
                                 ...styles.addPlayerJoin,
-                                opacity: trimmed && !pending ? 1 : 0.45,
+                                opacity: !pending ? 1 : 0.45,
                             }}
-                            disabled={!trimmed || pending}
+                            disabled={pending}
                         >
                             {pending ? "Joining…" : "Join"}
                         </button>
@@ -617,8 +581,6 @@ function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            onContextMenu={suppressContextMenu}
-            onContextMenuCapture={suppressContextMenu}
             disabled={!isEnabled && !isPending}
         >
             <div
@@ -712,7 +674,7 @@ interface CardDetailOverlayProps {
     event: DrawEvent;
     players: Player[];
     activePlayerId: string | null;
-    pendingTransfer: import("../lib/api").CardTransfer | null;
+    pendingTransfer: CardTransfer | null;
     onDismiss: () => void;
     onVote: (cardId: string, direction: "up" | "down" | null) => Promise<void>;
     onResolve: (drawEventId: string, resolved: boolean) => Promise<void>;
@@ -938,42 +900,49 @@ function CardDetailOverlay({
                     >
                         ✓
                     </span>
-                    <span style={styles.actionLabel}>
-                        {resolved ? "Resolved" : "Resolve"}
-                    </span>
+                    <span style={styles.actionLabel}>{resolved ? "Resolved" : "Resolve"}</span>
                 </button>
 
                 {/* Transfer / Retract */}
-                {pendingTransfer ? (
-                    <button style={styles.actionBtn} onClick={() => setShowRetractConfirm(true)}>
-                        <span
-                            style={{
-                                ...styles.actionIcon,
-                                color: "var(--color-accent-amber)",
-                            }}
+                {(pendingTransfer || transferablePlayers.length > 0) &&
+                    (pendingTransfer ? (
+                        <button
+                            style={styles.actionBtn}
+                            onClick={() => setShowRetractConfirm(true)}
                         >
-                            ⇄
-                        </span>
-                        <span style={{ ...styles.actionLabel, color: "var(--color-accent-amber)" }}>
-                            Retract
-                        </span>
-                    </button>
-                ) : (
-                    <button
-                        style={styles.actionBtn}
-                        onClick={() => setShowTransferPicker((v) => !v)}
-                    >
-                        <span
-                            style={{
-                                ...styles.actionIcon,
-                                color: "var(--color-text-secondary)",
-                            }}
+                            <span
+                                style={{
+                                    ...styles.actionIcon,
+                                    color: "var(--color-accent-amber)",
+                                }}
+                            >
+                                ⇄
+                            </span>
+                            <span
+                                style={{
+                                    ...styles.actionLabel,
+                                    color: "var(--color-accent-amber)",
+                                }}
+                            >
+                                Retract
+                            </span>
+                        </button>
+                    ) : (
+                        <button
+                            style={styles.actionBtn}
+                            onClick={() => setShowTransferPicker((v) => !v)}
                         >
-                            ⇄
-                        </span>
-                        <span style={styles.actionLabel}>Transfer</span>
-                    </button>
-                )}
+                            <span
+                                style={{
+                                    ...styles.actionIcon,
+                                    color: "var(--color-text-secondary)",
+                                }}
+                            >
+                                ⇄
+                            </span>
+                            <span style={styles.actionLabel}>Transfer</span>
+                        </button>
+                    ))}
 
                 {/* Share desc */}
                 {showActionBarShareBtn && (
@@ -1080,27 +1049,6 @@ export default function Game() {
     const [showReparationsConfirm, setShowReparationsConfirm] = useState(false);
     const [actionSheetTarget, setActionSheetTarget] = useState<Player | null>(null);
     const { isGuest, accessToken } = useAuth();
-
-    useEffect(() => {
-        if (!actionSheetTarget) return;
-
-        const suppressActionSheetContextMenu = (event: Event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement)) return;
-            const isActionSheetTarget =
-                target.closest("ion-action-sheet") !== null ||
-                target.closest("ion-backdrop") !== null;
-            if (!isActionSheetTarget) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-        };
-
-        document.addEventListener("contextmenu", suppressActionSheetContextMenu, true);
-        return () => {
-            document.removeEventListener("contextmenu", suppressActionSheetContextMenu, true);
-        };
-    }, [actionSheetTarget]);
 
     // Redirect if no session
     useEffect(() => {
@@ -1334,10 +1282,9 @@ export default function Game() {
                 players={players}
                 devicePlayerIds={devicePlayerIds}
                 activePlayerId={activePlayerId}
-                hostPlayerId={session.hostPlayerId}
                 onSwitchPlayer={setActivePlayer}
                 onAddPlayer={() => setShowAddPlayer(true)}
-                onLongPressPlayer={setActionSheetTarget}
+                onActionPlayer={setActionSheetTarget}
             />
 
             <IonContent scrollY className="game-content">

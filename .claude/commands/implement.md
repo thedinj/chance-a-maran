@@ -16,6 +16,7 @@ Define or update the Zod schema. This is the **single source of truth** for both
 - Text field limits → add constants to `packages/core/src/constants/textLimits.ts`, import into the schema
 - API request/response types → `packages/core/src/schemas/api.ts`
 - All types inferred via `z.infer<typeof Schema>` — no manual `interface` duplication
+- Frontend forms use the same schema via `zodResolver`; extend with `.extend()` to add user-facing error messages without duplicating the shape
 
 ### 2. Backend Repo (`apps/backend/src/lib/repos/<entity>Repo.ts`)
 
@@ -70,6 +71,7 @@ Consume via `apiClient.<method>()`. Rules:
 - **Queries:** `useSuspenseQuery` everywhere; Suspense boundaries at route level only
 - Show errors inline near the triggering action — no toast for expected outcomes
 - Never disable inputs while a mutation is in-flight; preserve state for retry
+- **Forms:** use `react-hook-form` (`useForm`) + `zodResolver` for every form. Use the shared `@chance/core` Zod schema as the resolver (extending via `.extend()` for user-facing messages). Never use manual `useState` per field or ad-hoc validation. Render per-field errors inline; API errors go to `setError("root", ...)`. For `IonInput`, bridge `onIonInput` → `register("field").onChange(...)` since Ionic does not fire native `onChange`.
 
 ---
 

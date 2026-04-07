@@ -33,13 +33,15 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: "column",
         backgroundColor: "var(--color-bg)",
         paddingTop: "var(--space-5)",
+        paddingLeft: "var(--space-5)",
+        paddingRight: "var(--space-5)",
         paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
     },
     pageHeader: {
         display: "flex",
         alignItems: "center",
         gap: "var(--space-3)",
-        padding: "0 var(--space-5) var(--space-5)",
+        padding: "0 0 var(--space-5)",
     },
     backLink: {
         background: "none",

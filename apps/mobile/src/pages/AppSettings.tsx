@@ -1,11 +1,48 @@
+import {
+    ChangePasswordRequestSchema,
+    MAX_DISPLAY_NAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    UpdateUserRequestSchema,
+} from "@chance/core";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonContent, IonInput, IonModal, IonPage, IonSpinner } from "@ionic/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
 import { useHistory } from "react-router-dom";
+import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
-import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
+
+// ─── Form schemas ──────────────────────────────────────────────────────────────
+
+const ProfileFormSchema = UpdateUserRequestSchema.extend({
+    displayName: z
+        .string()
+        .trim()
+        .min(1, "Display name cannot be empty.")
+        .max(MAX_DISPLAY_NAME_LENGTH),
+    email: z.string().trim().email("Enter a valid email address.").optional(),
+});
+
+type ProfileFormValues = z.infer<typeof ProfileFormSchema>;
+
+const PasswordFormSchema = ChangePasswordRequestSchema.extend({
+    currentPassword: z.string().min(1, "Enter your current password."),
+    newPassword: z
+        .string()
+        .min(
+            MIN_PASSWORD_LENGTH,
+            `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+        ),
+    confirmPassword: z.string(),
+}).refine((d) => d.newPassword === d.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+});
+
+type PasswordFormValues = z.infer<typeof PasswordFormSchema>;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -13,23 +50,42 @@ export default function AppSettings() {
     const { user, logout, updateCurrentUser } = useAuth();
     const history = useHistory();
 
-    // Profile form
-    const [displayName, setDisplayName] = useState(user?.displayName ?? "");
-    const [email, setEmail] = useState(user?.email ?? "");
-    const [profileError, setProfileError] = useState<string | null>(null);
-    const [profileSuccess, setProfileSuccess] = useState(false);
-    const [isProfilePending, startProfileTransition] = useTransition();
-
-    // Change-password modal
+    // Change-password modal open state
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-    const [currentPassword, setCurrentPassword] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [passwordError, setPasswordError] = useState<string | null>(null);
     const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+    const [isProfilePending, startProfileTransition] = useTransition();
     const [isPasswordPending, startPasswordTransition] = useTransition();
 
     const currentPasswordRef = useRef<HTMLIonInputElement>(null);
+
+    // Profile form
+    const {
+        register: profileRegister,
+        handleSubmit: handleProfileSubmit,
+        setError: setProfileError,
+        formState: { errors: profileErrors },
+    } = useForm<ProfileFormValues>({
+        resolver: zodResolver(ProfileFormSchema),
+        defaultValues: {
+            displayName: user?.displayName ?? "",
+            email: user?.email ?? "",
+        },
+    });
+
+    const [profileSuccess, setProfileSuccess] = useState(false);
+
+    // Password form
+    const {
+        register: passwordRegister,
+        handleSubmit: handlePasswordSubmit,
+        setError: setPasswordError,
+        reset: resetPasswordForm,
+        formState: { errors: passwordErrors },
+    } = useForm<PasswordFormValues>({
+        resolver: zodResolver(PasswordFormSchema),
+        defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+    });
 
     // Focus current-password input when modal opens
     useEffect(() => {
@@ -41,23 +97,18 @@ export default function AppSettings() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function handleSaveProfile() {
-        const trimmedName = displayName.trim();
-        const trimmedEmail = email.trim();
-        if (!trimmedName) {
-            setProfileError("Display name cannot be empty.");
-            return;
-        }
-        setProfileError(null);
+    function onSaveProfile(values: ProfileFormValues) {
         setProfileSuccess(false);
-
         startProfileTransition(async () => {
             const result = await apiClient.updateUser({
-                displayName: trimmedName !== user?.displayName ? trimmedName : undefined,
-                email: trimmedEmail !== user?.email ? trimmedEmail : undefined,
+                displayName:
+                    values.displayName?.trim() !== user?.displayName
+                        ? values.displayName?.trim()
+                        : undefined,
+                email: values.email?.trim() !== user?.email ? values.email?.trim() : undefined,
             });
             if (!result.ok) {
-                setProfileError(result.error.message);
+                setProfileError("root", { message: result.error.message });
                 return;
             }
             updateCurrentUser(result.data);
@@ -66,10 +117,7 @@ export default function AppSettings() {
     }
 
     function handleOpenPasswordModal() {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setPasswordError(null);
+        resetPasswordForm();
         setPasswordSuccess(false);
         setPasswordModalOpen(true);
     }
@@ -78,25 +126,14 @@ export default function AppSettings() {
         setPasswordModalOpen(false);
     }
 
-    function handleChangePassword() {
-        if (!currentPassword) {
-            setPasswordError("Enter your current password.");
-            return;
-        }
-        if (newPassword.length < 8) {
-            setPasswordError("New password must be at least 8 characters.");
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            setPasswordError("Passwords do not match.");
-            return;
-        }
-        setPasswordError(null);
-
+    function onChangePassword(values: PasswordFormValues) {
         startPasswordTransition(async () => {
-            const result = await apiClient.changePassword({ currentPassword, newPassword });
+            const result = await apiClient.changePassword({
+                currentPassword: values.currentPassword,
+                newPassword: values.newPassword,
+            });
             if (!result.ok) {
-                setPasswordError(result.error.message);
+                setPasswordError("root", { message: result.error.message });
                 return;
             }
             setPasswordSuccess(true);
@@ -140,47 +177,51 @@ export default function AppSettings() {
                             <label style={styles.label}>Display name</label>
                             <IonInput
                                 style={styles.input}
-                                value={displayName}
-                                onIonInput={(e) => {
-                                    setDisplayName(String(e.detail.value ?? ""));
-                                    setProfileSuccess(false);
-                                }}
-                                onKeyDown={(e) =>
-                                    e.key === "Enter" && !isProfilePending && handleSaveProfile()
-                                }
                                 placeholder="Your name"
                                 maxlength={MAX_DISPLAY_NAME_LENGTH}
                                 autocapitalize="words"
                                 autocomplete="nickname"
+                                {...profileRegister("displayName")}
+                                onIonInput={(e) =>
+                                    profileRegister("displayName").onChange({
+                                        target: { value: String(e.detail.value ?? "") },
+                                    })
+                                }
                             />
+                            {profileErrors.displayName && (
+                                <p style={styles.errorText}>{profileErrors.displayName.message}</p>
+                            )}
                         </div>
 
                         <div style={styles.fieldGroup}>
                             <label style={styles.label}>Email</label>
                             <IonInput
                                 style={styles.input}
-                                value={email}
-                                onIonInput={(e) => {
-                                    setEmail(String(e.detail.value ?? ""));
-                                    setProfileSuccess(false);
-                                }}
-                                onKeyDown={(e) =>
-                                    e.key === "Enter" && !isProfilePending && handleSaveProfile()
-                                }
                                 placeholder="you@example.com"
                                 type="email"
                                 inputmode="email"
                                 autocomplete="email"
+                                {...profileRegister("email")}
+                                onIonInput={(e) =>
+                                    profileRegister("email").onChange({
+                                        target: { value: String(e.detail.value ?? "") },
+                                    })
+                                }
                             />
+                            {profileErrors.email && (
+                                <p style={styles.errorText}>{profileErrors.email.message}</p>
+                            )}
                         </div>
 
-                        {profileError && <p style={styles.errorText}>{profileError}</p>}
+                        {profileErrors.root && (
+                            <p style={styles.errorText}>{profileErrors.root.message}</p>
+                        )}
                         {profileSuccess && <p style={styles.successText}>Profile updated.</p>}
 
                         <IonButton
                             expand="block"
                             style={styles.primaryButton}
-                            onClick={handleSaveProfile}
+                            onClick={() => void handleProfileSubmit(onSaveProfile)()}
                             disabled={isProfilePending}
                         >
                             {isProfilePending ? (
@@ -238,51 +279,61 @@ export default function AppSettings() {
                         <IonInput
                             ref={currentPasswordRef}
                             style={styles.input}
-                            value={currentPassword}
-                            onIonInput={(e) => {
-                                setCurrentPassword(String(e.detail.value ?? ""));
-                                setPasswordError(null);
-                            }}
                             type="password"
                             autocomplete="current-password"
                             placeholder="••••••••"
+                            onIonInput={(e) =>
+                                passwordRegister("currentPassword").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {passwordErrors.currentPassword && (
+                            <p style={styles.errorText}>{passwordErrors.currentPassword.message}</p>
+                        )}
                     </div>
 
                     <div style={styles.fieldGroup}>
                         <label style={styles.label}>New password</label>
                         <IonInput
                             style={styles.input}
-                            value={newPassword}
-                            onIonInput={(e) => {
-                                setNewPassword(String(e.detail.value ?? ""));
-                                setPasswordError(null);
-                            }}
                             type="password"
                             autocomplete="new-password"
                             placeholder="••••••••"
+                            {...passwordRegister("newPassword")}
+                            onIonInput={(e) =>
+                                passwordRegister("newPassword").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {passwordErrors.newPassword && (
+                            <p style={styles.errorText}>{passwordErrors.newPassword.message}</p>
+                        )}
                     </div>
 
                     <div style={styles.fieldGroup}>
                         <label style={styles.label}>Confirm new password</label>
                         <IonInput
                             style={styles.input}
-                            value={confirmPassword}
-                            onIonInput={(e) => {
-                                setConfirmPassword(String(e.detail.value ?? ""));
-                                setPasswordError(null);
-                            }}
-                            onKeyDown={(e) =>
-                                e.key === "Enter" && !isPasswordPending && handleChangePassword()
-                            }
                             type="password"
                             autocomplete="new-password"
                             placeholder="••••••••"
+                            {...passwordRegister("confirmPassword")}
+                            onIonInput={(e) =>
+                                passwordRegister("confirmPassword").onChange({
+                                    target: { value: String(e.detail.value ?? "") },
+                                })
+                            }
                         />
+                        {passwordErrors.confirmPassword && (
+                            <p style={styles.errorText}>{passwordErrors.confirmPassword.message}</p>
+                        )}
                     </div>
 
-                    {passwordError && <p style={styles.errorText}>{passwordError}</p>}
+                    {passwordErrors.root && (
+                        <p style={styles.errorText}>{passwordErrors.root.message}</p>
+                    )}
                     {passwordSuccess && <p style={styles.successText}>Password updated.</p>}
 
                     <div style={styles.modalActions}>
@@ -296,7 +347,7 @@ export default function AppSettings() {
                         </IonButton>
                         <IonButton
                             style={styles.primaryButton}
-                            onClick={handleChangePassword}
+                            onClick={() => void handlePasswordSubmit(onChangePassword)()}
                             disabled={isPasswordPending}
                         >
                             {isPasswordPending ? (

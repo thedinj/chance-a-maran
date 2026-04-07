@@ -132,6 +132,8 @@ The frontend targets **web browsers and native (iOS/Android) equally**. The web 
 
 **Error handling:** mutations fire directly; on failure the error is shown inline. No retry queue, no optimistic writes. `ApiClient` returns `ApiResult<T>` — never throws. `NetworkStatusBanner` shows when the Capacitor Network plugin reports offline; interactive elements are disabled until reconnected.
 
+**Forms:** all forms use `react-hook-form` (`useForm`) with `zodResolver` from `@hookform/resolvers/zod`. Use shared Zod schemas from `@chance/core` as the resolver base, extending with user-facing messages via `.extend()` where needed. Never use manual `useState` for individual form fields, uncontrolled refs, or ad-hoc validation logic. Per-field validation errors render inline below each input; API/server errors go to `setError("root", ...)` and render near the submit button. `IonInput` fires `onIonInput` not native `onChange` — bridge by calling `register("field").onChange({ target: { value: ... } })` inside `onIonInput`.
+
 **Session polling:** React Query `refetchInterval` — 5s foreground, 30s backgrounded. Background detection uses Capacitor App state events (native) or the Page Visibility API (web). Network status uses Capacitor Network plugin (native) or `navigator.onLine` / `online`/`offline` events (web). Paused while offline; resumes on reconnect. Poll endpoint accepts `?since=<ISO>` to return only changes since last known timestamp.
 
 **Local storage** (all storage paths are abstracted; native uses Capacitor plugins, web uses browser APIs):

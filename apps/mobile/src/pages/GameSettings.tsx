@@ -139,6 +139,7 @@ export default function GameSettings() {
                 });
                 if (result.ok) {
                     updateSession(result.data);
+                    void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
                     history.replace(`/game/${sessionId}`);
                 } else {
                     setSubmitError(result.error.message);

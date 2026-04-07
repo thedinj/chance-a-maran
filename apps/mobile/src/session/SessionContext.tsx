@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from "react";
-import type { FilterSettings, Player, Session, SessionState } from "../lib/api";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { Player, Session, SessionState } from "../lib/api";
+import { devicePlayersStore } from "../lib/devicePlayersStore";
 import { SessionContext } from "./useSession";
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -9,7 +10,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [devicePlayerIds, setDevicePlayerIds] = useState<string[]>([]);
     const [localPlayer, setLocalPlayer] = useState<Player | null>(null);
 
+    // Ref so addDevicePlayer/removeDevicePlayer callbacks can always access the
+    // current session ID without stale closures.
+    const sessionIdRef = useRef<string | null>(null);
+
     const initSession = useCallback((state: SessionState, myPlayerId: string) => {
+        sessionIdRef.current = state.session.id;
         setSessionData(state.session);
         setPlayers(state.players);
         setDevicePlayerIds([myPlayerId]);
@@ -17,12 +23,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setActivePlayerId(myPlayerId);
     }, []);
 
+    // Restore any additional device players that were persisted from a prior session.
+    // Keyed on session ID so it fires once per session, not on every poll.
+    useEffect(() => {
+        if (!session) return;
+        const sessionId = session.id;
+        void (async () => {
+            const stored = await devicePlayersStore.get(sessionId);
+            if (stored.length === 0) return;
+            const activeIds = new Set(players.filter((p) => p.active).map((p) => p.id));
+            const valid = stored.filter((id) => activeIds.has(id));
+            if (valid.length > 0) {
+                setDevicePlayerIds((prev) => [...new Set([...prev, ...valid])]);
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session?.id]);
+
     const addDevicePlayer = useCallback((playerId: string) => {
-        setDevicePlayerIds((prev) => (prev.includes(playerId) ? prev : [...prev, playerId]));
+        setDevicePlayerIds((prev) => {
+            if (prev.includes(playerId)) return prev;
+            const next = [...prev, playerId];
+            if (sessionIdRef.current) void devicePlayersStore.set(sessionIdRef.current, next);
+            return next;
+        });
     }, []);
 
     const removeDevicePlayer = useCallback((playerId: string) => {
-        setDevicePlayerIds((prev) => prev.filter((id) => id !== playerId));
+        setDevicePlayerIds((prev) => {
+            const next = prev.filter((id) => id !== playerId);
+            if (sessionIdRef.current) void devicePlayersStore.set(sessionIdRef.current, next);
+            return next;
+        });
     }, []);
 
     const setSession = useCallback((state: SessionState) => {
@@ -39,6 +71,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const clearSession = useCallback(() => {
+        if (sessionIdRef.current) void devicePlayersStore.clear(sessionIdRef.current);
+        sessionIdRef.current = null;
         setSessionData(null);
         setPlayers([]);
         setActivePlayerId(null);
