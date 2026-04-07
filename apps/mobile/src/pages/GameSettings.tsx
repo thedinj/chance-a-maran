@@ -1,14 +1,45 @@
+import {
+    CreateSessionRequestSchema,
+    FilterSettingsSchema,
+    MAX_SESSION_NAME_LENGTH,
+} from "@chance/core";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
-import { AppHeader } from "../components/AppHeader";
-import React, { useEffect, useState, useTransition } from "react";
-import { useHistory, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, useState, useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { useHistory, useParams } from "react-router-dom";
+import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
-import { useSession } from "../session/useSession";
 import { useCards } from "../cards/useCards";
+import { AppHeader } from "../components/AppHeader";
+import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import { apiClient } from "../lib/api";
 import type { Game } from "../lib/api/types";
-import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
+import { useSession } from "../session/useSession";
+
+// ─── Form schema ──────────────────────────────────────────────────────────────
+
+const GameSettingsFormSchema = CreateSessionRequestSchema.extend({
+    // Strengthen name validation to match what the route enforces
+    name: z
+        .string()
+        .trim()
+        .min(1, "Session name is required")
+        .max(
+            MAX_SESSION_NAME_LENGTH,
+            `Session name must be at most ${MAX_SESSION_NAME_LENGTH} characters`
+        ),
+    // Override to strip .default(true) on includeGlobalCards — Zod defaults make
+    // the input type optional, which conflicts with RHF's TFieldValues constraint
+    filterSettings: FilterSettingsSchema.extend({
+        includeGlobalCards: z.boolean(),
+    }),
+    // Client-only field; not sent to the create/update endpoints
+    cardSharing: z.enum(["none", "mine", "network"]),
+});
+
+type GameSettingsFormValues = z.infer<typeof GameSettingsFormSchema>;
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -31,30 +62,35 @@ export default function GameSettings() {
     const isEditMode = Boolean(sessionId);
 
     const { user, isInitializing } = useAuth();
-    const { session, players, initSession } = useSession();
+    const { session, players, initSession, updateSession } = useSession();
     const { clearHistory, addDrawEvent } = useCards();
     const queryClient = useQueryClient();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
 
-    // Form state — seeded from existing session in edit mode
-    const [name, setName] = useState(session?.name ?? "");
-    const [maxDrinkingLevel, setMaxDrinkingLevel] = useState<0 | 1 | 2 | 3>(
-        (session?.filterSettings.maxDrinkingLevel ?? 3) as 0 | 1 | 2 | 3
-    );
-    const [maxSpiceLevel, setMaxSpiceLevel] = useState<0 | 1 | 2 | 3>(
-        (session?.filterSettings.maxSpiceLevel ?? 2) as 0 | 1 | 2 | 3
-    );
-    const [gameTags, setGameTags] = useState<string[]>(session?.filterSettings.gameTags ?? []);
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
-    // Card sharing default per UX spec — host's own setting for pool contribution
-    // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
-    const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">("network");
-    const [includeGlobalCards, setIncludeGlobalCards] = useState<boolean>(
-        session?.filterSettings.includeGlobalCards ?? true
-    );
-    const [error, setError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    const {
+        register,
+        handleSubmit,
+        control,
+        formState: { errors },
+    } = useForm<GameSettingsFormValues>({
+        resolver: zodResolver(GameSettingsFormSchema),
+        defaultValues: {
+            name: session?.name ?? "",
+            filterSettings: {
+                maxDrinkingLevel: session?.filterSettings.maxDrinkingLevel ?? 3,
+                maxSpiceLevel: session?.filterSettings.maxSpiceLevel ?? 2,
+                gameTags: session?.filterSettings.gameTags ?? [],
+                includeGlobalCards: session?.filterSettings.includeGlobalCards ?? true,
+            },
+            // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
+            cardSharing: "network",
+        },
+    });
 
     useEffect(() => {
         apiClient.getGames().then((result) => {
@@ -71,30 +107,14 @@ export default function GameSettings() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    function toggleGame(gameId: string) {
-        setGameTags((prev) =>
-            prev.includes(gameId) ? prev.filter((id) => id !== gameId) : [...prev, gameId]
-        );
-    }
-
-    function handleSave() {
-        setError(null);
+    function onSubmit(values: GameSettingsFormValues) {
+        setSubmitError(null);
 
         if (!isEditMode) {
-            const trimmedName = name.trim();
-            if (!trimmedName) {
-                setError("Session name is required.");
-                return;
-            }
             startTransition(async () => {
                 const result = await apiClient.createSession({
-                    name: trimmedName,
-                    filterSettings: {
-                        maxDrinkingLevel,
-                        maxSpiceLevel,
-                        gameTags,
-                        includeGlobalCards,
-                    },
+                    name: values.name,
+                    filterSettings: values.filterSettings,
                 });
                 if (result.ok) {
                     const stateResult = await apiClient.getSessionState(result.data.id);
@@ -108,21 +128,20 @@ export default function GameSettings() {
                     void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
                     history.replace(`/game/${result.data.id}`, { newSession: true });
                 } else {
-                    setError(result.error.message);
+                    setSubmitError(result.error.message);
                 }
             });
         } else {
             startTransition(async () => {
-                const result = await apiClient.updateSessionFilters(sessionId!, {
-                    maxDrinkingLevel,
-                    maxSpiceLevel,
-                    gameTags,
-                    includeGlobalCards,
+                const result = await apiClient.updateSessionSettings(sessionId!, {
+                    name: values.name,
+                    filterSettings: values.filterSettings,
                 });
                 if (result.ok) {
+                    updateSession(result.data);
                     history.replace(`/game/${sessionId}`);
                 } else {
-                    setError(result.error.message);
+                    setSubmitError(result.error.message);
                 }
             });
         }
@@ -135,8 +154,6 @@ export default function GameSettings() {
             history.replace("/");
         }
     }
-
-    // ── Render ────────────────────────────────────────────────────────────────
 
     return (
         <IonPage>
@@ -154,19 +171,15 @@ export default function GameSettings() {
                     {/* ── Session name ────────────────────────────────────── */}
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>SESSION NAME</p>
-                        {isEditMode ? (
-                            <p style={styles.readOnlyValue}>{session?.name}</p>
-                        ) : (
-                            <input
-                                style={styles.textInput}
-                                placeholder="e.g. Friday Night Catan"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                maxLength={60}
-                                autoComplete="off"
-                                disabled={isPending}
-                            />
-                        )}
+                        <input
+                            style={styles.textInput}
+                            placeholder="e.g. Friday Night Catan"
+                            maxLength={MAX_SESSION_NAME_LENGTH}
+                            autoComplete="off"
+                            disabled={isPending}
+                            {...register("name")}
+                        />
+                        {errors.name && <p style={styles.fieldError}>{errors.name.message}</p>}
                     </div>
 
                     <div style={styles.divider} />
@@ -175,160 +188,203 @@ export default function GameSettings() {
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>FILTERS</p>
 
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Drinking limit</span>
-                            </div>
-                            <div style={styles.selectorGroup}>
-                                {([0, 1, 2, 3] as const).map((level) => (
-                                    <button
-                                        key={level}
-                                        style={
-                                            maxDrinkingLevel === level
-                                                ? styles.toggleOn
-                                                : styles.toggleOff
-                                        }
-                                        onClick={() => setMaxDrinkingLevel(level)}
-                                        disabled={isPending}
-                                    >
-                                        {level === 0
-                                            ? "∅"
-                                            : level === 1
-                                              ? "🍺"
-                                              : level === 2
-                                                ? "🍺🍺"
-                                                : "🍺🍺🍺"}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        <Controller
+                            name="filterSettings.maxDrinkingLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Drinking limit</span>
+                                    </div>
+                                    <div style={styles.selectorGroup}>
+                                        {([0, 1, 2, 3] as const).map((level) => (
+                                            <button
+                                                key={level}
+                                                style={
+                                                    field.value === level
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(level)}
+                                                disabled={isPending}
+                                            >
+                                                {level === 0
+                                                    ? "∅"
+                                                    : level === 1
+                                                      ? "🍺"
+                                                      : level === 2
+                                                        ? "🍺🍺"
+                                                        : "🍺🍺🍺"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        />
 
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Content rating</span>
-                            </div>
-                            <div style={styles.selectorGroup}>
-                                {([0, 1, 2, 3] as const).map((level) => (
-                                    <button
-                                        key={level}
-                                        style={
-                                            maxSpiceLevel === level
-                                                ? styles.toggleOn
-                                                : styles.toggleOff
-                                        }
-                                        onClick={() => setMaxSpiceLevel(level)}
-                                        disabled={isPending}
-                                    >
-                                        {level === 0
-                                            ? "G"
-                                            : level === 1
-                                              ? "PG"
-                                              : level === 2
-                                                ? "PG-13"
-                                                : "R"}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        <Controller
+                            name="filterSettings.maxSpiceLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Content rating</span>
+                                    </div>
+                                    <div style={styles.selectorGroup}>
+                                        {([0, 1, 2, 3] as const).map((level) => (
+                                            <button
+                                                key={level}
+                                                style={
+                                                    field.value === level
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(level)}
+                                                disabled={isPending}
+                                            >
+                                                {level === 0
+                                                    ? "G"
+                                                    : level === 1
+                                                      ? "PG"
+                                                      : level === 2
+                                                        ? "PG-13"
+                                                        : "R"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        />
                     </div>
 
                     <div style={styles.divider} />
 
                     {/* ── Game tags ────────────────────────────────────────── */}
                     {!gamesLoading && availableGames.length > 0 && (
-                        <div style={styles.section}>
-                            <p style={styles.sectionLabel}>GAME</p>
-                            <p style={styles.hint}>
-                                Filter cards by the game you're playing. Leave empty for any game.
-                            </p>
-                            <div style={styles.tagList}>
-                                {availableGames.map((game) => {
-                                    const selected = gameTags.includes(game.id);
-                                    return (
-                                        <button
-                                            key={game.id}
-                                            style={
-                                                (selected
-                                                    ? styles.gameChipOn
-                                                    : styles.gameChipOff) as React.CSSProperties
-                                            }
-                                            onClick={() => toggleGame(game.id)}
-                                            disabled={isPending}
-                                        >
-                                            {game.name}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <Controller
+                            name="filterSettings.gameTags"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.section}>
+                                    <p style={styles.sectionLabel}>GAME</p>
+                                    <p style={styles.hint}>
+                                        Filter cards by the game you're playing. Leave empty for any
+                                        game.
+                                    </p>
+                                    <div style={styles.tagList}>
+                                        {availableGames.map((game) => {
+                                            const selected = field.value.includes(game.id);
+                                            return (
+                                                <button
+                                                    key={game.id}
+                                                    style={
+                                                        (selected
+                                                            ? styles.gameChipOn
+                                                            : styles.gameChipOff) as React.CSSProperties
+                                                    }
+                                                    onClick={() =>
+                                                        field.onChange(
+                                                            selected
+                                                                ? field.value.filter(
+                                                                      (id) => id !== game.id
+                                                                  )
+                                                                : [...field.value, game.id]
+                                                        )
+                                                    }
+                                                    disabled={isPending}
+                                                >
+                                                    {game.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        />
                     )}
 
                     <div style={styles.divider} />
 
                     {/* ── Card sharing ─────────────────────────────────────── */}
-                    <div style={styles.section}>
-                        <p style={styles.sectionLabel}>YOUR CARDS</p>
-                        <p style={styles.hint}>How much of your library enters the draw pool.</p>
-
-                        <div style={styles.radioStack}>
-                            {(["network", "mine", "none"] as const).map((level) => (
-                                <button
-                                    key={level}
-                                    style={
-                                        (cardSharing === level
-                                            ? styles.radioRowSelected
-                                            : styles.radioRow) as React.CSSProperties
-                                    }
-                                    onClick={() => setCardSharing(level)}
-                                    disabled={isPending}
-                                >
-                                    <div
-                                        style={
-                                            cardSharing === level
-                                                ? styles.radioDotActive
-                                                : styles.radioDot
-                                        }
-                                    />
-                                    <div>
-                                        <div style={styles.radioLabel}>{SHARING_LABELS[level]}</div>
-                                        <div style={styles.radioSub}>
-                                            {SHARING_DESCRIPTIONS[level]}
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <Controller
+                        name="cardSharing"
+                        control={control}
+                        render={({ field }) => (
+                            <div style={styles.section}>
+                                <p style={styles.sectionLabel}>YOUR CARDS</p>
+                                <p style={styles.hint}>
+                                    How much of your library enters the draw pool.
+                                </p>
+                                <div style={styles.radioStack}>
+                                    {(["network", "mine", "none"] as const).map((level) => (
+                                        <button
+                                            key={level}
+                                            style={
+                                                (field.value === level
+                                                    ? styles.radioRowSelected
+                                                    : styles.radioRow) as React.CSSProperties
+                                            }
+                                            onClick={() => field.onChange(level)}
+                                            disabled={isPending}
+                                        >
+                                            <div
+                                                style={
+                                                    field.value === level
+                                                        ? styles.radioDotActive
+                                                        : styles.radioDot
+                                                }
+                                            />
+                                            <div>
+                                                <div style={styles.radioLabel}>
+                                                    {SHARING_LABELS[level]}
+                                                </div>
+                                                <div style={styles.radioSub}>
+                                                    {SHARING_DESCRIPTIONS[level]}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    />
 
                     <div style={styles.divider} />
 
                     {/* ── Deck composition ─────────────────────────────────── */}
-                    <div style={styles.section}>
-                        <p style={styles.sectionLabel}>DECK</p>
-                        <p style={styles.hint}>Control which cards enter the draw pool.</p>
-
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Global cards</span>
+                    <Controller
+                        name="filterSettings.includeGlobalCards"
+                        control={control}
+                        render={({ field }) => (
+                            <div style={styles.section}>
+                                <p style={styles.sectionLabel}>DECK</p>
+                                <p style={styles.hint}>Control which cards enter the draw pool.</p>
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Global cards</span>
+                                    </div>
+                                    <div style={styles.selectorGroup}>
+                                        <button
+                                            style={field.value ? styles.toggleOn : styles.toggleOff}
+                                            onClick={() => field.onChange(true)}
+                                            disabled={isPending}
+                                        >
+                                            Include
+                                        </button>
+                                        <button
+                                            style={
+                                                !field.value ? styles.toggleOn : styles.toggleOff
+                                            }
+                                            onClick={() => field.onChange(false)}
+                                            disabled={isPending}
+                                        >
+                                            Exclude
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div style={styles.selectorGroup}>
-                                <button
-                                    style={includeGlobalCards ? styles.toggleOn : styles.toggleOff}
-                                    onClick={() => setIncludeGlobalCards(true)}
-                                    disabled={isPending}
-                                >
-                                    Include
-                                </button>
-                                <button
-                                    style={!includeGlobalCards ? styles.toggleOn : styles.toggleOff}
-                                    onClick={() => setIncludeGlobalCards(false)}
-                                    disabled={isPending}
-                                >
-                                    Exclude
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                        )}
+                    />
 
                     {/* ── Player list (edit mode only) ─────────────────────── */}
                     {isEditMode && players.length > 0 && (
@@ -363,7 +419,7 @@ export default function GameSettings() {
                         </>
                     )}
 
-                    {error && <p style={styles.error}>{error}</p>}
+                    {submitError && <p style={styles.error}>{submitError}</p>}
                 </div>
             </IonContent>
 
@@ -373,7 +429,7 @@ export default function GameSettings() {
                     <IonButton
                         expand="block"
                         style={styles.saveButton as React.CSSProperties}
-                        onClick={handleSave}
+                        onClick={() => void handleSubmit(onSubmit)()}
                         disabled={isPending}
                     >
                         {isEditMode ? "Save" : "Create game"}
@@ -681,6 +737,12 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-caption)",
         color: "var(--color-danger)",
         margin: "0 var(--space-5) var(--space-3)",
+    },
+    fieldError: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        margin: "calc(-1 * var(--space-1)) 0 0",
     },
 
     // Footer

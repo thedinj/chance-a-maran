@@ -4,6 +4,7 @@ import { useHistory, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { apiClient } from "../lib/api";
 import { useSession } from "../session/useSession";
+import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ export default function PlayerGameOptions() {
                             style={styles.textInput}
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
-                            maxLength={30}
+                            maxLength={MAX_DISPLAY_NAME_LENGTH}
                             placeholder="Your name"
                             disabled={isPending}
                         />

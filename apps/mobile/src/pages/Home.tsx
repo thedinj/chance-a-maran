@@ -12,6 +12,7 @@ import type { SessionSummary } from "../lib/api/types";
 import { useSession } from "../session/useSession";
 import { useExitSession } from "../session/useExitSession";
 import { activeSessionsQueryOptions, ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
+import { MAX_JOIN_CODE_LENGTH } from "@chance/core";
 import "./Home.css";
 
 // ─── Expo-out easing (matches the rest of the app) ───────────────────────────
@@ -281,7 +282,7 @@ export default function Home() {
                                     placeholder="Enter code"
                                     value={joinCode}
                                     onChange={(e) => setJoinCode(e.target.value)}
-                                    maxLength={8}
+                                    maxLength={MAX_JOIN_CODE_LENGTH}
                                     autoCapitalize="characters"
                                     autoComplete="off"
                                     disabled={!!session}

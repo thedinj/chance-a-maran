@@ -9,9 +9,9 @@
  */
 
 // User-facing content limits
-export const MAX_NAME_LENGTH = 100; // Names: users, households, stores, aisles, sections, items
-export const MAX_EMAIL_LENGTH = 255; // Email addresses
 export const MAX_DISPLAY_NAME_LENGTH = 30; // Player/user display names
+export const MAX_SESSION_NAME_LENGTH = 60; // Game session names
+export const MAX_JOIN_CODE_LENGTH = 8; // Session join codes
 export const MIN_PASSWORD_LENGTH = 8; // Minimum password length
 
 // Card content limits

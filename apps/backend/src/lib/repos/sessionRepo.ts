@@ -71,11 +71,13 @@ export function updateStatus(id: string, status: "active" | "ended" | "expired")
     db.prepare("UPDATE sessions SET status = ? WHERE id = ?").run(status, id);
 }
 
-export function updateFilters(id: string, filterSettings: FilterSettings): DbSession {
-    db.prepare("UPDATE sessions SET filter_settings = ? WHERE id = ?").run(
-        JSON.stringify(filterSettings),
-        id
-    );
+export function updateSettings(
+    id: string,
+    settings: { name?: string; filterSettings: FilterSettings }
+): DbSession {
+    db.prepare(
+        "UPDATE sessions SET name = COALESCE(?, name), filter_settings = ? WHERE id = ?"
+    ).run(settings.name ?? null, JSON.stringify(settings.filterSettings), id);
     return findById(id)!;
 }
 

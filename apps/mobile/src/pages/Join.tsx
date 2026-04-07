@@ -9,6 +9,7 @@ import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
+import { MAX_DISPLAY_NAME_LENGTH, MAX_JOIN_CODE_LENGTH } from "@chance/core";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -235,7 +236,7 @@ function CodeStep({ code, onCodeChange, onContinue, error }: CodeStepProps) {
                     onIonInput={(e) => onCodeChange(String(e.detail.value ?? ""))}
                     onKeyDown={(e) => e.key === "Enter" && canContinue && onContinue()}
                     placeholder="ABC123"
-                    maxlength={8}
+                    maxlength={MAX_JOIN_CODE_LENGTH}
                     autocapitalize="characters"
                     autocomplete="off"
                     spellcheck={false}
@@ -316,7 +317,7 @@ function JoinDetailsStep({
                     onIonInput={(e) => onDisplayNameChange(String(e.detail.value ?? ""))}
                     onKeyDown={(e) => e.key === "Enter" && canJoin && onJoin()}
                     placeholder="Your name"
-                    maxlength={30}
+                    maxlength={MAX_DISPLAY_NAME_LENGTH}
                     autocapitalize="words"
                     autocomplete="nickname"
                 />

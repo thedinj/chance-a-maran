@@ -6,6 +6,7 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, SubmitCardRequest } from "../lib/api/types";
+import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 <input
                     style={styles.textInput}
                     placeholder="Title"
-                    maxLength={80}
+                    maxLength={MAX_CARD_TITLE_LENGTH}
                     autoComplete="off"
                     disabled={isDisabled}
                     {...register("title")}
@@ -212,7 +213,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 <textarea
                     style={styles.textArea}
                     placeholder="Description"
-                    maxLength={500}
+                    maxLength={MAX_CARD_DESCRIPTION_LENGTH}
                     disabled={isDisabled}
                     rows={4}
                     {...register("description")}

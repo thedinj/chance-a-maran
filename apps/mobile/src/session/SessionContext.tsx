@@ -46,8 +46,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setLocalPlayer(null);
     }, []);
 
-    const updateFilters = useCallback((settings: FilterSettings) => {
-        setSessionData((prev) => (prev ? { ...prev, filterSettings: settings } : null));
+    const updateSession = useCallback((session: Session) => {
+        setSessionData(session);
     }, []);
 
     const updateLocalPlayer = useCallback(
@@ -72,7 +72,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 setSession,
                 setActivePlayer,
                 clearSession,
-                updateFilters,
+                updateSession,
                 updateLocalPlayer,
             }}
         >

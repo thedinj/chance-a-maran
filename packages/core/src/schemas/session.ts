@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_SESSION_NAME_LENGTH } from "../constants/textLimits";
 
 export const FilterSettingsSchema = z.object({
     /**
@@ -29,7 +30,7 @@ export const SessionSchema = z.object({
     id: z.string(),
     /** Player ID of the host — host leaving ends the game. */
     hostPlayerId: z.string(),
-    name: z.string(),
+    name: z.string().max(MAX_SESSION_NAME_LENGTH),
     joinCode: z.string(),
     filterSettings: FilterSettingsSchema,
     status: z.enum(["active", "ended", "expired"]),

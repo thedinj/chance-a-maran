@@ -23,6 +23,7 @@ import { CardFront, FlippingCard } from "../components/GameCard";
 import { useExitSession } from "../session/useExitSession";
 import { useTransfers } from "../transfers/useTransfers";
 import { AppDialog } from "../components/AppDialog";
+import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
 
 // ─── Draw Drama ──────────────────────────────────────────────────────────────
 
@@ -446,7 +447,7 @@ function AddPlayerModal({ session, onClose, onSuccess }: AddPlayerModalProps) {
                             setError(null);
                         }}
                         autoFocus
-                        maxLength={32}
+                        maxLength={MAX_DISPLAY_NAME_LENGTH}
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="words"
@@ -744,6 +745,7 @@ function CardDetailOverlay({
         toPlayerId: string;
         toPlayerName: string;
     } | null>(null);
+    const [resolved, setResolved] = useState(event.resolved);
     const [sharing, setSharing] = useState(false);
     const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
 
@@ -763,7 +765,9 @@ function CardDetailOverlay({
     async function handleResolve() {
         setResolvePending(true);
         hapticLight();
-        await onResolve(event.id, !event.resolved);
+        const next = !resolved;
+        setResolved(next);
+        await onResolve(event.id, next);
         setResolvePending(false);
     }
 
@@ -927,7 +931,7 @@ function CardDetailOverlay({
                     <span
                         style={{
                             ...styles.actionIcon,
-                            color: event.resolved
+                            color: resolved
                                 ? "var(--color-success)"
                                 : "var(--color-text-secondary)",
                         }}
@@ -935,7 +939,7 @@ function CardDetailOverlay({
                         ✓
                     </span>
                     <span style={styles.actionLabel}>
-                        {event.resolved ? "Resolved" : "Resolve"}
+                        {resolved ? "Resolved" : "Resolve"}
                     </span>
                 </button>
 

@@ -254,9 +254,10 @@ export class ApiClient {
         return this.request<SessionSummary[]>("GET", "/api/sessions/active");
     }
 
-    updateSessionFilters(sessionId: string, filterSettings: FilterSettings) {
+    updateSessionSettings(sessionId: string, opts: { filterSettings: FilterSettings; name?: string }) {
         return this.request<Session>("PATCH", `/api/sessions/${sessionId}/filters`, {
-            filterSettings,
+            filterSettings: opts.filterSettings,
+            ...(opts.name !== undefined ? { name: opts.name } : {}),
         });
     }
 

@@ -23,13 +23,17 @@ export interface SessionContextValue {
     setSession(state: SessionState): void;
     setActivePlayer(playerId: string): void;
     clearSession(): void;
-    updateFilters(settings: FilterSettings): void;
+    /** Replaces the session object — called after a successful updateSessionSettings API response. */
+    updateSession(session: Session): void;
     /**
      * Optimistically applies a partial patch to the local player record after a
      * successful updatePlayerSettings API call. Extend the Pick union as new
      * per-player settings are added.
      */
-    updateLocalPlayer(playerId: string, patch: Partial<Pick<Player, "displayName" | "cardSharing">>): void;
+    updateLocalPlayer(
+        playerId: string,
+        patch: Partial<Pick<Player, "displayName" | "cardSharing">>
+    ): void;
 }
 
 export const SessionContext = createContext<SessionContextValue | null>(null);

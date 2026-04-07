@@ -5,6 +5,7 @@ import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
+import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export default function AppSettings() {
                                     e.key === "Enter" && !isProfilePending && handleSaveProfile()
                                 }
                                 placeholder="Your name"
-                                maxlength={30}
+                                maxlength={MAX_DISPLAY_NAME_LENGTH}
                                 autocapitalize="words"
                                 autocomplete="nickname"
                             />
