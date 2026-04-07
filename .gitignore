@@ -61,6 +61,3 @@ ios/
 *.swp
 *.swo
 *~
-
-# Local agent tooling
-.claude/skills/

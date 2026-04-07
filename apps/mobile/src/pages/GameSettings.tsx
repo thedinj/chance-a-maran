@@ -2,11 +2,13 @@ import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
 import { AppHeader } from "../components/AppHeader";
 import React, { useEffect, useState, useTransition } from "react";
 import { useHistory, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/useAuth";
 import { useSession } from "../session/useSession";
 import { useCards } from "../cards/useCards";
 import { apiClient } from "../lib/api";
 import type { Game } from "../lib/api/types";
+import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ export default function GameSettings() {
     const { user, isInitializing } = useAuth();
     const { session, players, initSession } = useSession();
     const { clearHistory, addDrawEvent } = useCards();
+    const queryClient = useQueryClient();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
 
@@ -102,6 +105,7 @@ export default function GameSettings() {
                             addDrawEvent(event);
                         }
                     }
+                    void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
                     history.replace(`/game/${result.data.id}`, { newSession: true });
                 } else {
                     setError(result.error.message);

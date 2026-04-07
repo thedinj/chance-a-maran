@@ -82,7 +82,7 @@ const DEMO_CARD_VERSION: CardVersion = {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." +
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."*/,
     hiddenDescription: false,
-    imageUrl: null,
+    imageId: null,
     drinkingLevel: 0,
     spiceLevel: 0,
     isGameChanger: false,
@@ -111,7 +111,7 @@ const DEMO_CARD_2_V1: CardVersion = {
     title: "Truth or truth",
     description: "Tell the group something they don't know about you.",
     hiddenDescription: false,
-    imageUrl: null,
+    imageId: null,
     drinkingLevel: 0,
     spiceLevel: 0,
     isGameChanger: false,
@@ -146,7 +146,7 @@ const DEMO_CARD_3_V1: CardVersion = {
     title: "Hot seat",
     description: "The player to your left gets to ask you any question.",
     hiddenDescription: true,
-    imageUrl: null,
+    imageId: null,
     drinkingLevel: 0,
     spiceLevel: 1,
     isGameChanger: false,
@@ -207,7 +207,6 @@ const DEMO_SESSION: Session = {
     },
     status: "active",
     createdAt: "2026-02-15T18:30:00.000Z",
-    expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
     endedAt: null,
 };
 
@@ -226,7 +225,6 @@ const DEMO_PAST_SESSION_1: SessionSummary = {
     },
     status: "ended",
     createdAt: "2026-03-28T20:00:00.000Z",
-    expiresAt: "2026-04-13T20:00:00.000Z",
     endedAt: "2026-03-28T22:14:00.000Z",
     playerCount: 5,
     drawCount: 18,
@@ -245,7 +243,6 @@ const DEMO_PAST_SESSION_2: SessionSummary = {
     },
     status: "expired",
     createdAt: "2026-03-14T19:00:00.000Z",
-    expiresAt: "2026-03-30T19:00:00.000Z",
     endedAt: null,
     playerCount: 4,
     drawCount: 11,
@@ -457,7 +454,6 @@ export class FakeApiClient implements ApiClient {
             filterSettings: req.filterSettings,
             status: "active",
             createdAt: ts(),
-            expiresAt: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString(),
             endedAt: null,
         };
         state.sessions.set(sessionId, session);
@@ -668,7 +664,7 @@ export class FakeApiClient implements ApiClient {
             title: req.title,
             description: req.description,
             hiddenDescription: req.hiddenDescription,
-            imageUrl: req.imageUrl ?? null,
+            imageId: req.imageId,
             drinkingLevel: req.drinkingLevel,
             spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,
@@ -704,7 +700,7 @@ export class FakeApiClient implements ApiClient {
             title: req.title,
             description: req.description,
             hiddenDescription: req.hiddenDescription,
-            imageUrl: req.imageUrl ?? null,
+            imageId: req.imageId,
             drinkingLevel: req.drinkingLevel,
             spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,
@@ -885,10 +881,13 @@ export class FakeApiClient implements ApiClient {
         return ok({ imageId: `fake-img-${Date.now()}` });
     }
 
-    resolveImageUrl(imagePath: string | null): string | null {
-        if (!imagePath) return null;
-        // In the fake client there's no real base URL — return the path as-is.
-        return imagePath;
+    async deleteImage(_imageId: string): Promise<ApiResult<void>> {
+        return ok(undefined);
+    }
+
+    resolveImageUrl(imageId: string | null): string | null {
+        if (!imageId) return null;
+        return `/api/images/${imageId}`;
     }
 
     // ── Games ─────────────────────────────────────────────────────────────────
@@ -938,7 +937,7 @@ export class FakeApiClient implements ApiClient {
             title: req.title,
             description: req.description,
             hiddenDescription: req.hiddenDescription,
-            imageUrl: req.imageUrl ?? null,
+            imageId: req.imageId,
             drinkingLevel: req.drinkingLevel,
             spiceLevel: req.spiceLevel,
             isGameChanger: req.isGameChanger,

@@ -29,14 +29,10 @@ export default function SubmitCard() {
         return null;
     }
 
-    async function onValidSubmit(
-        data: SubmitCardRequest,
-        imageUrl: string | undefined
-    ): Promise<string | null> {
-        const req = { ...data, imageUrl };
+    async function onValidSubmit(data: SubmitCardRequest): Promise<string | null> {
         const result = session
-            ? await apiClient.submitCard(session.id, req)
-            : await apiClient.submitCardOutsideSession(req);
+            ? await apiClient.submitCard(session.id, data)
+            : await apiClient.submitCardOutsideSession(data);
         if (!result.ok) return result.error.message;
         history.goBack();
         return null;

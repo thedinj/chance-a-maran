@@ -365,13 +365,17 @@ export class RealApiClient implements ApiClient {
         return this.request<ImageUploadResponse>("POST", "/api/images", form);
     }
 
+    deleteImage(imageId: string) {
+        return this.request<void>("DELETE", `/api/images/${imageId}`);
+    }
+
     /**
-     * Converts a stored image path ("/api/images/{id}") to a fully-qualified URL
-     * by prepending the configured API base URL. Returns null for null input.
+     * Constructs a fully-qualified display URL from a stored imageId UUID.
+     * Returns null for null input.
      */
-    resolveImageUrl(imagePath: string | null): string | null {
-        if (!imagePath) return null;
-        return `${this.baseUrl}${imagePath}`;
+    resolveImageUrl(imageId: string | null): string | null {
+        if (!imageId) return null;
+        return `${this.baseUrl}/api/images/${imageId}`;
     }
 
     // ── Games ─────────────────────────────────────────────────────────────────

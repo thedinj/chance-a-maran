@@ -315,15 +315,14 @@ const styles: Record<string, React.CSSProperties> = {
         display: "flex",
         flexDirection: "column",
         backgroundColor: "var(--color-bg)",
-        paddingTop: "var(--space-5)",
-        paddingBottom: "calc(var(--space-8) + env(safe-area-inset-bottom))",
+        padding: "var(--space-5) var(--space-5) calc(var(--space-8) + env(safe-area-inset-bottom))",
         gap: "var(--space-5)",
     },
     pageHeader: {
         display: "flex",
         alignItems: "center",
         gap: "var(--space-3)",
-        padding: "0 var(--space-5) var(--space-2)",
+        paddingBottom: "var(--space-2)",
     },
     backLink: {
         background: "none",

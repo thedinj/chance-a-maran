@@ -37,3 +37,15 @@ export function findRawById(id: string): Pick<DbImage, "data" | "mime_type"> | n
             .get(id) as Pick<DbImage, "data" | "mime_type"> | undefined) ?? null
     );
 }
+
+export function findMetaById(id: string): Pick<DbImage, "id" | "uploaded_by_user_id"> | null {
+    return (
+        (db
+            .prepare("SELECT id, uploaded_by_user_id FROM card_images WHERE id = ?")
+            .get(id) as Pick<DbImage, "id" | "uploaded_by_user_id"> | undefined) ?? null
+    );
+}
+
+export function deleteById(id: string): void {
+    db.prepare("DELETE FROM card_images WHERE id = ?").run(id);
+}

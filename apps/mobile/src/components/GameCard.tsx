@@ -108,9 +108,9 @@ export function CardFront({
                     />
                     <div style={styles.revealCardContentBody}>
                         <div style={styles.revealImageSlot}>
-                            {cv.imageUrl ? (
+                            {cv.imageId ? (
                                 <img
-                                    src={apiClient.resolveImageUrl(cv.imageUrl) ?? cv.imageUrl}
+                                    src={apiClient.resolveImageUrl(cv.imageId) ?? ""}
                                     alt={cv.title}
                                     style={{
                                         width: "100%",

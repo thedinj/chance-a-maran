@@ -103,6 +103,8 @@ export function joinByCode(
                 displayName,
                 cardSharing: req.cardSharing ?? "network",
             });
+        } else if (player.active === 0) {
+            player = playerRepo.update(player.id, { active: true });
         }
 
         const userRow = db
@@ -131,6 +133,9 @@ export function joinByCode(
         if (existing.player_token !== null) {
             // Name is owned by a guest — check for valid rejoin token
             if (req.playerToken && req.playerToken === existing.player_token) {
+                if (existing.active === 0) {
+                    playerRepo.update(existing.id, { active: true });
+                }
                 const accessToken = generateGuestToken({
                     playerId: existing.id,
                     sessionId: session.id,
@@ -138,7 +143,7 @@ export function joinByCode(
                 });
                 return {
                     session: sessionRepo.mapSession(session),
-                    player: playerRepo.mapPlayer(existing),
+                    player: playerRepo.mapPlayer(playerRepo.findById(existing.id)!),
                     accessToken,
                     playerToken: existing.player_token,
                 };

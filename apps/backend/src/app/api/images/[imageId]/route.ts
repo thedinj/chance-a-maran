@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthorizationError, ConflictError, NotFoundError } from "@chance/core";
+import { fail, handleError, ok } from "@/lib/auth/response";
+import { withAuth } from "@/lib/auth/withAuth";
 import * as imageRepo from "@/lib/repos/imageRepo";
 
 export const dynamic = "force-dynamic";
@@ -20,3 +23,27 @@ export async function GET(
         },
     });
 }
+
+/** DELETE /api/images/:imageId — uploader only. Blocked by FK if referenced by a card version. */
+export const DELETE = withAuth(async (req, context) => {
+    try {
+        const { imageId } = await context.params;
+
+        const meta = imageRepo.findMetaById(imageId);
+        if (!meta) return fail(new NotFoundError("Image not found"));
+
+        if (req.auth.type !== "user" || meta.uploaded_by_user_id !== req.auth.sub) {
+            return fail(new AuthorizationError("You can only delete your own images"));
+        }
+
+        try {
+            imageRepo.deleteById(imageId);
+        } catch {
+            return fail(new ConflictError("Image is in use and cannot be deleted"));
+        }
+
+        return ok(undefined);
+    } catch (err) {
+        return handleError(err);
+    }
+});

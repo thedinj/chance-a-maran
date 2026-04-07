@@ -11,7 +11,6 @@ export interface DbSession {
     filter_settings: string;
     status: "active" | "ended" | "expired";
     created_at: string;
-    expires_at: string | null;
     ended_at: string | null;
 }
 
@@ -24,7 +23,6 @@ export function mapSession(row: DbSession): Session {
         filterSettings: JSON.parse(row.filter_settings) as FilterSettings,
         status: row.status,
         createdAt: row.created_at,
-        expiresAt: row.expires_at ?? "",
         endedAt: row.ended_at ?? null,
     };
 }
@@ -35,22 +33,18 @@ export function create(data: {
     joinCode: string;
     qrToken: string;
     filterSettings: FilterSettings;
-    expiresAt?: Date;
 }): DbSession {
     const now = new Date().toISOString();
-    const defaultExpiry = new Date(Date.now() + 16 * 24 * 60 * 60 * 1000);
-    const expiresAt = (data.expiresAt ?? defaultExpiry).toISOString();
     db.prepare(`
-        INSERT INTO sessions (id, host_player_id, name, join_code, qr_token, filter_settings, status, created_at, expires_at)
-        VALUES (?, NULL, ?, ?, ?, ?, 'active', ?, ?)
+        INSERT INTO sessions (id, host_player_id, name, join_code, qr_token, filter_settings, status, created_at)
+        VALUES (?, NULL, ?, ?, ?, ?, 'active', ?)
     `).run(
         data.id,
         data.name,
         normalizeJoinCode(data.joinCode),
         data.qrToken,
         JSON.stringify(data.filterSettings),
-        now,
-        expiresAt
+        now
     );
     return findById(data.id)!;
 }

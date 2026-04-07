@@ -2,9 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What is Chance?
+
+Chance is a social party app played on a single shared phone alongside physical board games. When a game event triggers a "Chance" moment, the active player draws a card from a shared pool. Cards carry dares, drinking mechanics, and prompts. The card pool grows as registered players submit cards across sessions. Guests need no account — they join by entering a display name.
+
+## Terminology
+
+| Term | Definition |
+|------|------------|
+| **Game Session** | A single instance of play. Created by a registered host; expires after 16 days or when the host leaves. |
+| **Player** | An ephemeral game identity scoped to one session. Optionally linked to a User. |
+| **User** | A permanent registered account (email + password, invite-code-gated). |
+| **CardVersion** | Immutable snapshot of card content. Edits create new versions; draw history references the version drawn. |
+| **cardType** | `chanceCard` or `reparationsCard` — set at creation, Card-level (not version-level), admin-only to change post-creation. |
+| **card_sharing** | Per-player, per-session setting: `none` / `mine` / `network` (default). Controls how a registered player contributes cards to the draw pool. |
+
 ## Project Status
 
-This is an early-stage project. The monorepo structure, app code, and package files are being built out. The canonical design reference is `CHANCE_TECHNICAL_OVERVIEW.md` — read it before making architectural decisions.
+This is an early-stage project. The monorepo structure, app code, and package files are being built out.
 
 ## Monorepo Structure
 

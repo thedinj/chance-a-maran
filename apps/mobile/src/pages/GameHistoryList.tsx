@@ -1,11 +1,11 @@
-import { IonContent, IonPage } from "@ionic/react";
-import React, { useEffect, useState } from "react";
+import { IonContent, IonPage, useIonViewDidEnter } from "@ionic/react";
+import React from "react";
 import { useHistory } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
-import { apiClient } from "../lib/api";
 import { hapticLight } from "../lib/haptics";
-import type { SessionSummary } from "../lib/api/types";
+import { sessionHistoryQueryOptions, SESSION_HISTORY_KEY } from "../hooks/useSessionQueries";
 
 function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -18,17 +18,15 @@ function formatDate(iso: string): string {
 export default function GameHistoryList() {
     const { user } = useAuth();
     const history = useHistory();
+    const queryClient = useQueryClient();
+    const { data: sessions = [], isLoading: loading } = useQuery({
+        ...sessionHistoryQueryOptions,
+        enabled: !!user,
+    });
 
-    const [sessions, setSessions] = useState<SessionSummary[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!user) return;
-        apiClient.getSessionHistory().then((r) => {
-            if (r.ok) setSessions(r.data);
-            setLoading(false);
-        });
-    }, [user]);
+    useIonViewDidEnter(() => {
+        if (user) void queryClient.invalidateQueries({ queryKey: SESSION_HISTORY_KEY });
+    });
 
     if (!user) {
         return (

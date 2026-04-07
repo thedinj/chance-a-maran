@@ -1,4 +1,7 @@
+STILL issues with double back buttons???? How???
+middleware->proxy
 Fake -> Real, delete Fake
-App title (HTML head)
-Mobile/Android version
 Timing of sfx
+Preload image so that it's downloaded by the time the card appears
+Mobile/Android version
+

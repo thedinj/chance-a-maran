@@ -155,7 +155,7 @@ export const SubmitCardRequestSchema = z.object({
     title: z.string().min(1, "Title is required.").max(MAX_CARD_TITLE_LENGTH),
     description: z.string().min(1, "Description is required.").max(MAX_CARD_DESCRIPTION_LENGTH),
     hiddenDescription: z.boolean(),
-    imageUrl: z.string().optional(),
+    imageId: z.string().min(1, "A card image is required."),
     drinkingLevel: z.number().int().min(0).max(3),
     spiceLevel: z.number().int().min(0).max(3),
     /**

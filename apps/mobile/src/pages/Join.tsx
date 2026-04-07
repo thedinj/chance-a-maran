@@ -1,6 +1,7 @@
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAppHeader } from "../hooks/useAppHeader";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
@@ -8,6 +9,7 @@ import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
 import { useCards } from "../cards/useCards";
+import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -46,6 +48,7 @@ export default function Join() {
     const { user, setGuestSession } = useAuth();
     const sessionCtx = useSession();
     const { clearHistory, addDrawEvent } = useCards();
+    const queryClient = useQueryClient();
 
     // If a code arrived via URL, jump straight to name entry
     const [step, setStep] = useState<Step>(urlCode ? "name" : "code");
@@ -159,6 +162,7 @@ export default function Join() {
             for (const event of stateResult.data.drawEvents ?? []) {
                 addDrawEvent(event);
             }
+            void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
             history.replace(`/game/${session.id}`);
         });
     }

@@ -90,17 +90,13 @@ export default function MyCards() {
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
-    async function onEditValidSubmit(
-        data: SubmitCardRequest,
-        imageUrl: string | undefined
-    ): Promise<string | null> {
+    async function onEditValidSubmit(data: SubmitCardRequest): Promise<string | null> {
         if (!selectedCard) return null;
         const req: SubmitCardRequest = {
             ...data,
             title: data.title.trim(),
             description: data.description.trim(),
             isGameChanger: data.cardType === "reparations" ? false : data.isGameChanger,
-            imageUrl,
         };
         const result = await apiClient.updateCard(selectedCard.id, req);
         if (!result.ok) return result.error.message;
@@ -375,7 +371,7 @@ export default function MyCards() {
                                     isGameChanger: selectedCard.currentVersion.isGameChanger,
                                     cardType: selectedCard.cardType,
                                     gameTags: selectedCard.currentVersion.gameTags.map((g) => g.id),
-                                    imageUrl: selectedCard.currentVersion.imageUrl ?? undefined,
+                                    imageId: selectedCard.currentVersion.imageId ?? undefined,
                                 }}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}

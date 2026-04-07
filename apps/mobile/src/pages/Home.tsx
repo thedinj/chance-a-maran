@@ -1,13 +1,17 @@
 import { IonButton, IonContent, IonPage, IonSpinner, useIonViewDidEnter } from "@ionic/react";
 import { motion, useReducedMotion } from "motion/react";
-import React, { useCallback, useEffect, useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
+import { AppDialog } from "../components/AppDialog";
 import { hapticLight, hapticMedium } from "../lib/haptics";
 import { apiClient } from "../lib/api";
 import type { SessionSummary } from "../lib/api/types";
 import { useSession } from "../session/useSession";
+import { useExitSession } from "../session/useExitSession";
+import { activeSessionsQueryOptions, ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import "./Home.css";
 
 // ─── Expo-out easing (matches the rest of the app) ───────────────────────────
@@ -47,24 +51,24 @@ const actionsVariants = {
 export default function Home() {
     const { user, isGuest, isInitializing } = useAuth();
     const { session, initSession } = useSession();
+    const exitSession = useExitSession();
     const history = useHistory();
     const prefersReducedMotion = useReducedMotion();
+
+    const queryClient = useQueryClient();
+    const { data: activeGames = [], error: activeGamesError } = useQuery({
+        ...activeSessionsQueryOptions,
+        enabled: !!user,
+    });
+
+    useIonViewDidEnter(() => {
+        if (user) void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+    });
 
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
-    const [activeGames, setActiveGames] = useState<SessionSummary[]>([]);
-    const [activeGamesError, setActiveGamesError] = useState<string | null>(null);
-
-    const fetchActiveSessions = useCallback(() => {
-        if (!user) return;
-        apiClient.getActiveSessions().then((r) => {
-            if (r.ok) setActiveGames(r.data);
-        });
-    }, [user]);
-
-    useEffect(fetchActiveSessions, [user]);
-    useIonViewDidEnter(fetchActiveSessions);
+    const [confirmSwitch, setConfirmSwitch] = useState<SessionSummary | null>(null);
 
     const hasAccount = Boolean(user);
     const hasCode = joinCode.trim().length >= 1;
@@ -87,6 +91,30 @@ export default function Home() {
         });
     }
 
+    function doJoinActiveGame(summary: SessionSummary) {
+        void hapticMedium();
+        startTransition(async () => {
+            exitSession();
+            const joinResult = await apiClient.joinByCode({
+                joinCode: summary.joinCode,
+                displayName: user!.displayName,
+            });
+            if (!joinResult.ok) {
+                // Invalidate so the list reflects the session's current state
+                void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+                return;
+            }
+            const { session: joinedSession, player } = joinResult.data;
+            const stateResult = await apiClient.getSessionState(joinedSession.id);
+            if (!stateResult.ok) {
+                return;
+            }
+            void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+            initSession(stateResult.data, player.id);
+            history.push(`/game/${joinedSession.id}`);
+        });
+    }
+
     function handleJoinActiveGame(summary: SessionSummary) {
         if (!user) return;
         // Already the active session on this device — just navigate.
@@ -95,29 +123,12 @@ export default function Home() {
             history.push(`/game/${summary.id}`);
             return;
         }
-        setActiveGamesError(null);
-        void hapticMedium();
-        startTransition(async () => {
-            const joinResult = await apiClient.joinByCode({
-                joinCode: summary.joinCode,
-                displayName: user.displayName,
-            });
-            if (!joinResult.ok) {
-                setActiveGamesError(joinResult.error.message);
-                // Refresh the list — session may no longer be active
-                const refresh = await apiClient.getActiveSessions();
-                if (refresh.ok) setActiveGames(refresh.data);
-                return;
-            }
-            const { session: joinedSession, player } = joinResult.data;
-            const stateResult = await apiClient.getSessionState(joinedSession.id);
-            if (!stateResult.ok) {
-                setActiveGamesError("Could not load game state. Please try again.");
-                return;
-            }
-            initSession(stateResult.data, player.id);
-            history.push(`/game/${joinedSession.id}`);
-        });
+        // In a different session — ask before switching.
+        if (session) {
+            setConfirmSwitch(summary);
+            return;
+        }
+        doJoinActiveGame(summary);
     }
 
     if (isInitializing) {
@@ -330,7 +341,7 @@ export default function Home() {
                         <div style={styles.pastGames}>
                             <p style={styles.sectionLabel}>MY GAMES</p>
                             {activeGamesError && (
-                                <p style={styles.activeGamesError}>{activeGamesError}</p>
+                                <p style={styles.activeGamesError}>{activeGamesError.message}</p>
                             )}
                             {activeGames.map((g) => (
                                 <button
@@ -354,6 +365,27 @@ export default function Home() {
                     )}
                 </div>
             </IonContent>
+
+            {confirmSwitch && (
+                <AppDialog
+                    title="Switch game?"
+                    message={`You're currently in "${session?.name}". Switch to "${confirmSwitch.name}"?`}
+                    onDismiss={() => setConfirmSwitch(null)}
+                    buttons={[
+                        { label: "Cancel", variant: "ghost", onClick: () => setConfirmSwitch(null) },
+                        {
+                            label: "Switch",
+                            variant: "accent",
+                            isPending,
+                            onClick: () => {
+                                const target = confirmSwitch;
+                                setConfirmSwitch(null);
+                                doJoinActiveGame(target);
+                            },
+                        },
+                    ]}
+                />
+            )}
         </IonPage>
     );
 }

@@ -33,7 +33,9 @@
       "Bash(mkdir -p \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/backend/src/app/api/transfers/[transferId]/accept\")",
       "Bash(pnpm --filter core exec tsc --noEmit)",
       "Bash(pnpm --filter mobile add browser-image-compression @capacitor/camera)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
+      "Bash(xargs grep:*)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

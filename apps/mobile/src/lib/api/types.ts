@@ -129,10 +129,15 @@ export interface ApiClient {
      */
     uploadImage(file: File): Promise<ApiResult<ImageUploadResponse>>;
     /**
-     * Converts a stored image path ("/api/images/{id}") to a fully-qualified URL.
+     * Delete an uploaded image by its UUID. Only the uploader may delete.
+     * Silently fails if the image is already referenced by a saved card version.
+     */
+    deleteImage(imageId: string): Promise<ApiResult<void>>;
+    /**
+     * Constructs a fully-qualified display URL from a stored imageId UUID.
      * Returns null for null input.
      */
-    resolveImageUrl(imagePath: string | null): string | null;
+    resolveImageUrl(imageId: string | null): string | null;
 
     // ── Games ────────────────────────────────────────────────────────────────
     /** Public — no auth required. Returns all active games for the game tag picker. */

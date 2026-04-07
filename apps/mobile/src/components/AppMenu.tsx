@@ -12,10 +12,12 @@ import {
 import React, { useMemo, useState, useTransition } from "react";
 import { useLocation, useHistory } from "react-router-dom";
 import { AppDialog } from "./AppDialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/useAuth";
 import { apiClient } from "../lib/api";
 import { useSession } from "../session/useSession";
 import { useExitSession } from "../session/useExitSession";
+import { ACTIVE_SESSIONS_KEY, SESSION_HISTORY_KEY } from "../hooks/useSessionQueries";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,7 @@ export function AppMenu() {
     const { user, isGuest, logout } = useAuth();
     const { session, players, devicePlayerIds, localPlayer } = useSession();
     const exitSession = useExitSession();
+    const queryClient = useQueryClient();
     const { pathname } = useLocation();
     const history = useHistory();
     const [isPending, startTransition] = useTransition();
@@ -91,27 +94,17 @@ export function AppMenu() {
     }
 
     function handleLeaveGame() {
-        if (!session || devicePlayerIds.length === 0) return;
-        startTransition(async () => {
-            const activeDevicePlayerIds = players
-                .filter((player) => devicePlayerIds.includes(player.id) && player.active)
-                .map((player) => player.id);
-
-            for (const playerId of activeDevicePlayerIds) {
-                const result = await apiClient.leaveSession(session.id, playerId);
-                if (!result.ok) return;
-            }
-
-            setDialog(null);
-            exitSession();
-            history.replace("/");
-        });
+        setDialog(null);
+        exitSession();
+        history.replace("/");
     }
 
     function handleEndGame() {
         if (!session) return;
         startTransition(async () => {
             await apiClient.endSession(session.id);
+            void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+            void queryClient.invalidateQueries({ queryKey: SESSION_HISTORY_KEY });
             setDialog(null);
             exitSession();
             history.replace("/");
@@ -245,7 +238,7 @@ export function AppMenu() {
             {dialog === "leave" && (
                 <AppDialog
                     title="Leave game?"
-                    message="All players on this device will be marked as left. You can rejoin with the invite code."
+                    message="You'll return to the home screen. Rejoin anytime with the invite code."
                     accent="danger"
                     onDismiss={() => setDialog(null)}
                     buttons={[

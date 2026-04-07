@@ -23,11 +23,11 @@ export interface CardEditorProps {
      */
     showCardTypeSelector?: boolean;
     /**
-     * Called after successful RHF validation.
+     * Called after successful RHF validation (including imageId required check).
      * Return null on success, or an error message string on failure.
-     * imageUrl is the resolved `/api/images/<id>` path, or the existing path, or undefined.
+     * data.imageId is the committed imageId UUID.
      */
-    onValidSubmit(data: SubmitCardRequest, imageUrl: string | undefined): Promise<string | null>;
+    onValidSubmit(data: SubmitCardRequest): Promise<string | null>;
     /** Parent's isPending from useTransition (e.g. during deactivate/reactivate). */
     disabled?: boolean;
 }
@@ -44,6 +44,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         handleSubmit,
         control,
         watch,
+        setValue,
         formState: { errors },
     } = useForm<SubmitCardRequest>({
         resolver: zodResolver(SubmitCardRequestSchema),
@@ -52,6 +53,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             title: "",
             description: "",
             hiddenDescription: false,
+            imageId: "",
             drinkingLevel: 0,
             spiceLevel: 0,
             cardType: "standard",
@@ -64,13 +66,16 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const cardType = watch("cardType");
 
     // ── Image state ───────────────────────────────────────────────────────────
-    // existingImageUrl: the API path already stored on the card (edit mode only)
-    const existingDefaultImageUrl = defaultValues?.imageUrl ?? null;
+    // imagePreview: local URL for display only (not persisted)
+    // pendingImageId: a newly-uploaded imageId that hasn't been saved to a card yet.
+    //   Tracked so we can DELETE it from the server if the user replaces or removes it
+    //   before saving. The existing card's imageId (from defaultValues) is NOT tracked
+    //   here — it is still referenced by the card version and must not be deleted.
+    const existingDefaultImageId = defaultValues?.imageId ?? null;
     const [imagePreview, setImagePreview] = useState<string | null>(
-        existingDefaultImageUrl ? apiClient.resolveImageUrl(existingDefaultImageUrl) : null
+        existingDefaultImageId ? apiClient.resolveImageUrl(existingDefaultImageId) : null
     );
-    const [existingImageUrl, setExistingImageUrl] = useState<string | null>(existingDefaultImageUrl);
-    const [imageId, setImageId] = useState<string | null>(null);
+    const [pendingImageId, setPendingImageId] = useState<string | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,12 +100,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             void handleSubmit(async (data) => {
                 setSubmitError(null);
                 setIsSaving(true);
-                const imageUrl = imageId
-                    ? `/api/images/${imageId}`
-                    : imagePreview !== null
-                      ? (existingImageUrl ?? undefined)
-                      : undefined;
-                const error = await onValidSubmit(data, imageUrl);
+                const error = await onValidSubmit(data);
                 setIsSaving(false);
                 if (error) setSubmitError(error);
             })(),
@@ -134,9 +134,14 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             return; // user cancelled
         }
 
+        // Delete the previous pending upload before replacing it
+        if (pendingImageId) {
+            void apiClient.deleteImage(pendingImageId);
+            setPendingImageId(null);
+        }
+
         setImagePreview(URL.createObjectURL(file));
-        setImageId(null);
-        setExistingImageUrl(null);
+        setValue("imageId", "", { shouldValidate: false });
         setImageUploading(true);
 
         const compressed = await imageCompression(file, {
@@ -152,7 +157,8 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         setImageUploading(false);
 
         if (result.ok) {
-            setImageId(result.data.imageId);
+            setValue("imageId", result.data.imageId, { shouldValidate: true });
+            setPendingImageId(result.data.imageId);
         } else {
             setSubmitError(result.error.message);
             setImagePreview(null);
@@ -160,9 +166,13 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     }
 
     function handleRemoveImage() {
+        // Delete the pending upload — it's not yet saved to any card version
+        if (pendingImageId) {
+            void apiClient.deleteImage(pendingImageId);
+            setPendingImageId(null);
+        }
         setImagePreview(null);
-        setExistingImageUrl(null);
-        setImageId(null);
+        setValue("imageId", "", { shouldValidate: true });
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -231,7 +241,8 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
 
             {/* ── Image ─────────────────────────────────────────────────────── */}
             <div style={styles.section}>
-                <p style={styles.sectionLabel}>IMAGE (OPTIONAL)</p>
+                <input type="hidden" {...register("imageId")} />
+                <p style={styles.sectionLabel}>IMAGE</p>
 
                 {imagePreview ? (
                     <div style={styles.imagePreviewRow}>
@@ -243,12 +254,22 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                         <div style={styles.imagePreviewMeta}>
                             {imageUploading ? (
                                 <span style={styles.imageStatus}>Uploading…</span>
-                            ) : imageId ? (
-                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                            ) : pendingImageId ? (
+                                <span
+                                    style={{
+                                        ...styles.imageStatus,
+                                        color: "var(--color-accent-primary)",
+                                    }}
+                                >
                                     ✓ Ready
                                 </span>
                             ) : (
-                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                <span
+                                    style={{
+                                        ...styles.imageStatus,
+                                        color: "var(--color-accent-primary)",
+                                    }}
+                                >
                                     ✓ Saved
                                 </span>
                             )}
@@ -270,6 +291,9 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                         Add image
                     </button>
                 )}
+                {errors.imageId && (
+                    <p style={styles.fieldError}>{errors.imageId.message}</p>
+                )}
             </div>
 
             <div style={styles.divider} />
@@ -285,18 +309,55 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     control={control}
                     render={({ field }) => (
                         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {([["∅", 0], ["🍺", 1], ["🍺🍺", 2], ["🍺🍺🍺", 3]] as const).map(
-                                ([label, val]) => (
-                                    <button
-                                        key={val}
-                                        style={field.value === val ? styles.toggleOn : styles.toggleOff}
-                                        onClick={() => field.onChange(val)}
-                                        disabled={isDisabled}
-                                    >
-                                        {label}
-                                    </button>
-                                )
-                            )}
+                            {(
+                                [
+                                    ["∅", 0],
+                                    ["🍺", 1],
+                                    ["🍺🍺", 2],
+                                    ["🍺🍺🍺", 3],
+                                ] as const
+                            ).map(([label, val]) => (
+                                <button
+                                    key={val}
+                                    style={field.value === val ? styles.toggleOn : styles.toggleOff}
+                                    onClick={() => field.onChange(val)}
+                                    disabled={isDisabled}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                />
+            </div>
+
+            <div style={styles.divider} />
+
+            {/* ── Content rating ────────────────────────────────────────────── */}
+            <div style={styles.section}>
+                <p style={styles.sectionLabel}>CONTENT RATING</p>
+                <Controller
+                    name="spiceLevel"
+                    control={control}
+                    render={({ field }) => (
+                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                            {(
+                                [
+                                    ["G", 0],
+                                    ["PG", 1],
+                                    ["PG-13", 2],
+                                    ["R", 3],
+                                ] as const
+                            ).map(([label, val]) => (
+                                <button
+                                    key={val}
+                                    style={field.value === val ? styles.toggleOn : styles.toggleOff}
+                                    onClick={() => field.onChange(val)}
+                                    disabled={isDisabled}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
                     )}
                 />
@@ -328,7 +389,9 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                                                 onClick={() =>
                                                     field.onChange(
                                                         selected
-                                                            ? field.value.filter((id) => id !== game.id)
+                                                            ? field.value.filter(
+                                                                  (id) => id !== game.id
+                                                              )
                                                             : [...field.value, game.id]
                                                     )
                                                 }
@@ -414,35 +477,10 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 </>
             )}
 
-            {/* ── Content rating ────────────────────────────────────────────── */}
+            {/* ── Game Changer? ────────────────────────────────────────────── */}
             <div style={styles.section}>
-                <p style={styles.sectionLabel}>CONTENT RATING</p>
-                <Controller
-                    name="spiceLevel"
-                    control={control}
-                    render={({ field }) => (
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {([["G", 0], ["PG", 1], ["PG-13", 2], ["R", 3]] as const).map(
-                                ([label, val]) => (
-                                    <button
-                                        key={val}
-                                        style={
-                                            field.value === val ? styles.toggleOn : styles.toggleOff
-                                        }
-                                        onClick={() => field.onChange(val)}
-                                        disabled={isDisabled}
-                                    >
-                                        {label}
-                                    </button>
-                                )
-                            )}
-                        </div>
-                    )}
-                />
-
                 {cardType !== "reparations" && (
                     <>
-                        <div style={styles.rowDivider} />
                         <Controller
                             name="isGameChanger"
                             control={control}
@@ -455,7 +493,9 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                                         </span>
                                     </div>
                                     <button
-                                        style={field.value ? styles.toggleOnViolet : styles.toggleOff}
+                                        style={
+                                            field.value ? styles.toggleOnViolet : styles.toggleOff
+                                        }
                                         onClick={() => field.onChange(!field.value)}
                                         disabled={isDisabled}
                                     >

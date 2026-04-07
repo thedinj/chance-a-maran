@@ -34,9 +34,7 @@ export const SessionSchema = z.object({
     filterSettings: FilterSettingsSchema,
     status: z.enum(["active", "ended", "expired"]),
     createdAt: z.string(),
-    /** Sessions expire automatically after 16 days. */
-    expiresAt: z.string(),
-    /** Set when the host explicitly ends the session. Null for active/expired sessions. */
+    /** Set when the host explicitly ends the session. Null for active sessions. */
     endedAt: z.string().nullable(),
 });
 

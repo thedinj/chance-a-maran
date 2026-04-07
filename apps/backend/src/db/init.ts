@@ -34,7 +34,6 @@ export function initializeDatabase() {
             status          TEXT NOT NULL DEFAULT 'active'
                 CHECK(status IN ('active', 'ended', 'expired')),
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            expires_at      DATETIME,
             ended_at        DATETIME
         );
 
@@ -115,7 +114,7 @@ export function initializeDatabase() {
             title                TEXT NOT NULL,
             description          TEXT NOT NULL,
             hidden_description   INTEGER NOT NULL DEFAULT 0,
-            image_url            TEXT,
+            image_id             TEXT REFERENCES card_images(id),
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,
