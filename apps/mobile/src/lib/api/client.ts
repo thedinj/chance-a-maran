@@ -33,7 +33,7 @@ function resolveBaseUrl(): string {
     return "https://api.chance.app";
 }
 
-export class RealApiClient {
+export class ApiClient {
     private baseUrl = resolveBaseUrl();
     private accessToken: string | null = null;
     // Native only: the raw refresh token loaded from secure storage.

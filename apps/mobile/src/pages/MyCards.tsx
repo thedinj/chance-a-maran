@@ -1,11 +1,12 @@
 import { IonButton, IonContent, IonFooter, IonModal, IonPage } from "@ionic/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
-import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
+import { AppHeader } from "../components/AppHeader";
+import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
 import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
-import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -184,6 +185,8 @@ export default function MyCards() {
         );
     }
 
+    const goToHomeBase = useGoToHomeBase();
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     const showTabs = user.isAdmin;
@@ -196,7 +199,7 @@ export default function MyCards() {
                     {/* Page header */}
                     <div style={styles.pageHeader}>
                         <div style={styles.pageHeaderLeft}>
-                            <button style={styles.backLink} onClick={() => history.goBack()}>
+                            <button style={styles.backLink} onClick={goToHomeBase}>
                                 «
                             </button>
                             <h1 style={styles.heading}>My cards</h1>
@@ -365,9 +368,18 @@ export default function MyCards() {
                                 defaultValues={{
                                     title: selectedCard.currentVersion.title,
                                     description: selectedCard.currentVersion.description ?? "",
-                                    hiddenDescription: selectedCard.currentVersion.hiddenDescription,
-                                    drinkingLevel: selectedCard.currentVersion.drinkingLevel as 0 | 1 | 2 | 3,
-                                    spiceLevel: selectedCard.currentVersion.spiceLevel as 0 | 1 | 2 | 3,
+                                    hiddenDescription:
+                                        selectedCard.currentVersion.hiddenDescription,
+                                    drinkingLevel: selectedCard.currentVersion.drinkingLevel as
+                                        | 0
+                                        | 1
+                                        | 2
+                                        | 3,
+                                    spiceLevel: selectedCard.currentVersion.spiceLevel as
+                                        | 0
+                                        | 1
+                                        | 2
+                                        | 3,
                                     isGameChanger: selectedCard.currentVersion.isGameChanger,
                                     cardType: selectedCard.cardType,
                                     gameTags: selectedCard.currentVersion.gameTags.map((g) => g.id),

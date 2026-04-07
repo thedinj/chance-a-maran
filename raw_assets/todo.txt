@@ -1,7 +1,3 @@
-STILL issues with double back buttons???? How???
-middleware->proxy
-Fake -> Real, delete Fake
 Timing of sfx
-Preload image so that it's downloaded by the time the card appears
 Mobile/Android version
-
+Lots of places need useCallback

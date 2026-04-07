@@ -1,11 +1,13 @@
 import { IonContent, IonPage } from "@ionic/react";
 import React from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory } from "react-router";
 import { AppHeader } from "../components/AppHeader";
 import { LoginForm } from "../components/LoginForm";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 
 export default function Login() {
     const history = useHistory();
+    const goToHomeBase = useGoToHomeBase();
 
     return (
         <IonPage>
@@ -13,7 +15,7 @@ export default function Login() {
             <IonContent>
                 <div style={styles.root}>
                     <div style={styles.pageHeader}>
-                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                        <button style={styles.backLink} onClick={goToHomeBase}>
                             «
                         </button>
                         <h1 style={styles.heading}>Sign in</h1>

@@ -1,10 +1,10 @@
 import { IonContent, IonPage } from "@ionic/react";
 import React from "react";
-import { useHistory } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 
 export default function InviteRequest() {
-    const history = useHistory();
+    const goToHomeBase = useGoToHomeBase();
 
     return (
         <IonPage>
@@ -12,7 +12,7 @@ export default function InviteRequest() {
             <IonContent>
                 <div style={styles.root}>
                     <div style={styles.pageHeader}>
-                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                        <button style={styles.backLink} onClick={goToHomeBase}>
                             «
                         </button>
                         <h1 style={styles.heading}>Request an invite</h1>

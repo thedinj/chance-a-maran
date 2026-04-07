@@ -1,15 +1,14 @@
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAppHeader } from "../hooks/useAppHeader";
 import { useAuth } from "../auth/useAuth";
+import { useCards } from "../cards/useCards";
 import { AppHeader } from "../components/AppHeader";
+import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import { apiClient } from "../lib/api";
 import { playerTokenStore } from "../lib/playerTokenStore";
 import { useSession } from "../session/useSession";
-import { useCards } from "../cards/useCards";
-import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
@@ -44,7 +43,6 @@ type ErrorKind =
 export default function Join() {
     const { code: urlCode } = useParams<{ code?: string }>();
     const history = useHistory();
-    const { setShowBack } = useAppHeader();
     const { user, setGuestSession } = useAuth();
     const sessionCtx = useSession();
     const { clearHistory, addDrawEvent } = useCards();
@@ -61,12 +59,6 @@ export default function Join() {
     const [isPending, startTransition] = useTransition();
 
     const nameInputRef = useRef<HTMLIonInputElement>(null);
-
-    // AppHeader always shows a back button on this page
-    useEffect(() => {
-        setShowBack(true);
-        return () => setShowBack(false);
-    }, [setShowBack]);
 
     // Focus the name input a tick after transitioning to it so the keyboard opens
     useEffect(() => {
@@ -332,7 +324,9 @@ function JoinDetailsStep({
                 {isRegistered && (
                     <div style={styles.sharingSection}>
                         <p style={styles.sharingSectionLabel}>YOUR CARDS</p>
-                        <p style={styles.sharingHint}>How much of your library enters the draw pool.</p>
+                        <p style={styles.sharingHint}>
+                            How much of your library enters the draw pool.
+                        </p>
                         <div style={styles.radioStack}>
                             {(["network", "mine", "none"] as const).map((level) => (
                                 <button

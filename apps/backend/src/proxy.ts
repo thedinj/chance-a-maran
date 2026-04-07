@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:8100";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     // Check if request is over HTTPS (consider proxy headers)
     const protocol = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol;
     const isHttps = protocol === "https:" || protocol === "https";

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import { useAppConfig } from "../hooks/useAppConfig";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 
 export default function Register() {
     const history = useHistory();
@@ -19,6 +20,7 @@ export default function Register() {
     const [inviteCode, setInviteCode] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
+    const goToHomeBase = useGoToHomeBase();
 
     const inviteRequired = appConfig.inviteCodeRequired;
 
@@ -70,7 +72,7 @@ export default function Register() {
             <IonContent>
                 <div style={styles.root}>
                     <div style={styles.pageHeader}>
-                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                        <button style={styles.backLink} onClick={goToHomeBase}>
                             «
                         </button>
                         <h1 style={styles.heading}>Register</h1>

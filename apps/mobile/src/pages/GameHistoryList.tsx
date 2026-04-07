@@ -1,11 +1,12 @@
 import { IonContent, IonPage, useIonViewDidEnter } from "@ionic/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import React from "react";
 import { useHistory } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
+import { AppHeader } from "../components/AppHeader";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
+import { SESSION_HISTORY_KEY, sessionHistoryQueryOptions } from "../hooks/useSessionQueries";
 import { hapticLight } from "../lib/haptics";
-import { sessionHistoryQueryOptions, SESSION_HISTORY_KEY } from "../hooks/useSessionQueries";
 
 function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -18,6 +19,7 @@ function formatDate(iso: string): string {
 export default function GameHistoryList() {
     const { user } = useAuth();
     const history = useHistory();
+    const goToHomeBase = useGoToHomeBase();
     const queryClient = useQueryClient();
     const { data: sessions = [], isLoading: loading } = useQuery({
         ...sessionHistoryQueryOptions,
@@ -47,7 +49,7 @@ export default function GameHistoryList() {
             <IonContent>
                 <div style={styles.root}>
                     <div style={styles.pageHeader}>
-                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                        <button style={styles.backLink} onClick={goToHomeBase}>
                             «
                         </button>
                         <h1 style={styles.heading}>Game History</h1>

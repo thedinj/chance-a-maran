@@ -1,6 +1,5 @@
 import { type ErrorCodeType as ErrorCode } from "@chance/core";
 import type {
-    ApiClient,
     ApiResult,
     ApiSuccess,
     AppConfig,
@@ -355,7 +354,7 @@ const state: FakeState = {
 
 // ─── FakeApiClient ────────────────────────────────────────────────────────────
 
-export class FakeApiClient implements ApiClient {
+export class FakeApiClient {
     // ── App config ────────────────────────────────────────────────────────────
 
     async getAppConfig(): Promise<ApiResult<AppConfig>> {

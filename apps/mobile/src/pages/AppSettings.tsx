@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -107,6 +108,8 @@ export default function AppSettings() {
         history.replace("/");
     }
 
+    const goToHomeBase = useGoToHomeBase();
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     const memberSince = user?.createdAt
@@ -123,7 +126,7 @@ export default function AppSettings() {
                 <div style={styles.root}>
                     {" "}
                     <div style={styles.pageHeader}>
-                        <button style={styles.backLink} onClick={() => history.goBack()}>
+                        <button style={styles.backLink} onClick={goToHomeBase}>
                             «
                         </button>
                         <h1 style={styles.pageTitle}>Settings</h1>

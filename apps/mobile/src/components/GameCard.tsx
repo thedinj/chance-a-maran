@@ -14,6 +14,9 @@ interface CardBackProps {
 
 export function CardBack({ event }: CardBackProps): React.JSX.Element {
     const isReparations = event.card.cardType === "reparations";
+    const imageUrl = event.cardVersion.imageId
+        ? apiClient.resolveImageUrl(event.cardVersion.imageId)
+        : null;
 
     return (
         <div
@@ -34,6 +37,15 @@ export function CardBack({ event }: CardBackProps): React.JSX.Element {
             <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>◆</span>
             <div style={styles.revealBackLogo}>C</div>
             <p style={styles.revealBackSub}>CHANCE</p>
+            {imageUrl && (
+                <img
+                    src={imageUrl}
+                    alt=""
+                    aria-hidden="true"
+                    style={{ display: "none" }}
+                    fetchPriority="low"
+                />
+            )}
         </div>
     );
 }

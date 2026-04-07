@@ -1,36 +1,17 @@
-import {
-    IonBackButton,
-    IonButtons,
-    IonHeader,
-    IonMenuButton,
-    IonTitle,
-    IonToolbar,
-} from "@ionic/react";
+import { IonButtons, IonHeader, IonMenuButton, IonTitle, IonToolbar } from "@ionic/react";
 import React from "react";
 import { useAppHeader } from "../hooks/useAppHeader";
 
 export function AppHeader() {
-    const { title, showBack } = useAppHeader();
+    const { title } = useAppHeader();
 
     return (
         <IonHeader>
             <IonToolbar>
                 <IonButtons slot="start">
-                    {showBack ? (
-                        <IonBackButton
-                            defaultHref="/"
-                            text=""
-                            style={
-                                { "--color": "var(--color-text-secondary)" } as React.CSSProperties
-                            }
-                        />
-                    ) : (
-                        <IonMenuButton
-                            style={
-                                { "--color": "var(--color-text-secondary)" } as React.CSSProperties
-                            }
-                        />
-                    )}
+                    <IonMenuButton
+                        style={{ "--color": "var(--color-text-secondary)" } as React.CSSProperties}
+                    />
                 </IonButtons>
                 {title ? (
                     <IonTitle

@@ -1,13 +1,13 @@
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { useHistory } from "react-router-dom";
-import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
-import { useAppHeader } from "../hooks/useAppHeader";
-import { useSession } from "../session/useSession";
+import { AppHeader } from "../components/AppHeader";
+import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
+import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
 import type { SubmitCardRequest } from "../lib/api/types";
-import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
+import { useSession } from "../session/useSession";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -15,13 +15,8 @@ export default function SubmitCard() {
     const { user, isInitializing } = useAuth();
     const { session } = useSession();
     const history = useHistory();
-    const { setShowBack } = useAppHeader();
     const editorRef = useRef<CardEditorHandle>(null);
-
-    useEffect(() => {
-        setShowBack(true);
-        return () => setShowBack(false);
-    }, [setShowBack]);
+    const goToHomeBase = useGoToHomeBase();
 
     // Registered-only page
     if (!user) {
@@ -34,7 +29,7 @@ export default function SubmitCard() {
             ? await apiClient.submitCard(session.id, data)
             : await apiClient.submitCardOutsideSession(data);
         if (!result.ok) return result.error.message;
-        history.goBack();
+        goToHomeBase();
         return null;
     }
 
@@ -43,7 +38,7 @@ export default function SubmitCard() {
             <AppHeader />
             <IonContent>
                 <div style={styles.pageHeader}>
-                    <button style={styles.backLink} onClick={() => history.goBack()}>
+                    <button style={styles.backLink} onClick={goToHomeBase}>
                         «
                     </button>
                     <h1 style={styles.heading}>Submit card</h1>
@@ -61,7 +56,7 @@ export default function SubmitCard() {
                     >
                         Submit card
                     </IonButton>
-                    <button style={styles.cancelLink} onClick={() => history.goBack()}>
+                    <button style={styles.cancelLink} onClick={goToHomeBase}>
                         Cancel
                     </button>
                 </div>
