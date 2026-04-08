@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { db } from "../db/db";
 import { boolToInt, intToBool } from "../db/boolBridge";
-import type { Card, CardVersion, Game } from "@chance/core";
+import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ export interface DbCardVersion {
     version_number: number;
     title: string;
     description: string;
-    hidden_description: number;
+    hidden_instructions: string | null;
     image_id: string | null;
     drinking_level: number;
     spice_level: number;
@@ -56,19 +56,35 @@ function getGameTagsForVersion(cardVersionId: string): Game[] {
         .all(cardVersionId) as Game[];
 }
 
+
 export function mapCardVersion(row: DbCardVersion): CardVersion {
+    const rawRequirements = db
+        .prepare(
+            `SELECT re.id, re.title, re.active
+             FROM card_version_requirements cvr
+             JOIN requirement_elements re ON cvr.element_id = re.id
+             WHERE cvr.card_version_id = ?
+             ORDER BY re.title`
+        )
+        .all(row.id) as Array<{ id: string; title: string; active: number }>;
+
     return {
         id: row.id,
         cardId: row.card_id,
         versionNumber: row.version_number,
         title: row.title,
         description: row.description,
-        hiddenDescription: intToBool(row.hidden_description),
+        hiddenInstructions: row.hidden_instructions,
         imageId: row.image_id,
         drinkingLevel: row.drinking_level,
         spiceLevel: row.spice_level,
         isGameChanger: intToBool(row.is_game_changer),
         gameTags: getGameTagsForVersion(row.id),
+        requirements: rawRequirements.map((r) => ({
+            id: r.id,
+            title: r.title,
+            active: intToBool(r.active),
+        })),
         authoredByUserId: row.authored_by_user_id,
         authorDisplayName: row.author_display_name,
         createdAt: row.created_at,
@@ -190,12 +206,13 @@ export function create(data: {
     createdInSessionId: string | null;
     title: string;
     description: string;
-    hiddenDescription: boolean;
+    hiddenInstructions: string | null;
     imageId: string | null;
     drinkingLevel: number;
     spiceLevel: number;
     isGameChanger: boolean;
     gameTags: string[]; // game IDs
+    requirementIds: string[];
 }): Card {
     const cardId = randomUUID();
     const versionId = randomUUID();
@@ -208,14 +225,14 @@ export function create(data: {
         ).run(cardId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
 
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_description, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
              VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
             data.title,
             data.description,
-            boolToInt(data.hiddenDescription),
+            data.hiddenInstructions,
             data.imageId,
             data.drinkingLevel,
             data.spiceLevel,
@@ -229,6 +246,12 @@ export function create(data: {
                 "INSERT OR IGNORE INTO card_game_tags (card_version_id, game_id) VALUES (?, ?)"
             ).run(versionId, gameId);
         }
+
+        for (const elementId of data.requirementIds) {
+            db.prepare(
+                "INSERT OR IGNORE INTO card_version_requirements (card_version_id, element_id) VALUES (?, ?)"
+            ).run(versionId, elementId);
+        }
     })();
 
     return findById(cardId)!;
@@ -240,12 +263,13 @@ export function createVersion(
         authoredByUserId: string;
         title: string;
         description: string;
-        hiddenDescription: boolean;
+        hiddenInstructions: string | null;
         imageId: string | null;
         drinkingLevel: number;
         spiceLevel: number;
         isGameChanger: boolean;
         gameTags: string[]; // game IDs
+        requirementIds: string[];
     }
 ): Card {
     const versionId = randomUUID();
@@ -260,7 +284,7 @@ export function createVersion(
 
     db.transaction(() => {
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_description, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
@@ -268,7 +292,7 @@ export function createVersion(
             nextVersionNumber,
             data.title,
             data.description,
-            boolToInt(data.hiddenDescription),
+            data.hiddenInstructions,
             data.imageId,
             data.drinkingLevel,
             data.spiceLevel,
@@ -283,6 +307,12 @@ export function createVersion(
             db.prepare(
                 "INSERT OR IGNORE INTO card_game_tags (card_version_id, game_id) VALUES (?, ?)"
             ).run(versionId, gameId);
+        }
+
+        for (const elementId of data.requirementIds) {
+            db.prepare(
+                "INSERT OR IGNORE INTO card_version_requirements (card_version_id, element_id) VALUES (?, ?)"
+            ).run(versionId, elementId);
         }
     })();
 

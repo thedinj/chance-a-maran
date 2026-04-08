@@ -9,6 +9,7 @@ import {
 import type { Card, CardTransfer, CardVersion, DrawEvent, SubmitCardRequest } from "@chance/core";
 import { db } from "../db/db";
 import * as cardRepo from "../repos/cardRepo";
+import * as requirementElementRepo from "../repos/requirementElementRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
 import * as cardVoteRepo from "../repos/cardVoteRepo";
@@ -16,21 +17,33 @@ import * as sessionRepo from "../repos/sessionRepo";
 import * as playerRepo from "../repos/playerRepo";
 import * as cardPicker from "../card-picker";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function validateRequirementIds(ids: string[]): void {
+    if (ids.length === 0) return;
+    const found = requirementElementRepo.findByIds(ids);
+    if (found.length !== ids.length) {
+        throw new ValidationError("One or more requirement IDs are invalid or inactive");
+    }
+}
+
 // ─── Card submission ──────────────────────────────────────────────────────────
 
 export function submitCard(userId: string, sessionId: string | null, req: SubmitCardRequest): Card {
+    validateRequirementIds(req.requirementIds);
     return cardRepo.create({
         authorUserId: userId,
         cardType: req.cardType,
         createdInSessionId: sessionId,
         title: req.title,
         description: req.description,
-        hiddenDescription: req.hiddenDescription,
+        hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
         drinkingLevel: req.drinkingLevel,
         spiceLevel: req.spiceLevel,
         isGameChanger: req.cardType === "reparations" ? false : req.isGameChanger,
         gameTags: req.gameTags,
+        requirementIds: req.requirementIds,
     });
 }
 
@@ -48,16 +61,18 @@ export function updateCard(
         throw new AuthorizationError("You can only edit your own cards");
     }
 
+    validateRequirementIds(req.requirementIds);
     return cardRepo.createVersion(cardId, {
         authoredByUserId: userId,
         title: req.title,
         description: req.description,
-        hiddenDescription: req.hiddenDescription,
+        hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
         drinkingLevel: req.drinkingLevel,
         spiceLevel: req.spiceLevel,
         isGameChanger: card.cardType === "reparations" ? false : req.isGameChanger,
         gameTags: req.gameTags,
+        requirementIds: req.requirementIds,
     });
 }
 
@@ -169,8 +184,8 @@ export function drawReparationsCard(sessionId: string, playerId: string): DrawEv
 export function shareDescription(drawEventId: string): DrawEvent {
     const event = drawEventRepo.findById(drawEventId);
     if (!event) throw new NotFoundError("Draw event not found");
-    if (!event.cardVersion.hiddenDescription) {
-        throw new ConflictError("Card description is not hidden");
+    if (event.cardVersion.hiddenInstructions === null) {
+        throw new ConflictError("Card has no hidden instructions");
     }
     return drawEventRepo.update(drawEventId, { descriptionShared: true });
 }

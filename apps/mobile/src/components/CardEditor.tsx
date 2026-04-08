@@ -5,7 +5,7 @@ import imageCompression from "browser-image-compression";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
-import type { Game, SubmitCardRequest } from "../lib/api/types";
+import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
 import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -56,13 +56,14 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         defaultValues: {
             title: "",
             description: "",
-            hiddenDescription: false,
+            hiddenInstructions: null,
             imageId: "",
             drinkingLevel: 0,
             spiceLevel: 0,
             cardType: "standard",
             isGameChanger: false,
             gameTags: [],
+            requirementIds: [],
             ...defaultValues,
         },
     });
@@ -86,15 +87,19 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     // ── Other state ───────────────────────────────────────────────────────────
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
+    const [availableRequirements, setAvailableRequirements] = useState<RequirementElement[]>([]);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     const isDisabled = disabled || isSaving;
 
     useEffect(() => {
-        apiClient.getGames().then((result) => {
+        void apiClient.getGames().then((result) => {
             if (result.ok) setAvailableGames(result.data);
             setGamesLoading(false);
+        });
+        void apiClient.getRequirementElements().then((result) => {
+            if (result.ok) setAvailableRequirements(result.data);
         });
     }, []);
 
@@ -225,23 +230,36 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 <div style={styles.rowDivider} />
 
                 <Controller
-                    name="hiddenDescription"
+                    name="hiddenInstructions"
                     control={control}
                     render={({ field }) => (
-                        <div style={styles.toggleRow}>
-                            <div style={styles.toggleText}>
-                                <span style={styles.toggleTitle}>Hidden description</span>
-                                <span style={styles.toggleSub}>
-                                    Only the drawing player sees this initially
-                                </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                            <div style={styles.toggleRow}>
+                                <div style={styles.toggleText}>
+                                    <span style={styles.toggleTitle}>Hidden instructions</span>
+                                    <span style={styles.toggleSub}>
+                                        Revealed only to the drawing player initially
+                                    </span>
+                                </div>
+                                <button
+                                    style={field.value !== null ? styles.toggleOn : styles.toggleOff}
+                                    onClick={() => field.onChange(field.value !== null ? null : "")}
+                                    disabled={isDisabled}
+                                >
+                                    {field.value !== null ? "ON" : "OFF"}
+                                </button>
                             </div>
-                            <button
-                                style={field.value ? styles.toggleOn : styles.toggleOff}
-                                onClick={() => field.onChange(!field.value)}
-                                disabled={isDisabled}
-                            >
-                                {field.value ? "ON" : "OFF"}
-                            </button>
+                            {field.value !== null && (
+                                <textarea
+                                    style={styles.textArea}
+                                    placeholder="Hidden instructions text…"
+                                    maxLength={MAX_CARD_DESCRIPTION_LENGTH}
+                                    disabled={isDisabled}
+                                    rows={3}
+                                    value={field.value}
+                                    onChange={(e) => field.onChange(e.target.value || null)}
+                                />
+                            )}
                         </div>
                     )}
                 />
@@ -408,6 +426,50 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                                                 disabled={isDisabled}
                                             >
                                                 {game.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        />
+                    </div>
+                    <div style={styles.divider} />
+                </>
+            )}
+
+            {/* ── Requirements ─────────────────────────────────────────────── */}
+            {availableRequirements.length > 0 && (
+                <>
+                    <div style={styles.section}>
+                        <p style={styles.sectionLabel}>REQUIREMENTS</p>
+                        <p style={styles.hint}>
+                            Physical or game-specific props this card needs. Leave empty if none.
+                        </p>
+                        <Controller
+                            name="requirementIds"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.tagList}>
+                                    {availableRequirements.map((req) => {
+                                        const selected = field.value.includes(req.id);
+                                        return (
+                                            <button
+                                                key={req.id}
+                                                style={
+                                                    (selected
+                                                        ? styles.gameChipOn
+                                                        : styles.gameChipOff) as React.CSSProperties
+                                                }
+                                                onClick={() =>
+                                                    field.onChange(
+                                                        selected
+                                                            ? field.value.filter((id) => id !== req.id)
+                                                            : [...field.value, req.id]
+                                                    )
+                                                }
+                                                disabled={isDisabled}
+                                            >
+                                                {req.title}
                                             </button>
                                         );
                                     })}

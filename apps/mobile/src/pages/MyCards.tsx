@@ -28,7 +28,6 @@ export default function MyCards() {
     const [allLoading, setAllLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("active");
-    const [filterGlobal, setFilterGlobal] = useState<"all" | "global" | "non-global">("all");
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const modalRef = useRef<HTMLIonModalElement>(null);
@@ -56,14 +55,12 @@ export default function MyCards() {
         const filters: GetAllCardsFilters = {};
         if (filterActive === "active") filters.active = true;
         else if (filterActive === "inactive") filters.active = false;
-        if (filterGlobal === "global") filters.isGlobal = true;
-        else if (filterGlobal === "non-global") filters.isGlobal = false;
         if (search.trim()) filters.search = search.trim();
         apiClient.getAllCards(filters).then((result) => {
             if (result.ok) setAllCards(result.data);
             setAllLoading(false);
         });
-    }, [activeTab, search, filterActive, filterGlobal, user?.isAdmin]);
+    }, [activeTab, search, filterActive, user?.isAdmin]);
 
     // Must be called before any early return — hooks must not be conditional
     const goToHomeBase = useGoToHomeBase();
@@ -141,20 +138,6 @@ export default function MyCards() {
         });
     }
 
-    function handleToggleGlobal() {
-        if (!selectedCard) return;
-        startTransition(async () => {
-            const result = selectedCard.isGlobal
-                ? await apiClient.demoteFromGlobal(selectedCard.id)
-                : await apiClient.promoteToGlobal(selectedCard.id);
-            if (result.ok) {
-                setSelectedCard(result.data);
-                setAllCards((prev) => prev.map((c) => (c.id === result.data.id ? result.data : c)));
-            } else {
-                setEditError(result.error.message);
-            }
-        });
-    }
 
     // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -171,7 +154,6 @@ export default function MyCards() {
                         <span style={card.active ? styles.badgeActive : styles.badgeInactive}>
                             {card.active ? "ACTIVE" : "INACTIVE"}
                         </span>
-                        {card.isGlobal && <span style={styles.badgeGlobal}>GLOBAL</span>}
                     </div>
                 </div>
                 {v.description && <p style={styles.tileDesc}>{v.description}</p>}
@@ -284,24 +266,6 @@ export default function MyCards() {
                                             : v.charAt(0).toUpperCase() + v.slice(1)}
                                     </button>
                                 ))}
-                                <span style={styles.filterSep}>◆</span>
-                                {(["all", "global", "non-global"] as const).map((v) => (
-                                    <button
-                                        key={v}
-                                        style={
-                                            filterGlobal === v
-                                                ? styles.filterChipOn
-                                                : styles.filterChip
-                                        }
-                                        onClick={() => setFilterGlobal(v)}
-                                    >
-                                        {v === "all"
-                                            ? "All pools"
-                                            : v === "global"
-                                              ? "Global"
-                                              : "Non-global"}
-                                    </button>
-                                ))}
                             </div>
 
                             {allLoading && <p style={styles.statusText}>Loading…</p>}
@@ -357,9 +321,6 @@ export default function MyCards() {
                                         V{selectedCard.currentVersion.versionNumber}
                                     </span>
                                 )}
-                                {selectedCard.isGlobal && (
-                                    <span style={styles.badgeGlobal}>GLOBAL</span>
-                                )}
                             </div>
 
                             {/* ── Card form ─────────────────────────────────── */}
@@ -369,8 +330,8 @@ export default function MyCards() {
                                 defaultValues={{
                                     title: selectedCard.currentVersion.title,
                                     description: selectedCard.currentVersion.description ?? "",
-                                    hiddenDescription:
-                                        selectedCard.currentVersion.hiddenDescription,
+                                    hiddenInstructions:
+                                        selectedCard.currentVersion.hiddenInstructions,
                                     drinkingLevel: selectedCard.currentVersion.drinkingLevel as
                                         | 0
                                         | 1
@@ -384,6 +345,9 @@ export default function MyCards() {
                                     isGameChanger: selectedCard.currentVersion.isGameChanger,
                                     cardType: selectedCard.cardType,
                                     gameTags: selectedCard.currentVersion.gameTags.map((g) => g.id),
+                                    requirementIds: selectedCard.currentVersion.requirements.map(
+                                        (r) => r.id
+                                    ),
                                     imageId: selectedCard.currentVersion.imageId ?? undefined,
                                 }}
                                 showCardTypeSelector={false}
@@ -466,24 +430,6 @@ export default function MyCards() {
                                 )}
                             </div>
 
-                            {/* ── Admin actions ─────────────────────────────── */}
-                            {user.isAdmin && (
-                                <>
-                                    <div style={styles.divider} />
-                                    <div style={styles.modalSection}>
-                                        <p style={styles.sectionLabel}>ADMIN</p>
-                                        <button
-                                            style={styles.adminActionButton}
-                                            onClick={handleToggleGlobal}
-                                            disabled={isPending}
-                                        >
-                                            {selectedCard.isGlobal
-                                                ? "Demote from global pool"
-                                                : "Promote to global pool"}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
 
                             {editError && <p style={styles.errorInline}>{editError}</p>}
 
@@ -721,11 +667,6 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: "pointer",
         minHeight: "32px",
     },
-    filterSep: {
-        color: "var(--color-border)",
-        fontSize: "8px",
-    },
-
     // Card tiles
     tileList: {
         display: "flex",
@@ -825,17 +766,6 @@ const styles: Record<string, React.CSSProperties> = {
         padding: "1px var(--space-2)",
         flexShrink: 0,
     },
-    badgeGlobal: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.1em",
-        color: "var(--color-accent-primary)",
-        border: "1px solid var(--color-accent-primary)",
-        padding: "1px var(--space-2)",
-        flexShrink: 0,
-    },
-
     // ── Modal ─────────────────────────────────────────────────────────────────
     modalRoot: {
         display: "flex",

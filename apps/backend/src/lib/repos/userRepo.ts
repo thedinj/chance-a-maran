@@ -22,6 +22,37 @@ export function mapUser(row: DbUser): User {
     };
 }
 
+export interface AdminUser {
+    id: string;
+    email: string;
+    displayName: string;
+    isAdmin: boolean;
+    cardCount: number;
+    createdAt: string;
+}
+
+export function findAll(): AdminUser[] {
+    const rows = db
+        .prepare(
+            `SELECT u.id, u.email, u.display_name, u.is_admin, u.created_at,
+                    COUNT(c.id) AS card_count
+             FROM users u
+             LEFT JOIN cards c ON c.author_user_id = u.id
+             GROUP BY u.id
+             ORDER BY u.created_at DESC`
+        )
+        .all() as Array<DbUser & { card_count: number }>;
+
+    return rows.map((r) => ({
+        id: r.id,
+        email: r.email,
+        displayName: r.display_name,
+        isAdmin: intToBool(r.is_admin),
+        cardCount: r.card_count,
+        createdAt: r.created_at,
+    }));
+}
+
 export function findById(id: string): DbUser | null {
     return (db.prepare("SELECT * FROM users WHERE id = ?").get(id) as DbUser | undefined) ?? null;
 }

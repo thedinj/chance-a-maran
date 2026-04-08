@@ -17,6 +17,7 @@ import type {
     LoginRequest,
     Player,
     RegisterRequest,
+    RequirementElement,
     Session,
     SessionState,
     SessionSummary,
@@ -392,6 +393,10 @@ export class ApiClient {
         return this.request<Game[]>("GET", "/api/games");
     }
 
+    getRequirementElements() {
+        return this.request<RequirementElement[]>("GET", "/api/requirement-elements");
+    }
+
     // ── My Cards management ───────────────────────────────────────────────────
 
     getMyCards() {
@@ -402,7 +407,6 @@ export class ApiClient {
         const params = new URLSearchParams();
         if (filters?.search) params.set("search", filters.search);
         if (filters?.active !== undefined) params.set("active", String(filters.active));
-        if (filters?.isGlobal !== undefined) params.set("isGlobal", String(filters.isGlobal));
         const query = params.size ? `?${params}` : "";
         return this.request<Card[]>("GET", `/api/cards${query}`);
     }
@@ -423,11 +427,4 @@ export class ApiClient {
         return this.request<CardVersion[]>("GET", `/api/cards/${cardId}/versions`);
     }
 
-    promoteToGlobal(cardId: string) {
-        return this.request<Card>("POST", `/api/cards/${cardId}/promote`);
-    }
-
-    demoteFromGlobal(cardId: string) {
-        return this.request<Card>("POST", `/api/cards/${cardId}/demote`);
-    }
 }

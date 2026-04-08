@@ -49,7 +49,7 @@ function DrawEntry({
     const cv = event.cardVersion;
     const drinkEmoji = cv.drinkingLevel > 0 ? DRINK_EMOJI[cv.drinkingLevel] : null;
     const spiceLabel = cv.spiceLevel > 0 ? SPICE_LABELS[cv.spiceLevel] : null;
-    const showLock = cv.hiddenDescription && !event.descriptionShared;
+    const showLock = cv.hiddenInstructions !== null && !event.descriptionShared;
 
     return (
         <button style={styles.drawEntry} onClick={onToggle} aria-expanded={expanded}>

@@ -20,6 +20,15 @@
                 "group": "devServers",
                 "reveal": "always"
             }
+        },
+        {
+            "label": "Import Legacy Cards",
+            "type": "shell",
+            "command": "pnpm --filter backend db:import",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
         }
     ]
 }

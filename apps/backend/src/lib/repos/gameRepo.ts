@@ -31,6 +31,26 @@ export function findAll(): Game[] {
     return stmts.findAll.all().map(mapGame);
 }
 
+export function findAllIncludingInactive(): DbGame[] {
+    return db.prepare("SELECT * FROM games ORDER BY name ASC").all() as DbGame[];
+}
+
+export function countCards(gameId: string): number {
+    const row = db
+        .prepare(
+            "SELECT COUNT(DISTINCT cgt.card_version_id) AS c FROM card_game_tags cgt WHERE cgt.game_id = ?"
+        )
+        .get(gameId) as { c: number };
+    return row.c;
+}
+
+export function update(id: string, data: { name?: string; slug?: string }): void {
+    if (data.name !== undefined)
+        db.prepare("UPDATE games SET name = ? WHERE id = ?").run(data.name, id);
+    if (data.slug !== undefined)
+        db.prepare("UPDATE games SET slug = ? WHERE id = ?").run(data.slug, id);
+}
+
 export function findById(id: string): DbGame | null {
     return stmts.findById.get(id) ?? null;
 }

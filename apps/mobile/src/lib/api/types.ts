@@ -12,6 +12,7 @@ export type {
     DrawEvent,
     CardTransfer,
     Game,
+    RequirementElement,
     // API envelope
     ApiSuccess,
     ApiFailure,

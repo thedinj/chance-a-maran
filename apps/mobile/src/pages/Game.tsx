@@ -711,7 +711,7 @@ function CardDetailOverlay({
     const [sharing, setSharing] = useState(false);
     const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
 
-    const showActionBarShareBtn = cv.hiddenDescription && !sharedViaActionBar && isDrawer;
+    const showActionBarShareBtn = cv.hiddenInstructions !== null && !sharedViaActionBar && isDrawer;
 
     // Current transfer target name (for retract confirmation)
     const pendingTargetName =

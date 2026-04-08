@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { GameSchema } from "./game";
 
+export const RequirementElementSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    active: z.boolean(),
+});
+
+export type RequirementElement = z.infer<typeof RequirementElementSchema>;
+
 /** Immutable snapshot of a card at a point in time. Saves never overwrite; they create a new version. */
 export const CardVersionSchema = z.object({
     id: z.string(),
@@ -8,8 +16,8 @@ export const CardVersionSchema = z.object({
     versionNumber: z.number().int().nonnegative(),
     title: z.string(),
     description: z.string(),
-    /** If true, only the drawing player sees the description initially. They can choose to share it. */
-    hiddenDescription: z.boolean(),
+    /** Text revealed only to the drawing player initially. Null if no hidden instructions. */
+    hiddenInstructions: z.string().nullable(),
     imageId: z.string().nullable(),
     /**
      * How much drinking this card involves for the drawing player.
@@ -27,6 +35,8 @@ export const CardVersionSchema = z.object({
     isGameChanger: z.boolean(),
     /** Empty = universal (eligible for any session). */
     gameTags: z.array(GameSchema),
+    /** Physical or game-specific props required to play this card. Empty = no requirements. */
+    requirements: z.array(RequirementElementSchema),
     authoredByUserId: z.string(),
     /** Denormalised display name of the authoring user at the time the version is served. */
     authorDisplayName: z.string(),

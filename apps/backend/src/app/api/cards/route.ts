@@ -1,19 +1,14 @@
-import { NextRequest } from "next/server";
 import { AuthorizationError, SubmitCardRequestSchema, ValidationError } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
-import { withAuth } from "@/lib/auth/withAuth";
+import { withAdmin, withAuth } from "@/lib/auth/withAuth";
 import * as cardService from "@/lib/services/cardService";
 import * as cardRepo from "@/lib/repos/cardRepo";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/cards — admin only, full card pool with optional filters. */
-export const GET = withAuth(async (req) => {
+export const GET = withAdmin(async (req) => {
     try {
-        if (req.auth.type !== "user" || !req.auth.scopes.includes("admin")) {
-            return fail(new AuthorizationError("Admin access required"));
-        }
-
         const { searchParams } = new URL(req.url);
         const search = searchParams.get("search") ?? undefined;
         const activeParam = searchParams.get("active");

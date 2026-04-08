@@ -52,6 +52,11 @@ export async function register(
     if (code.expires_at && new Date(code.expires_at) < new Date()) {
         throw new InvitationCodeError("Invitation code has expired");
     }
+    if (code.max_uses !== null) {
+        const useCount = invitationCodeRepo.countUses(code.id);
+        if (useCount >= code.max_uses)
+            throw new InvitationCodeError("Invitation code has reached its usage limit");
+    }
 
     // Check email uniqueness
     if (userRepo.findByEmail(req.email)) {

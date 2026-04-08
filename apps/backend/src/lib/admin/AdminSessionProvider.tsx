@@ -1,8 +1,9 @@
 "use client";
 
-import type { User } from "@chance/core";
+import type { AuthResponse, User } from "@chance/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSessionContext } from "./AdminSessionContext";
+import { parseApiResult } from "./useAdminFetch";
 
 interface AdminSessionProviderProps {
     children: React.ReactNode;
@@ -48,18 +49,17 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                     body: JSON.stringify({ refreshToken: currentRefreshToken }),
                 });
 
-                if (!response.ok) {
-                    return false;
-                }
+                // Restore user from storage — refresh endpoint doesn't return user
+                const storedUserRaw = localStorage.getItem(STORAGE_USER_KEY);
+                if (!storedUserRaw) return false;
+                const storedUser: User = JSON.parse(storedUserRaw) as User;
+                if (!storedUser.isAdmin) return false;
 
-                const data = await response.json();
+                const { accessToken, refreshToken } = await parseApiResult<
+                    Pick<AuthResponse, "accessToken" | "refreshToken">
+                >(response);
 
-                // Verify admin scope
-                if (!data.user.scopes || !data.user.scopes.includes("admin")) {
-                    return false;
-                }
-
-                persistSession(data.accessToken, data.refreshToken, data.user);
+                persistSession(accessToken, refreshToken, storedUser);
                 return true;
             } catch (error) {
                 console.error("Token refresh failed:", error);
@@ -106,19 +106,13 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                 body: JSON.stringify({ email, password }),
             });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || "Login failed");
-            }
+            const { user, accessToken, refreshToken } = await parseApiResult<AuthResponse>(response);
 
-            const data = await response.json();
-
-            // Verify admin scope
-            if (!data.user.scopes || !data.user.scopes.includes("admin")) {
+            if (!user.isAdmin) {
                 throw new Error("Access denied: admin privileges required");
             }
 
-            persistSession(data.accessToken, data.refreshToken, data.user);
+            persistSession(accessToken, refreshToken, user);
         },
         [persistSession]
     );

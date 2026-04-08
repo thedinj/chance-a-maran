@@ -11,6 +11,7 @@ export function initializeDatabase() {
             created_by_user_id TEXT REFERENCES users(id),
             expires_at         DATETIME,
             is_active          INTEGER NOT NULL DEFAULT 1,
+            max_uses           INTEGER,
             created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -113,13 +114,26 @@ export function initializeDatabase() {
             version_number       INTEGER NOT NULL,
             title                TEXT NOT NULL,
             description          TEXT NOT NULL,
-            hidden_description   INTEGER NOT NULL DEFAULT 0,
+            hidden_instructions  TEXT,
             image_id             TEXT REFERENCES card_images(id),
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,
             authored_by_user_id  TEXT NOT NULL REFERENCES users(id),
             created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Physical/game prop requirements for card versions
+        CREATE TABLE IF NOT EXISTS requirement_elements (
+            id     TEXT NOT NULL PRIMARY KEY,
+            title  TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS card_version_requirements (
+            card_version_id TEXT NOT NULL REFERENCES card_versions(id) ON DELETE CASCADE,
+            element_id      TEXT NOT NULL REFERENCES requirement_elements(id),
+            PRIMARY KEY (card_version_id, element_id)
         );
 
         -- Tags linking card versions to game modes

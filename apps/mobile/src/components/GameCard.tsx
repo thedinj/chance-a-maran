@@ -74,14 +74,14 @@ export function CardFront({
     const isDrawer = event.playerId === activePlayerId;
     const [descriptionShared, setDescriptionShared] = useState(event.descriptionShared);
     const [descrRevealed, setDescrRevealed] = useState(
-        !cv.hiddenDescription || event.descriptionShared
+        !cv.hiddenInstructions !== null || event.descriptionShared
     );
     const [sharing, setSharing] = useState(false);
 
     const showHiddenToggle =
-        !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && !descrRevealed;
+        !readOnly && cv.hiddenInstructions !== null && !descriptionShared && isDrawer && !descrRevealed;
     const showShareBtn =
-        !readOnly && cv.hiddenDescription && !descriptionShared && isDrawer && descrRevealed;
+        !readOnly && cv.hiddenInstructions !== null && !descriptionShared && isDrawer && descrRevealed;
 
     async function handleShare() {
         setSharing(true);
@@ -162,7 +162,7 @@ export function CardFront({
                                     Tap to reveal description
                                 </span>
                             </button>
-                        ) : readOnly && cv.hiddenDescription && !descriptionShared ? (
+                        ) : readOnly && cv.hiddenInstructions !== null && !descriptionShared ? (
                             <div style={styles.hiddenDescArea}>
                                 <span style={styles.hiddenDescLabel}>HIDDEN</span>
                             </div>

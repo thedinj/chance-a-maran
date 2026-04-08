@@ -154,7 +154,7 @@ export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 export const SubmitCardRequestSchema = z.object({
     title: z.string().min(1, "Title is required.").max(MAX_CARD_TITLE_LENGTH),
     description: z.string().min(1, "Description is required.").max(MAX_CARD_DESCRIPTION_LENGTH),
-    hiddenDescription: z.boolean(),
+    hiddenInstructions: z.string().max(MAX_CARD_DESCRIPTION_LENGTH).nullable(),
     imageId: z.string().min(1, "A card image is required."),
     drinkingLevel: z.number().int().min(0).max(3),
     spiceLevel: z.number().int().min(0).max(3),
@@ -165,6 +165,8 @@ export const SubmitCardRequestSchema = z.object({
     isGameChanger: z.boolean(),
     cardType: z.enum(["standard", "reparations"]),
     gameTags: z.array(z.string()),
+    /** IDs of existing requirement_elements. End users select from the list; they cannot create new elements. */
+    requirementIds: z.array(z.string()),
 });
 export type SubmitCardRequest = z.infer<typeof SubmitCardRequestSchema>;
 
@@ -187,7 +189,6 @@ export type ImageUploadResponse = z.infer<typeof ImageUploadResponseSchema>;
 export const GetAllCardsFiltersSchema = z.object({
     search: z.string().optional(),
     active: z.boolean().optional(),
-    isGlobal: z.boolean().optional(),
 });
 export type GetAllCardsFilters = z.infer<typeof GetAllCardsFiltersSchema>;
 
