@@ -10,6 +10,7 @@ import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as sessionRepo from "@/lib/repos/sessionRepo";
 import * as playerRepo from "@/lib/repos/playerRepo";
+import * as userRepo from "@/lib/repos/userRepo";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,14 @@ export const PATCH = withAuth(async (req, { params }) => {
             name: validatedName,
             filterSettings,
         });
+
+        // Persist the host's element selection for future sessions
+        if (filterSettings.availableElementIds && hostPlayer?.user_id) {
+            userRepo.update(hostPlayer.user_id, {
+                lastElementSelection: filterSettings.availableElementIds,
+            });
+        }
+
         return ok(sessionRepo.mapSession(updated));
     } catch (err) {
         return handleError(err);

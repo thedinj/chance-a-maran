@@ -13,11 +13,19 @@ export const GET = withAdmin(async (req) => {
         const search = searchParams.get("search") ?? undefined;
         const activeParam = searchParams.get("active");
         const isGlobalParam = searchParams.get("isGlobal");
+        const pendingGlobalParam = searchParams.get("pendingGlobal");
+        const gameId = searchParams.get("gameId") ?? undefined;
+        const drinkingLevelParam = searchParams.get("drinkingLevel");
+        const spiceLevelParam = searchParams.get("spiceLevel");
 
         const cards = cardRepo.findAll({
             search,
             active: activeParam !== null ? activeParam === "true" : undefined,
             isGlobal: isGlobalParam !== null ? isGlobalParam === "true" : undefined,
+            pendingGlobal: pendingGlobalParam !== null ? pendingGlobalParam === "true" : undefined,
+            gameId,
+            drinkingLevel: drinkingLevelParam !== null ? Number(drinkingLevelParam) : undefined,
+            spiceLevel: spiceLevelParam !== null ? Number(spiceLevelParam) : undefined,
         });
 
         return ok(cards);

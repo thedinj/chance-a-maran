@@ -15,7 +15,7 @@ import { useCards } from "../cards/useCards";
 import { AppHeader } from "../components/AppHeader";
 import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import { apiClient } from "../lib/api";
-import type { Game } from "../lib/api/types";
+import type { Game, RequirementElement } from "../lib/api/types";
 import { useSession } from "../session/useSession";
 
 // ─── Form schema ──────────────────────────────────────────────────────────────
@@ -70,12 +70,16 @@ export default function GameSettings() {
 
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
+    const [availableElements, setAvailableElements] = useState<RequirementElement[]>([]);
+    const [elementsLoading, setElementsLoading] = useState(true);
+    const [venueExpanded, setVenueExpanded] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     const {
         register,
         handleSubmit,
         control,
+        setValue,
         formState: { errors },
     } = useForm<GameSettingsFormValues>({
         resolver: zodResolver(GameSettingsFormSchema),
@@ -86,6 +90,7 @@ export default function GameSettings() {
                 maxSpiceLevel: session?.filterSettings.maxSpiceLevel ?? 2,
                 gameTags: session?.filterSettings.gameTags ?? [],
                 includeGlobalCards: session?.filterSettings.includeGlobalCards ?? true,
+                availableElementIds: session?.filterSettings.availableElementIds,
             },
             // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
             cardSharing: "network",
@@ -97,7 +102,41 @@ export default function GameSettings() {
             if (result.ok) setAvailableGames(result.data);
             setGamesLoading(false);
         });
-    }, []);
+
+        // Fetch elements, then resolve initial selection from user profile or defaults
+        apiClient.getRequirementElements().then((elResult) => {
+            if (elResult.ok) {
+                setAvailableElements(elResult.data);
+
+                // In edit mode, use the session's existing selection
+                if (isEditMode && session?.filterSettings.availableElementIds) {
+                    setElementsLoading(false);
+                    return;
+                }
+
+                // For new sessions, try user's last selection, else use defaults
+                apiClient.getUserProfile().then((profileResult) => {
+                    if (profileResult.ok && profileResult.data.lastElementSelection) {
+                        setValue(
+                            "filterSettings.availableElementIds",
+                            profileResult.data.lastElementSelection
+                        );
+                    } else {
+                        // Fall back to default-available elements
+                        setValue(
+                            "filterSettings.availableElementIds",
+                            elResult.data
+                                .filter((el) => el.defaultAvailable)
+                                .map((el) => el.id)
+                        );
+                    }
+                    setElementsLoading(false);
+                });
+            } else {
+                setElementsLoading(false);
+            }
+        });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Registered-only page
     if (!user) {
@@ -188,6 +227,10 @@ export default function GameSettings() {
                     {/* ── Filters ─────────────────────────────────────────── */}
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>FILTERS</p>
+                        <p style={styles.hint}>
+                            Drinking and content themes are independent — a session can
+                            be max drinking and fully Clean.
+                        </p>
 
                         <Controller
                             name="filterSettings.maxDrinkingLevel"
@@ -229,7 +272,7 @@ export default function GameSettings() {
                             render={({ field }) => (
                                 <div style={styles.toggleRow}>
                                     <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Content rating</span>
+                                        <span style={styles.toggleTitle}>Themes</span>
                                     </div>
                                     <div style={styles.selectorGroup}>
                                         {([0, 1, 2, 3] as const).map((level) => (
@@ -244,12 +287,12 @@ export default function GameSettings() {
                                                 disabled={isPending}
                                             >
                                                 {level === 0
-                                                    ? "G"
+                                                    ? "Clean"
                                                     : level === 1
-                                                      ? "PG"
+                                                      ? "Mild"
                                                       : level === 2
-                                                        ? "PG-13"
-                                                        : "R"}
+                                                        ? "Edgy"
+                                                        : "Spicy"}
                                             </button>
                                         ))}
                                     </div>
@@ -301,6 +344,137 @@ export default function GameSettings() {
                                     </div>
                                 </div>
                             )}
+                        />
+                    )}
+
+                    {/* ── Venue elements ──────────────────────────────────── */}
+                    {!elementsLoading && availableElements.length > 0 && (
+                        <Controller
+                            name="filterSettings.availableElementIds"
+                            control={control}
+                            render={({ field }) => {
+                                const selected = field.value ?? [];
+                                const defaultOnElements = availableElements.filter(
+                                    (el) => el.defaultAvailable
+                                );
+                                const extraElements = availableElements.filter(
+                                    (el) => !el.defaultAvailable
+                                );
+                                const selectedCount = selected.length;
+                                const totalCount = availableElements.length;
+
+                                function toggle(id: string) {
+                                    field.onChange(
+                                        selected.includes(id)
+                                            ? selected.filter((x) => x !== id)
+                                            : [...selected, id]
+                                    );
+                                }
+
+                                return (
+                                    <>
+                                        <div style={styles.divider} />
+                                        <div style={styles.section}>
+                                            <button
+                                                style={styles.collapsibleHeader}
+                                                onClick={() => setVenueExpanded((v) => !v)}
+                                                type="button"
+                                            >
+                                                <span style={styles.sectionLabel}>VENUE</span>
+                                                <span style={styles.collapsibleMeta}>
+                                                    {selectedCount}/{totalCount}
+                                                    {" "}
+                                                    {venueExpanded ? "▴" : "▾"}
+                                                </span>
+                                            </button>
+
+                                            {!venueExpanded ? (
+                                                /* Collapsed: show summary of non-default selections */
+                                                <p style={styles.hint}>
+                                                    {extraElements.filter((el) =>
+                                                        selected.includes(el.id)
+                                                    ).length > 0
+                                                        ? `Extras: ${extraElements
+                                                              .filter((el) =>
+                                                                  selected.includes(el.id)
+                                                              )
+                                                              .map((el) => el.title)
+                                                              .join(", ")}`
+                                                        : "Tap to configure available props & items"}
+                                                </p>
+                                            ) : (
+                                                /* Expanded: full chip list */
+                                                <>
+                                                    <p style={styles.hint}>
+                                                        Select items available at your venue. Cards
+                                                        requiring missing items won't be drawn.
+                                                    </p>
+
+                                                    {defaultOnElements.length > 0 && (
+                                                        <>
+                                                            <p style={styles.venueGroupLabel}>
+                                                                Common
+                                                            </p>
+                                                            <div style={styles.tagList}>
+                                                                {defaultOnElements.map((el) => {
+                                                                    const isOn =
+                                                                        selected.includes(el.id);
+                                                                    return (
+                                                                        <button
+                                                                            key={el.id}
+                                                                            style={
+                                                                                isOn
+                                                                                    ? styles.elementChipOn
+                                                                                    : styles.elementChipOff
+                                                                            }
+                                                                            onClick={() =>
+                                                                                toggle(el.id)
+                                                                            }
+                                                                            disabled={isPending}
+                                                                        >
+                                                                            {el.title}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {extraElements.length > 0 && (
+                                                        <>
+                                                            <p style={styles.venueGroupLabel}>
+                                                                Extras
+                                                            </p>
+                                                            <div style={styles.tagList}>
+                                                                {extraElements.map((el) => {
+                                                                    const isOn =
+                                                                        selected.includes(el.id);
+                                                                    return (
+                                                                        <button
+                                                                            key={el.id}
+                                                                            style={
+                                                                                isOn
+                                                                                    ? styles.elementChipOn
+                                                                                    : styles.elementChipOff
+                                                                            }
+                                                                            onClick={() =>
+                                                                                toggle(el.id)
+                                                                            }
+                                                                            disabled={isPending}
+                                                                        >
+                                                                            {el.title}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </>
+                                );
+                            }}
                         />
                     )}
 
@@ -627,6 +801,57 @@ const styles: Record<string, React.CSSProperties> = {
         display: "inline-flex",
         alignItems: "center",
     },
+
+    // Venue elements
+    collapsibleHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        minHeight: "28px",
+    },
+    collapsibleMeta: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        flexShrink: 0,
+    },
+    venueGroupLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        color: "var(--color-text-secondary)",
+        margin: 0,
+    },
+    elementChipOff: {
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    } as React.CSSProperties,
+    elementChipOn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-amber)",
+        color: "var(--color-accent-amber)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    } as React.CSSProperties,
 
     // Card sharing
     radioStack: {

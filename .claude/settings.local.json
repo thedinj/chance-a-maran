@@ -36,7 +36,13 @@
       "Bash(pnpm:*)",
       "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
       "Bash(xargs grep:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && grep -E \"^export const \\(GET|POST|PATCH|DELETE|PUT\\)\" {} | head -1')",
+      "Bash(sed 's/===\\\\s*//g')",
+      "Bash(sed 's/\\\\s*===.*//')",
+      "Bash(node:*)",
+      "Bash(find /d/Users/thedinj/Programming/Apps/chance-a-maran -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec grep -l \"FilterSettings\\\\|filter_settings\" {} \\\\;)",
+      "Bash(cat /d/Users/thedinj/Programming/Apps/basket-bot/.github/workflows/*.yml)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

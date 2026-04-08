@@ -358,6 +358,13 @@ export class ApiClient {
 
     // ── User management ───────────────────────────────────────────────────────
 
+    getUserProfile() {
+        return this.request<User & { lastElementSelection: string[] | null }>(
+            "GET",
+            "/api/users/me"
+        );
+    }
+
     updateUser(req: UpdateUserRequest) {
         return this.request<User>("PATCH", "/api/users/me", req);
     }

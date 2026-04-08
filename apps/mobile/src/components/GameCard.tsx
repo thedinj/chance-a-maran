@@ -58,6 +58,8 @@ interface CardFrontProps {
     event: DrawEvent;
     /** Pass true while a flip animation is in flight to animate the sheen effect. */
     flipInFlight?: boolean;
+    /** Flip duration in ms — syncs the sheen transition to the actual flip speed. */
+    flipDurationMs?: number;
     /** When true: disables interactive description reveal/share. Used in carousel slots. */
     readOnly?: boolean;
 }
@@ -65,6 +67,7 @@ interface CardFrontProps {
 export function CardFront({
     event,
     flipInFlight = false,
+    flipDurationMs = 1180,
     readOnly = false,
 }: CardFrontProps): React.JSX.Element {
     const cv = event.cardVersion;
@@ -114,8 +117,7 @@ export function CardFront({
                             ...styles.revealContentSheen,
                             transform: flipInFlight ? "translateX(105%)" : "translateX(-86%)",
                             opacity: flipInFlight ? 0.38 : 0,
-                            transition:
-                                "transform 1180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms var(--ease)",
+                            transition: `transform ${flipDurationMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms var(--ease)`,
                         }}
                     />
                     <div style={styles.revealCardContentBody}>
@@ -195,6 +197,8 @@ interface FlippingCardProps {
     overrideDuration?: number;
     /** Explicit pre-flip hold time in ms. Takes precedence over overrideDuration's implicit 0-delay. */
     dramaDelayMs?: number;
+    /** When true, suppress flip timers entirely. Flip starts when this transitions to false. */
+    flipHeld?: boolean;
 }
 
 export function FlippingCard({
@@ -202,6 +206,7 @@ export function FlippingCard({
     onFlipComplete,
     overrideDuration,
     dramaDelayMs,
+    flipHeld,
 }: FlippingCardProps): React.JSX.Element {
     const cv = event.cardVersion;
     const isGameChanger = Boolean(cv.isGameChanger);
@@ -235,6 +240,8 @@ export function FlippingCard({
         setFlipStarted(false);
         setFlipComplete(false);
 
+        if (flipHeld) return;
+
         const startTimer = window.setTimeout(() => setFlipStarted(true), flipDelayMs);
         const doneTimer = window.setTimeout(
             () => setFlipComplete(true),
@@ -245,7 +252,7 @@ export function FlippingCard({
             window.clearTimeout(startTimer);
             window.clearTimeout(doneTimer);
         };
-    }, [event.id, flipDelayMs, flipDurationMs]);
+    }, [event.id, flipDelayMs, flipDurationMs, flipHeld]);
 
     useEffect(() => {
         if (flipComplete) onFlipComplete?.();
@@ -284,7 +291,7 @@ export function FlippingCard({
 
                 {/* Front face — initially hidden (rotated 180deg away from viewer) */}
                 <div style={{ ...styles.revealFlipFace, transform: "rotateY(180deg)" }}>
-                    <CardFront event={event} flipInFlight={flipInFlight} />
+                    <CardFront event={event} flipInFlight={flipInFlight} flipDurationMs={flipDurationMs} />
                 </div>
             </div>
         </div>

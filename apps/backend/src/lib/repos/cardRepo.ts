@@ -11,6 +11,7 @@ export interface DbCard {
     card_type: "standard" | "reparations";
     active: number;
     is_global: number;
+    pending_global: number;
     created_in_session_id: string | null;
     current_version_id: string;
     created_at: string;
@@ -40,6 +41,7 @@ export interface DrawPoolEntry {
     createdInSessionId: string | null;
     netVotes: number;
     gameTagIds: string[];
+    requirementElementIds: string[];
 }
 
 // ─── Mapping ──────────────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ export interface DrawPoolEntry {
 function getGameTagsForVersion(cardVersionId: string): Game[] {
     return db
         .prepare(
-            `SELECT g.id, g.name, g.slug
+            `SELECT g.id, g.name
              FROM card_game_tags cgt
              JOIN games g ON cgt.game_id = g.id
              WHERE cgt.card_version_id = ?
@@ -60,13 +62,18 @@ function getGameTagsForVersion(cardVersionId: string): Game[] {
 export function mapCardVersion(row: DbCardVersion): CardVersion {
     const rawRequirements = db
         .prepare(
-            `SELECT re.id, re.title, re.active
+            `SELECT re.id, re.title, re.active, re.default_available
              FROM card_version_requirements cvr
              JOIN requirement_elements re ON cvr.element_id = re.id
              WHERE cvr.card_version_id = ?
              ORDER BY re.title`
         )
-        .all(row.id) as Array<{ id: string; title: string; active: number }>;
+        .all(row.id) as Array<{
+        id: string;
+        title: string;
+        active: number;
+        default_available: number;
+    }>;
 
     return {
         id: row.id,
@@ -84,6 +91,7 @@ export function mapCardVersion(row: DbCardVersion): CardVersion {
             id: r.id,
             title: r.title,
             active: intToBool(r.active),
+            defaultAvailable: intToBool(r.default_available),
         })),
         authoredByUserId: row.authored_by_user_id,
         authorDisplayName: row.author_display_name,
@@ -98,6 +106,7 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
         cardType: cardRow.card_type,
         active: intToBool(cardRow.active),
         isGlobal: intToBool(cardRow.is_global),
+        pendingGlobal: intToBool(cardRow.pending_global),
         createdInSessionId: cardRow.created_in_session_id,
         currentVersionId: cardRow.current_version_id,
         currentVersion: mapCardVersion(versionRow),
@@ -166,7 +175,11 @@ export function findByAuthorUserId(userId: string): Card[] {
 export function findAll(filters?: {
     active?: boolean;
     isGlobal?: boolean;
+    pendingGlobal?: boolean;
     search?: string;
+    gameId?: string;
+    drinkingLevel?: number;
+    spiceLevel?: number;
 }): Card[] {
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -179,9 +192,25 @@ export function findAll(filters?: {
         conditions.push("c.is_global = ?");
         params.push(boolToInt(filters.isGlobal));
     }
+    if (filters?.pendingGlobal !== undefined) {
+        conditions.push("c.pending_global = ?");
+        params.push(boolToInt(filters.pendingGlobal));
+    }
     if (filters?.search) {
         conditions.push("cv.title LIKE ?");
         params.push(`%${filters.search}%`);
+    }
+    if (filters?.gameId) {
+        conditions.push("EXISTS (SELECT 1 FROM card_game_tags cgt WHERE cgt.card_version_id = cv.id AND cgt.game_id = ?)");
+        params.push(filters.gameId);
+    }
+    if (filters?.drinkingLevel !== undefined) {
+        conditions.push("cv.drinking_level = ?");
+        params.push(filters.drinkingLevel);
+    }
+    if (filters?.spiceLevel !== undefined) {
+        conditions.push("cv.spice_level = ?");
+        params.push(filters.spiceLevel);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -324,7 +353,15 @@ export function setActive(id: string, active: boolean): void {
 }
 
 export function setGlobal(id: string, isGlobal: boolean): void {
-    db.prepare("UPDATE cards SET is_global = ? WHERE id = ?").run(boolToInt(isGlobal), id);
+    db.prepare("UPDATE cards SET is_global = ?, pending_global = 0 WHERE id = ?").run(boolToInt(isGlobal), id);
+}
+
+export function setGlobalNomination(id: string, pending: boolean): void {
+    db.prepare("UPDATE cards SET pending_global = ? WHERE id = ?").run(boolToInt(pending), id);
+}
+
+export function setCardType(id: string, cardType: "standard" | "reparations"): void {
+    db.prepare("UPDATE cards SET card_type = ? WHERE id = ?").run(cardType, id);
 }
 
 // ─── Draw pool query ──────────────────────────────────────────────────────────
@@ -348,7 +385,9 @@ export function getDrawPool(
                  0
                )                 AS net_votes,
                (SELECT GROUP_CONCAT(game_id)
-                FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids
+                FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids,
+               (SELECT GROUP_CONCAT(element_id)
+                FROM card_version_requirements WHERE card_version_id = cv.id) AS requirement_element_ids
              FROM cards c
              JOIN card_versions cv ON cv.id = c.current_version_id
              WHERE c.active = 1
@@ -377,6 +416,7 @@ export function getDrawPool(
         created_in_session_id: string | null;
         net_votes: number;
         game_tag_ids: string | null;
+        requirement_element_ids: string | null;
     }>;
 
     return rows.map((r) => ({
@@ -385,5 +425,8 @@ export function getDrawPool(
         createdInSessionId: r.created_in_session_id,
         netVotes: r.net_votes,
         gameTagIds: r.game_tag_ids ? r.game_tag_ids.split(",") : [],
+        requirementElementIds: r.requirement_element_ids
+            ? r.requirement_element_ids.split(",")
+            : [],
     }));
 }

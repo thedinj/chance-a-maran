@@ -6,7 +6,7 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
-import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH } from "@chance/core";
+import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -84,6 +84,13 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const [imageUploading, setImageUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // ── Content warning state ────────────────────────────────────────────────
+    const [contentWarning, setContentWarning] = useState<{
+        suggestDrinking: boolean;
+        suggestSpice: boolean;
+        pendingData: SubmitCardRequest;
+    } | null>(null);
+
     // ── Other state ───────────────────────────────────────────────────────────
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
@@ -104,20 +111,39 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     }, []);
 
     // ── Ref handle ────────────────────────────────────────────────────────────
+    async function doSubmit(data: SubmitCardRequest) {
+        setSubmitError(null);
+        setContentWarning(null);
+        setIsSaving(true);
+        const error = await onValidSubmit(data);
+        setIsSaving(false);
+        if (error) setSubmitError(error);
+    }
+
     useImperativeHandle(ref, () => ({
         submitForm: () =>
             void handleSubmit(async (data) => {
                 setSubmitError(null);
-                setIsSaving(true);
-                const error = await onValidSubmit(data);
-                setIsSaving(false);
-                if (error) setSubmitError(error);
+                setContentWarning(null);
+
+                // Check if content suggests higher rating levels than selected
+                const text = [data.title, data.description, data.hiddenInstructions ?? ""].join(" ");
+                const suggestDrinking = hasDrinkingContent(text) && data.drinkingLevel < 1;
+                const suggestSpice = hasRRatedContent(text) && data.spiceLevel < 3;
+
+                if (suggestDrinking || suggestSpice) {
+                    setContentWarning({ suggestDrinking, suggestSpice, pendingData: data });
+                    return;
+                }
+
+                await doSubmit(data);
             })(),
         reset: () => {
             resetForm();
             setImagePreview(null);
             setPendingImageId(null);
             setSubmitError(null);
+            setContentWarning(null);
         },
     }));
 
@@ -361,9 +387,9 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
 
             <div style={styles.divider} />
 
-            {/* ── Content rating ────────────────────────────────────────────── */}
+            {/* ── Themes ────────────────────────────────────────────────────── */}
             <div style={styles.section}>
-                <p style={styles.sectionLabel}>CONTENT RATING</p>
+                <p style={styles.sectionLabel}>THEMES</p>
                 <Controller
                     name="spiceLevel"
                     control={control}
@@ -371,10 +397,10 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                         <div style={{ display: "flex", gap: "var(--space-2)" }}>
                             {(
                                 [
-                                    ["G", 0],
-                                    ["PG", 1],
-                                    ["PG-13", 2],
-                                    ["R", 3],
+                                    ["Clean", 0],
+                                    ["Mild", 1],
+                                    ["Edgy", 2],
+                                    ["Spicy", 3],
                                 ] as const
                             ).map(([label, val]) => (
                                 <button
@@ -579,6 +605,49 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     </>
                 )}
             </div>
+
+            {/* ── Content warning ───────────────────────────────────────────── */}
+            {contentWarning && (
+                <div style={styles.contentWarning}>
+                    <p style={styles.contentWarningTitle}>Content suggestion</p>
+                    <p style={styles.contentWarningText}>
+                        Your card content may warrant updated ratings:
+                    </p>
+                    {contentWarning.suggestDrinking && (
+                        <p style={styles.contentWarningItem}>Drinking content detected — at least 🍺</p>
+                    )}
+                    {contentWarning.suggestSpice && (
+                        <p style={styles.contentWarningItem}>Adult content detected — Spicy rating</p>
+                    )}
+                    <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
+                        <button
+                            style={styles.contentWarningBtn}
+                            onClick={() => {
+                                const updated = { ...contentWarning.pendingData };
+                                if (contentWarning.suggestDrinking) {
+                                    updated.drinkingLevel = Math.max(updated.drinkingLevel, 1);
+                                    setValue("drinkingLevel", updated.drinkingLevel);
+                                }
+                                if (contentWarning.suggestSpice) {
+                                    updated.spiceLevel = 3;
+                                    setValue("spiceLevel", 3);
+                                }
+                                void doSubmit(updated);
+                            }}
+                            disabled={isSaving}
+                        >
+                            Update my ratings
+                        </button>
+                        <button
+                            style={styles.contentWarningBtnSecondary}
+                            onClick={() => void doSubmit(contentWarning.pendingData)}
+                            disabled={isSaving}
+                        >
+                            Submit as-is
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Submit error ──────────────────────────────────────────────── */}
             {submitError && <p style={styles.submitError}>{submitError}</p>}
@@ -845,5 +914,58 @@ export const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-caption)",
         color: "var(--color-danger)",
         margin: "var(--space-4) var(--space-5) 0",
+    },
+
+    // Content warning
+    contentWarning: {
+        margin: "var(--space-4) var(--space-5) 0",
+        padding: "var(--space-4)",
+        border: "1.5px solid var(--color-accent-amber)",
+        background: "var(--color-surface)",
+    },
+    contentWarningTitle: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        fontWeight: 600,
+        color: "var(--color-accent-amber)",
+        margin: "0 0 var(--space-2)",
+    },
+    contentWarningText: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        margin: "0 0 var(--space-2)",
+        lineHeight: 1.5,
+    },
+    contentWarningItem: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-primary)",
+        margin: "0",
+        lineHeight: 1.8,
+    },
+    contentWarningBtn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-amber)",
+        color: "var(--color-accent-amber)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        padding: "var(--space-2) var(--space-4)",
+        cursor: "pointer",
+        minHeight: "44px",
+    },
+    contentWarningBtnSecondary: {
+        background: "none",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        padding: "var(--space-2) var(--space-4)",
+        cursor: "pointer",
+        minHeight: "44px",
     },
 };

@@ -1,10 +1,8 @@
+Host venue settings (required elements)
 Timing of sfx
 Test hidden instructions
 Setup/update scripts
+LLM tool in admin portal to parse card for spicines/drunkenness?
 DDNS
 
 Mobile/Android version
-
-Android Portal:
-- Tables summary
-- Promote cards to Global

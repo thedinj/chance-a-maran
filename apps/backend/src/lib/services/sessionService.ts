@@ -12,6 +12,8 @@ import { generateAccessToken, generateGuestToken } from "../auth/jwt";
 import type { JwtPayload } from "../auth/types";
 import * as playerRepo from "../repos/playerRepo";
 import * as sessionRepo from "../repos/sessionRepo";
+import * as userRepo from "../repos/userRepo";
+import * as requirementElementRepo from "../repos/requirementElementRepo";
 import { normalizeJoinCode } from "../utils/stringUtils";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
@@ -50,6 +52,13 @@ export function createSession(userId: string, req: CreateSessionRequest): Sessio
     const joinCode = uniqueJoinCode();
     const qrToken = randomUUID();
 
+    // Resolve available elements: client selection → user's last selection → global defaults
+    if (!req.filterSettings.availableElementIds) {
+        const lastSelection = userRepo.getLastElementSelection(userId);
+        req.filterSettings.availableElementIds =
+            lastSelection ?? requirementElementRepo.listDefaultAvailableIds();
+    }
+
     db.transaction(() => {
         sessionRepo.create({
             id: sessionId,
@@ -68,6 +77,11 @@ export function createSession(userId: string, req: CreateSessionRequest): Sessio
         });
 
         sessionRepo.setHostPlayer(sessionId, playerId);
+
+        // Save the host's element selection for next time
+        userRepo.update(userId, {
+            lastElementSelection: req.filterSettings.availableElementIds ?? null,
+        });
     })();
 
     return sessionRepo.mapSession(sessionRepo.findById(sessionId)!);

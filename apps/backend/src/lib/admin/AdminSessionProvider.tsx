@@ -1,6 +1,6 @@
 "use client";
 
-import type { AuthResponse, User } from "@chance/core";
+import type { ApiResult, AuthResponse, User } from "@chance/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSessionContext } from "./AdminSessionContext";
 import { parseApiResult } from "./useAdminFetch";
@@ -49,17 +49,16 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                     body: JSON.stringify({ refreshToken: currentRefreshToken }),
                 });
 
+                const envelope = await response.json() as ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>;
+                if (!envelope.ok) return false; // stale or invalid token — expected, not an error
+
                 // Restore user from storage — refresh endpoint doesn't return user
                 const storedUserRaw = localStorage.getItem(STORAGE_USER_KEY);
                 if (!storedUserRaw) return false;
                 const storedUser: User = JSON.parse(storedUserRaw) as User;
                 if (!storedUser.isAdmin) return false;
 
-                const { accessToken, refreshToken } = await parseApiResult<
-                    Pick<AuthResponse, "accessToken" | "refreshToken">
-                >(response);
-
-                persistSession(accessToken, refreshToken, storedUser);
+                persistSession(envelope.data.accessToken, envelope.data.refreshToken, storedUser);
                 return true;
             } catch (error) {
                 console.error("Token refresh failed:", error);

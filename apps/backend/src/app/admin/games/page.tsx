@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-    Title, Table, Badge, Switch, Button, TextInput, Stack, Group,
-    Modal, Text, Loader, Center,
+    Title, Table, Switch, Button, TextInput, Stack, Group,
+    Modal, Text, Loader, Center, ActionIcon, Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
@@ -11,7 +11,6 @@ import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 interface AdminGame {
     id: string;
     name: string;
-    slug: string;
     active: boolean;
     createdAt: string;
     cardCount: number;
@@ -22,9 +21,12 @@ export default function GamesPage() {
     const [games, setGames] = useState<AdminGame[]>([]);
     const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
-    const [modalOpen, setModalOpen] = useState(false);
+    const [createOpen, setCreateOpen] = useState(false);
     const [newName, setNewName] = useState("");
     const [creating, setCreating] = useState(false);
+    const [editTarget, setEditTarget] = useState<AdminGame | null>(null);
+    const [editName, setEditName] = useState("");
+    const [saving, setSaving] = useState(false);
 
     function loadGames() {
         setLoading(true);
@@ -50,6 +52,29 @@ export default function GamesPage() {
         });
     }
 
+    function openEdit(game: AdminGame) {
+        setEditTarget(game);
+        setEditName(game.name);
+    }
+
+    async function saveEdit() {
+        if (!editTarget || !editName.trim()) return;
+        setSaving(true);
+        const res = await adminFetch(`/api/admin/games/${editTarget.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: editName.trim() }),
+        });
+        const data = await res.json();
+        setSaving(false);
+        if (data.ok) {
+            setGames((prev) => prev.map((g) => g.id === editTarget.id ? data.data as AdminGame : g));
+            setEditTarget(null);
+            notifications.show({ message: "Game updated", color: "green" });
+        } else {
+            notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        }
+    }
+
     async function createGame() {
         if (!newName.trim()) return;
         setCreating(true);
@@ -62,7 +87,7 @@ export default function GamesPage() {
         if (data.ok) {
             setGames((prev) => [...prev, data.data as AdminGame]);
             setNewName("");
-            setModalOpen(false);
+            setCreateOpen(false);
             notifications.show({ message: "Game created", color: "green" });
         } else {
             notifications.show({ message: data.error?.message ?? "Error", color: "red" });
@@ -74,7 +99,7 @@ export default function GamesPage() {
             <Stack gap="md">
                 <Group justify="space-between">
                     <Title order={3}>Games</Title>
-                    <Button size="sm" onClick={() => setModalOpen(true)}>New Game</Button>
+                    <Button size="sm" onClick={() => setCreateOpen(true)}>New Game</Button>
                 </Group>
 
                 {loading ? (
@@ -84,18 +109,15 @@ export default function GamesPage() {
                         <Table.Thead>
                             <Table.Tr>
                                 <Table.Th>Name</Table.Th>
-                                <Table.Th>Slug</Table.Th>
                                 <Table.Th>Active</Table.Th>
                                 <Table.Th>Cards</Table.Th>
+                                <Table.Th />
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
                             {games.map((game) => (
                                 <Table.Tr key={game.id}>
                                     <Table.Td>{game.name}</Table.Td>
-                                    <Table.Td>
-                                        <Text size="xs" c="dimmed" ff="monospace">{game.slug}</Text>
-                                    </Table.Td>
                                     <Table.Td>
                                         <Switch
                                             checked={game.active}
@@ -107,6 +129,17 @@ export default function GamesPage() {
                                     <Table.Td>
                                         <Text size="sm">{game.cardCount}</Text>
                                     </Table.Td>
+                                    <Table.Td>
+                                        <Tooltip label="Edit">
+                                            <ActionIcon
+                                                variant="subtle"
+                                                size="sm"
+                                                onClick={() => openEdit(game)}
+                                            >
+                                                ✏
+                                            </ActionIcon>
+                                        </Tooltip>
+                                    </Table.Td>
                                 </Table.Tr>
                             ))}
                         </Table.Tbody>
@@ -114,7 +147,7 @@ export default function GamesPage() {
                 )}
             </Stack>
 
-            <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="New Game">
+            <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Game">
                 <Stack gap="md">
                     <TextInput
                         label="Name"
@@ -123,11 +156,31 @@ export default function GamesPage() {
                         onChange={(e) => setNewName(e.currentTarget.value)}
                         autoFocus
                     />
-                    <Text size="xs" c="dimmed">
-                        Slug will be auto-derived from the name.
-                    </Text>
                     <Button onClick={() => void createGame()} loading={creating} fullWidth>
                         Create
+                    </Button>
+                </Stack>
+            </Modal>
+
+            <Modal
+                opened={!!editTarget}
+                onClose={() => setEditTarget(null)}
+                title="Edit Game"
+            >
+                <Stack gap="md">
+                    <TextInput
+                        label="Name"
+                        value={editName}
+                        onChange={(e) => setEditName(e.currentTarget.value)}
+                        autoFocus
+                    />
+                    <Button
+                        onClick={() => void saveEdit()}
+                        loading={saving}
+                        disabled={!editName.trim()}
+                        fullWidth
+                    >
+                        Save
                     </Button>
                 </Stack>
             </Modal>

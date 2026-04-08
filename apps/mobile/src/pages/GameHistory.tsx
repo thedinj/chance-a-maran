@@ -7,7 +7,7 @@ import type { DrawEvent, Player, SessionState } from "../lib/api/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const SPICE_LABELS: Record<number, string> = { 0: "G", 1: "PG", 2: "PG-13", 3: "R" };
+const SPICE_LABELS: Record<number, string> = { 0: "Clean", 1: "Mild", 2: "Edgy", 3: "Spicy" };
 const DRINK_EMOJI: Record<number, string> = { 1: "🍺", 2: "🍺🍺", 3: "🍺🍺🍺" };
 
 function formatDate(iso: string): string {

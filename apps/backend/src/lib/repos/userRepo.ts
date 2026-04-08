@@ -9,6 +9,7 @@ export interface DbUser {
     password_hash: string;
     is_admin: number;
     invitation_code_id: string | null;
+    last_element_selection: string | null;
     created_at: string;
 }
 
@@ -83,7 +84,13 @@ export function create(data: {
 
 export function update(
     id: string,
-    patch: Partial<{ displayName: string; email: string; passwordHash: string; isAdmin: boolean }>
+    patch: Partial<{
+        displayName: string;
+        email: string;
+        passwordHash: string;
+        isAdmin: boolean;
+        lastElementSelection: string[] | null;
+    }>
 ): DbUser {
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -104,10 +111,24 @@ export function update(
         sets.push("is_admin = ?");
         params.push(patch.isAdmin ? 1 : 0);
     }
+    if (patch.lastElementSelection !== undefined) {
+        sets.push("last_element_selection = ?");
+        params.push(
+            patch.lastElementSelection ? JSON.stringify(patch.lastElementSelection) : null
+        );
+    }
 
     if (sets.length === 0) return findById(id)!;
 
     params.push(id);
     db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...params);
     return findById(id)!;
+}
+
+export function getLastElementSelection(userId: string): string[] | null {
+    const row = db
+        .prepare("SELECT last_element_selection FROM users WHERE id = ?")
+        .get(userId) as { last_element_selection: string | null } | undefined;
+    if (!row?.last_element_selection) return null;
+    return JSON.parse(row.last_element_selection) as string[];
 }

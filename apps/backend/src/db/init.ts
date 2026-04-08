@@ -20,9 +20,10 @@ export function initializeDatabase() {
             email              TEXT NOT NULL UNIQUE COLLATE NOCASE,
             display_name       TEXT NOT NULL,
             password_hash      TEXT NOT NULL,
-            is_admin           INTEGER NOT NULL DEFAULT 0,
-            invitation_code_id TEXT REFERENCES invitation_codes(id),
-            created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            is_admin               INTEGER NOT NULL DEFAULT 0,
+            invitation_code_id     TEXT REFERENCES invitation_codes(id),
+            last_element_selection TEXT,
+            created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS sessions (
@@ -89,8 +90,7 @@ export function initializeDatabase() {
         -- Games (named game modes / expansions)
         CREATE TABLE IF NOT EXISTS games (
             id         TEXT NOT NULL PRIMARY KEY,
-            name       TEXT NOT NULL,
-            slug       TEXT NOT NULL UNIQUE,
+            name       TEXT NOT NULL UNIQUE,
             active     INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -103,6 +103,7 @@ export function initializeDatabase() {
                 CHECK(card_type IN ('standard', 'reparations')),
             active               INTEGER NOT NULL DEFAULT 1,
             is_global            INTEGER NOT NULL DEFAULT 0,
+            pending_global       INTEGER NOT NULL DEFAULT 0,
             created_in_session_id TEXT REFERENCES sessions(id),
             current_version_id   TEXT NOT NULL,
             created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -125,9 +126,10 @@ export function initializeDatabase() {
 
         -- Physical/game prop requirements for card versions
         CREATE TABLE IF NOT EXISTS requirement_elements (
-            id     TEXT NOT NULL PRIMARY KEY,
-            title  TEXT NOT NULL,
-            active INTEGER NOT NULL DEFAULT 1
+            id                TEXT NOT NULL PRIMARY KEY,
+            title             TEXT NOT NULL,
+            active            INTEGER NOT NULL DEFAULT 1,
+            default_available INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS card_version_requirements (

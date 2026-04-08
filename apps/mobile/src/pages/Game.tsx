@@ -31,13 +31,13 @@ import { useTransfers } from "../transfers/useTransfers";
 // ─── Draw Drama ──────────────────────────────────────────────────────────────
 
 interface DrawDrama {
-    /** Sound to loop from overlay mount until hitSoundAt */
+    /** Sound to loop (standard) or play once before flip (introOnly) */
     loopSound: string;
-    /** One-shot sound fired at hitSoundAt ms */
+    /** If true, loopSound plays once and flip waits for onended before starting */
+    introOnly?: boolean;
+    /** One-shot sound fired when flip completes */
     hitSound: string;
-    /** ms from overlay mount when loop stops and hit sound fires */
-    hitSoundAt: number;
-    /** ms to show card back (static) before the flip begins */
+    /** ms to show card back (static) before the flip begins — ignored when introOnly */
     backMs: number;
     /** flip animation duration ms (passed as overrideDuration to FlippingCard) */
     flipMs: number;
@@ -68,16 +68,15 @@ function getAudio(src: string): HTMLAudioElement {
 const STANDARD_DRAW_DRAMA: DrawDrama = {
     loopSound: "/sound/drumrollloop.mp3",
     hitSound: "/sound/cymbal.mp3",
-    hitSoundAt: 500 + 2000 * 0.75, // 2000ms from mount
-    backMs: 500,
-    flipMs: 2000,
+    backMs: 750,
+    flipMs: 1000,
 };
 
 const GAME_CHANGER_DRAMA: DrawDrama = {
     loopSound: "/sound/drama.mp3",
+    introOnly: true,
     hitSound: "/sound/cymbal.mp3",
-    hitSoundAt: 1500 + 3000 * 0.75, // 3750ms from mount
-    backMs: 1500,
+    backMs: 0, // unused — drama.mp3 duration drives the hold
     flipMs: 3000,
     preFlipLabel: "GAME CHANGER",
 };
@@ -614,26 +613,27 @@ interface CardRevealOverlayProps {
 function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) {
     const loopRef = useRef<HTMLAudioElement | null>(null);
     const [ready, setReady] = useState(false);
+    // introComplete starts true for standard (no intro hold), false for introOnly until audio ends
+    const [introComplete, setIntroComplete] = useState(!drama?.introOnly);
 
     useEffect(() => {
         if (!drama) return;
 
         const loop = getAudio(drama.loopSound);
-        loop.loop = true;
-        loop.play().catch(() => {});
         loopRef.current = loop;
 
-        const hitTimer = window.setTimeout(() => {
-            loopRef.current?.pause();
-            loopRef.current = null;
-            getAudio(drama.hitSound)
-                .play()
-                .catch(() => {});
-        }, drama.hitSoundAt);
+        if (drama.introOnly) {
+            loop.loop = false;
+            loop.onended = () => setIntroComplete(true);
+            loop.play().catch(() => {});
+        } else {
+            loop.loop = true;
+            loop.play().catch(() => {});
+        }
 
         return () => {
-            window.clearTimeout(hitTimer);
-            loopRef.current?.pause();
+            loop.onended = null;
+            loop.pause();
             loopRef.current = null;
         };
     }, [drama]);
@@ -647,12 +647,20 @@ function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) 
                 style={{ ...styles.revealCardWrap, position: "relative", pointerEvents: "auto" }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {drama?.preFlipLabel && <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>}
+                {drama?.preFlipLabel && !introComplete && (
+                    <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>
+                )}
                 <FlippingCard
                     event={event}
-                    dramaDelayMs={drama?.backMs}
+                    dramaDelayMs={drama?.introOnly ? 0 : drama?.backMs}
                     overrideDuration={drama?.flipMs}
-                    onFlipComplete={() => setReady(true)}
+                    flipHeld={drama?.introOnly ? !introComplete : false}
+                    onFlipComplete={() => {
+                        setReady(true);
+                        loopRef.current?.pause();
+                        loopRef.current = null;
+                        if (drama) getAudio(drama.hitSound).play().catch(() => {});
+                    }}
                 />
                 <p
                     style={{

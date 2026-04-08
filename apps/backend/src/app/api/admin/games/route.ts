@@ -23,16 +23,10 @@ export const GET = withAdmin(async () => {
 export const POST = withAdmin(async (req) => {
     try {
         const body = await req.json();
-        const { name, slug } = body as { name?: string; slug?: string };
+        const { name } = body as { name?: string };
         if (!name?.trim()) return fail(new ValidationError("name is required"));
-        const derivedSlug = (slug ?? name)
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, "");
-        if (!derivedSlug) return fail(new ValidationError("slug is invalid"));
 
-        const game = gameRepo.create({ id: randomUUID(), name: name.trim(), slug: derivedSlug });
+        const game = gameRepo.create({ id: randomUUID(), name: name.trim() });
         return ok(game, 201);
     } catch (err) {
         return handleError(err);

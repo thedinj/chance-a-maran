@@ -10,13 +10,14 @@
  *   2. Parses ChanceCardElements, ChanceCards, ChanceCardRequirements
  *   3. Skips cards where Inactive = 1
  *   4. Imports images as BLOBs, maps ratings to drinking/spice levels
- *   5. All cards are set to is_global = 1 and attributed to the admin user
+ *   5. All cards are set to pending_global = 1 (nominated for global promotion) and attributed to the admin user
  */
 
 import { randomUUID } from "crypto";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { config } from "dotenv";
+import { applyContentFloors } from "@chance/core";
 import { initializeDatabase } from "../src/db/init";
 import { db } from "../src/lib/db/db";
 
@@ -31,16 +32,21 @@ type SqlValue = string | number | Buffer | null;
  * Handles: 'quoted strings', NULL, integers, 0xHEXBLOBS.
  */
 function parseInsertRows(sql: string, tableName: string): SqlValue[][] {
-    const tableRegex = new RegExp(
-        `INSERT INTO \`${tableName}\`[^(]*\\(([^)]+)\\)\\s+VALUES\\s+([\\s\\S]*?);`,
+    // Match only the INSERT header up to VALUES — do NOT capture the values block
+    // via regex, because a lazy [\s\S]*?; would terminate inside a quoted string
+    // that contains a semicolon (e.g. "walk anywhere; ride instead.").
+    // Instead, hand the remaining text to parseValueRows, which is quote-aware
+    // and stops naturally after the closing ) of each tuple.
+    const headerRegex = new RegExp(
+        `INSERT INTO \`${tableName}\`[^(]*\\([^)]+\\)\\s+VALUES\\s+`,
         "gi"
     );
     const rows: SqlValue[][] = [];
 
     let match: RegExpExecArray | null;
-    while ((match = tableRegex.exec(sql)) !== null) {
-        const valuesBlock = match[2];
-        rows.push(...parseValueRows(valuesBlock));
+    while ((match = headerRegex.exec(sql)) !== null) {
+        const valuesStart = match.index + match[0].length;
+        rows.push(...parseValueRows(sql.slice(valuesStart)));
     }
     return rows;
 }
@@ -51,7 +57,11 @@ function parseValueRows(block: string): SqlValue[][] {
 
     while (i < block.length) {
         // Skip whitespace and commas between rows
-        while (i < block.length && (block[i] === "," || block[i] === "\n" || block[i] === "\r" || block[i] === " ")) i++;
+        while (
+            i < block.length &&
+            (block[i] === "," || block[i] === "\n" || block[i] === "\r" || block[i] === " ")
+        )
+            i++;
         if (i >= block.length) break;
         if (block[i] !== "(") break;
         i++; // consume '('
@@ -59,9 +69,13 @@ function parseValueRows(block: string): SqlValue[][] {
         const row: SqlValue[] = [];
         while (i < block.length && block[i] !== ")") {
             // Skip whitespace
-            while (i < block.length && (block[i] === " " || block[i] === "\n" || block[i] === "\r")) i++;
+            while (i < block.length && (block[i] === " " || block[i] === "\n" || block[i] === "\r"))
+                i++;
 
-            if (block[i] === ",") { i++; continue; }
+            if (block[i] === ",") {
+                i++;
+                continue;
+            }
             if (block[i] === ")") break;
 
             // NULL
@@ -99,6 +113,10 @@ function parseValueRows(block: string): SqlValue[][] {
                     } else if (block[i] === "\\" && block[i + 1] === "n") {
                         str += "\n";
                         i += 2;
+                    } else if (block[i] === "'" && block[i + 1] === "'") {
+                        // MySQL-style escaped single quote: '' → '
+                        str += "'";
+                        i += 2;
                     } else if (block[i] === "'") {
                         i++; // consume closing quote
                         break;
@@ -112,7 +130,13 @@ function parseValueRows(block: string): SqlValue[][] {
 
             // Number (integer or null-like)
             let numStr = "";
-            while (i < block.length && block[i] !== "," && block[i] !== ")" && block[i] !== " " && block[i] !== "\n") {
+            while (
+                i < block.length &&
+                block[i] !== "," &&
+                block[i] !== ")" &&
+                block[i] !== " " &&
+                block[i] !== "\n"
+            ) {
                 numStr += block[i++];
             }
             if (numStr !== "") {
@@ -195,7 +219,9 @@ async function main() {
     // ChanceCardRequirements columns: 0:ID, 1:CardID, 2:ElementID
 
     // Check if data already imported (idempotency)
-    const existingCount = (db.prepare("SELECT COUNT(*) AS c FROM requirement_elements").get() as { c: number }).c;
+    const existingCount = (
+        db.prepare("SELECT COUNT(*) AS c FROM requirement_elements").get() as { c: number }
+    ).c;
     if (existingCount > 0) {
         console.log(`requirement_elements already has ${existingCount} rows. Skipping import.`);
         console.log("To re-run, drop the database and re-seed first.");
@@ -225,8 +251,8 @@ async function main() {
         const cardIdMap = new Map<number, { cardId: string; versionId: string }>();
 
         const insertCard = db.prepare(
-            `INSERT INTO cards (id, author_user_id, card_type, active, is_global, created_in_session_id, current_version_id, created_at)
-             VALUES (?, ?, ?, 1, 1, NULL, ?, ?)`
+            `INSERT INTO cards (id, author_user_id, card_type, active, is_global, pending_global, created_in_session_id, current_version_id, created_at)
+             VALUES (?, ?, ?, 1, 0, 1, NULL, ?, ?)`
         );
         const insertVersion = db.prepare(
             `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
@@ -257,7 +283,11 @@ async function main() {
             }
 
             const cardType = cardTypeId === 2 ? "reparations" : "standard";
-            const { drinkingLevel, spiceLevel } = RATING_MAP[ratingId] ?? RATING_MAP[1];
+            const baseLevels = RATING_MAP[ratingId] ?? RATING_MAP[1];
+            const { drinkingLevel, spiceLevel } = applyContentFloors(
+                { title, description: instructions, hiddenInstructions },
+                baseLevels,
+            );
 
             // Insert image if present
             let imageId: string | null = null;
@@ -277,7 +307,9 @@ async function main() {
                 cardId,
                 title,
                 instructions,
-                hiddenInstructions && hiddenInstructions.trim() !== "" ? hiddenInstructions.trim() : null,
+                hiddenInstructions && hiddenInstructions.trim() !== ""
+                    ? hiddenInstructions.trim()
+                    : null,
                 imageId,
                 drinkingLevel,
                 spiceLevel,

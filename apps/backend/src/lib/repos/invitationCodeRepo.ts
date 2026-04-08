@@ -59,6 +59,16 @@ export function setActive(id: string, isActive: boolean): void {
     db.prepare("UPDATE invitation_codes SET is_active = ? WHERE id = ?").run(isActive ? 1 : 0, id);
 }
 
+export function update(
+    id: string,
+    patch: { maxUses?: number | null; expiresAt?: string | null }
+): void {
+    if (patch.maxUses !== undefined)
+        db.prepare("UPDATE invitation_codes SET max_uses = ? WHERE id = ?").run(patch.maxUses, id);
+    if (patch.expiresAt !== undefined)
+        db.prepare("UPDATE invitation_codes SET expires_at = ? WHERE id = ?").run(patch.expiresAt, id);
+}
+
 export function findByCode(code: string): DbInvitationCode | null {
     return (
         (db

@@ -1,10 +1,27 @@
-import { AuthorizationError, ConflictError } from "@chance/core";
+import { AuthorizationError, ConflictError, NotFoundError } from "@chance/core";
 import type { UpdateUserRequest } from "@chance/core";
 import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as userRepo from "@/lib/repos/userRepo";
 
 export const dynamic = "force-dynamic";
+
+/** GET /api/users/me — return current user profile + last element selection. */
+export const GET = withAuth(async (req) => {
+    try {
+        if (req.auth.type !== "user") {
+            throw new AuthorizationError("Registered account required");
+        }
+        const user = userRepo.findById(req.auth.sub);
+        if (!user) throw new NotFoundError("User not found");
+        return ok({
+            ...userRepo.mapUser(user),
+            lastElementSelection: userRepo.getLastElementSelection(req.auth.sub),
+        });
+    } catch (err) {
+        return handleError(err);
+    }
+});
 
 /** PATCH /api/users/me — update current user's display name and/or email. */
 export const PATCH = withAuth(async (req) => {

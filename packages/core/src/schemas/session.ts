@@ -9,9 +9,9 @@ export const FilterSettingsSchema = z.object({
      */
     maxDrinkingLevel: z.number().int().min(0).max(3),
     /**
-     * Maximum spice level cards to include (0–3, matching spiceLevel on CardVersion).
-     * 0 = G only; 3 = up to R.
-     * Displayed as MPAA rating selector.
+     * Maximum content themes level to include (0–3, matching spiceLevel on CardVersion).
+     * 0 = Clean only; 3 = up to Spicy.
+     * Independent of drinking level — filtering one does not affect the other.
      */
     maxSpiceLevel: z.number().int().min(0).max(3),
     /** One or more game names. Empty array = any game. */
@@ -22,6 +22,12 @@ export const FilterSettingsSchema = z.object({
      * player-contributed cards only.
      */
     includeGlobalCards: z.boolean().default(true),
+    /**
+     * IDs of requirement elements available at the venue.
+     * Cards whose requirements are all satisfied by this set are eligible for draw.
+     * Undefined = no element filtering (backwards-compatible with legacy sessions).
+     */
+    availableElementIds: z.array(z.string()).optional(),
 });
 
 export type FilterSettings = z.infer<typeof FilterSettingsSchema>;

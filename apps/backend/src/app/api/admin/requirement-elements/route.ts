@@ -20,9 +20,12 @@ export const GET = withAdmin(async () => {
 export const POST = withAdmin(async (req) => {
     try {
         const body = await req.json();
-        const { title } = body as { title?: string };
+        const { title, defaultAvailable } = body as {
+            title?: string;
+            defaultAvailable?: boolean;
+        };
         if (!title?.trim()) return fail(new ValidationError("title is required"));
-        const element = reqRepo.create(title.trim());
+        const element = reqRepo.create(title.trim(), defaultAvailable ?? false);
         return ok(element, 201);
     } catch (err) {
         return handleError(err);

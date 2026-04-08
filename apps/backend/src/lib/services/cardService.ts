@@ -5,6 +5,7 @@ import {
     ConflictError,
     ValidationError,
     REVEAL_DELAY_MS,
+    applyContentFloors,
 } from "@chance/core";
 import type { Card, CardTransfer, CardVersion, DrawEvent, SubmitCardRequest } from "@chance/core";
 import { db } from "../db/db";
@@ -31,6 +32,10 @@ function validateRequirementIds(ids: string[]): void {
 
 export function submitCard(userId: string, sessionId: string | null, req: SubmitCardRequest): Card {
     validateRequirementIds(req.requirementIds);
+    const levels = applyContentFloors(
+        { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
+        { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
+    );
     return cardRepo.create({
         authorUserId: userId,
         cardType: req.cardType,
@@ -39,8 +44,8 @@ export function submitCard(userId: string, sessionId: string | null, req: Submit
         description: req.description,
         hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
-        drinkingLevel: req.drinkingLevel,
-        spiceLevel: req.spiceLevel,
+        drinkingLevel: levels.drinkingLevel,
+        spiceLevel: levels.spiceLevel,
         isGameChanger: req.cardType === "reparations" ? false : req.isGameChanger,
         gameTags: req.gameTags,
         requirementIds: req.requirementIds,
@@ -60,16 +65,23 @@ export function updateCard(
     if (!isAdmin && card.authorUserId !== userId) {
         throw new AuthorizationError("You can only edit your own cards");
     }
+    if (card.isGlobal && !isAdmin) {
+        throw new AuthorizationError("Global cards can only be edited by admins");
+    }
 
     validateRequirementIds(req.requirementIds);
+    const levels = applyContentFloors(
+        { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
+        { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
+    );
     return cardRepo.createVersion(cardId, {
         authoredByUserId: userId,
         title: req.title,
         description: req.description,
         hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
-        drinkingLevel: req.drinkingLevel,
-        spiceLevel: req.spiceLevel,
+        drinkingLevel: levels.drinkingLevel,
+        spiceLevel: levels.spiceLevel,
         isGameChanger: card.cardType === "reparations" ? false : req.isGameChanger,
         gameTags: req.gameTags,
         requirementIds: req.requirementIds,
@@ -82,6 +94,9 @@ export function deactivateCard(userId: string, cardId: string, isAdmin: boolean)
     if (!isAdmin && card.authorUserId !== userId) {
         throw new AuthorizationError("You can only deactivate your own cards");
     }
+    if (card.isGlobal && !isAdmin) {
+        throw new AuthorizationError("Global cards can only be deactivated by admins");
+    }
     cardRepo.setActive(cardId, false);
     return cardRepo.findById(cardId)!;
 }
@@ -91,6 +106,9 @@ export function reactivateCard(userId: string, cardId: string, isAdmin: boolean)
     if (!card) throw new NotFoundError("Card not found");
     if (!isAdmin && card.authorUserId !== userId) {
         throw new AuthorizationError("You can only reactivate your own cards");
+    }
+    if (card.isGlobal && !isAdmin) {
+        throw new AuthorizationError("Global cards can only be reactivated by admins");
     }
     cardRepo.setActive(cardId, true);
     return cardRepo.findById(cardId)!;
@@ -118,6 +136,35 @@ export function promoteToGlobal(cardId: string): Card {
 export function demoteFromGlobal(cardId: string): Card {
     if (!cardRepo.findById(cardId)) throw new NotFoundError("Card not found");
     cardRepo.setGlobal(cardId, false);
+    return cardRepo.findById(cardId)!;
+}
+
+export function nominateForGlobal(userId: string, cardId: string): Card {
+    const card = cardRepo.findById(cardId);
+    if (!card) throw new NotFoundError("Card not found");
+    if (card.authorUserId !== userId) {
+        throw new AuthorizationError("You can only nominate your own cards");
+    }
+    if (card.isGlobal) {
+        throw new ConflictError("Card is already in the global pool");
+    }
+    if (card.pendingGlobal) {
+        throw new ConflictError("Card is already nominated for global promotion");
+    }
+    if (!card.active) {
+        throw new ConflictError("Cannot nominate an inactive card");
+    }
+    cardRepo.setGlobalNomination(cardId, true);
+    return cardRepo.findById(cardId)!;
+}
+
+export function withdrawNomination(userId: string, cardId: string, isAdmin: boolean): Card {
+    const card = cardRepo.findById(cardId);
+    if (!card) throw new NotFoundError("Card not found");
+    if (!isAdmin && card.authorUserId !== userId) {
+        throw new AuthorizationError("You can only withdraw nominations for your own cards");
+    }
+    cardRepo.setGlobalNomination(cardId, false);
     return cardRepo.findById(cardId)!;
 }
 

@@ -12,9 +12,17 @@ export const PATCH = withAdmin(async (req, { params }) => {
         if (!existing) return fail(new NotFoundError("User not found"));
 
         const body = await req.json();
-        const { isAdmin } = body as { isAdmin?: boolean };
+        const { isAdmin, displayName, email } = body as {
+            isAdmin?: boolean;
+            displayName?: string;
+            email?: string;
+        };
 
-        if (isAdmin !== undefined) userRepo.update(userId, { isAdmin });
+        userRepo.update(userId, {
+            ...(isAdmin !== undefined && { isAdmin }),
+            ...(displayName !== undefined && { displayName: displayName.trim() }),
+            ...(email !== undefined && { email: email.trim().toLowerCase() }),
+        });
 
         const updated = userRepo.findAll().find((u) => u.id === userId)!;
         return ok(updated);

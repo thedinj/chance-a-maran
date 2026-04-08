@@ -5,6 +5,8 @@ export const RequirementElementSchema = z.object({
     id: z.string(),
     title: z.string(),
     active: z.boolean(),
+    /** If true, this element is assumed available by default when a host doesn't configure venue elements. */
+    defaultAvailable: z.boolean(),
 });
 
 export type RequirementElement = z.infer<typeof RequirementElementSchema>;
@@ -26,9 +28,9 @@ export const CardVersionSchema = z.object({
      */
     drinkingLevel: z.number().int().min(0).max(3),
     /**
-     * Content rating of the card.
-     * 0 = G, 1 = PG, 2 = PG-13, 3 = R.
-     * Displayed as MPAA-style badge in the UI.
+     * Content themes rating of the card.
+     * 0 = Clean, 1 = Mild, 2 = Edgy, 3 = Spicy.
+     * Independent of drinkingLevel — a card can be heavy drinking and still be Clean.
      */
     spiceLevel: z.number().int().min(0).max(3),
     /** If true, triggers a dramatic reveal sequence before the standard overlay. Not applicable to reparations cards. */
@@ -56,6 +58,8 @@ export const CardSchema = z.object({
     active: z.boolean(),
     /** Admin-promoted to the global pool; eligible for all sessions regardless of player presence. */
     isGlobal: z.boolean(),
+    /** Author has nominated this card for admin review and potential global promotion. */
+    pendingGlobal: z.boolean(),
     /** The session in which this card was originally submitted. Null if created outside a session. */
     createdInSessionId: z.string().nullable(),
     currentVersionId: z.string(),

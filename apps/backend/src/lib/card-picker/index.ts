@@ -56,6 +56,23 @@ function passesGameTagFilter(gameTagIds: string[], sessionGameTagIds: string[]):
     return gameTagIds.some((id) => sessionGameTagIds.includes(id));
 }
 
+// ─── Requirement element filter ──────────────────────────────────────────────
+
+/**
+ * A card is eligible when:
+ *   - It has no requirement elements (no props needed), OR
+ *   - availableElementIds is undefined (legacy session, no filtering), OR
+ *   - Every requirement element is present in the available set.
+ */
+function passesElementFilter(
+    requirementElementIds: string[],
+    availableElementIds: string[] | undefined
+): boolean {
+    if (requirementElementIds.length === 0) return true;
+    if (!availableElementIds) return true;
+    return requirementElementIds.every((id) => availableElementIds.includes(id));
+}
+
 // ─── Public pick function ─────────────────────────────────────────────────────
 
 export function pick(
@@ -75,22 +92,27 @@ export function pick(
     );
 
     // 2. Apply game tag filter
-    const eligible = candidates.filter((c) =>
+    const afterGameTags = candidates.filter((c) =>
         passesGameTagFilter(c.gameTagIds, filterSettings.gameTags)
+    );
+
+    // 3. Apply requirement element filter
+    const eligible = afterGameTags.filter((c) =>
+        passesElementFilter(c.requirementElementIds, filterSettings.availableElementIds)
     );
 
     if (eligible.length === 0) return null;
 
-    // 3. Get set of already-drawn card IDs and exclude them entirely
+    // 4. Get set of already-drawn card IDs and exclude them entirely
     const drawnCardIds = drawEventRepo.getDrawnCardIds(sessionId);
     const undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
 
     if (undrawn.length === 0) return null;
 
-    // 4. Calculate weights
+    // 5. Calculate weights
     const weights = undrawn.map((entry) => calculateWeight(entry, sessionId));
 
-    // 5. Weighted random selection
+    // 6. Weighted random selection
     const idx = weightedRandom(weights);
     const selected = undrawn[idx]!;
 

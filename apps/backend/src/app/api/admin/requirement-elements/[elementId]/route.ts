@@ -13,10 +13,15 @@ export const PATCH = withAdmin(async (req, { params }) => {
         if (!existing) return fail(new NotFoundError("Requirement element not found"));
 
         const body = await req.json();
-        const { active, title } = body as { active?: boolean; title?: string };
+        const { active, title, defaultAvailable } = body as {
+            active?: boolean;
+            title?: string;
+            defaultAvailable?: boolean;
+        };
 
         if (active !== undefined) reqRepo.setActive(elementId, active);
         if (title !== undefined) reqRepo.update(elementId, title.trim());
+        if (defaultAvailable !== undefined) reqRepo.setDefaultAvailable(elementId, defaultAvailable);
 
         const updated = reqRepo.listAll().find((e) => e.id === elementId)!;
         return ok({ ...updated, cardCount: reqRepo.countUsage(elementId) });

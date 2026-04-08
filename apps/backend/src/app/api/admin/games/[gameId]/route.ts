@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError } from "@chance/core";
+import { NotFoundError } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAdmin } from "@/lib/auth/withAuth";
 import * as gameRepo from "@/lib/repos/gameRepo";
@@ -12,10 +12,10 @@ export const PATCH = withAdmin(async (req, { params }) => {
         if (!game) return fail(new NotFoundError("Game not found"));
 
         const body = await req.json();
-        const { active, name, slug } = body as { active?: boolean; name?: string; slug?: string };
+        const { active, name } = body as { active?: boolean; name?: string };
 
         if (active !== undefined) gameRepo.setActive(gameId, active);
-        if (name !== undefined || slug !== undefined) gameRepo.update(gameId, { name, slug });
+        if (name !== undefined) gameRepo.update(gameId, { name });
 
         const updated = gameRepo.findById(gameId)!;
         return ok({

@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
     Title, Table, Badge, Switch, TextInput, Group, Stack, Text,
     Drawer, Image, Button, Divider, Select, ScrollArea, Loader, Center,
-    ActionIcon, Tooltip,
+    Textarea, SegmentedControl, MultiSelect, Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
+import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type FilterState = { search: string; active: string; isGlobal: string };
+type FilterState = { search: string; active: string; isGlobal: string; pendingGlobal: string; gameId: string; drinkingLevel: string; spiceLevel: string };
+
+interface GameOption { id: string; name: string; }
+interface ElementOption { id: string; title: string; }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -20,10 +24,37 @@ function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString();
 }
 
-function LevelBadge({ label, value }: { label: string; value: number }) {
+const DRINKING_TOOLTIPS = ["", "Light — 1 drink", "Moderate — 2 drinks", "Heavy — 3+ drinks"];
+const SPICE_TOOLTIPS = ["", "Mild — light innuendo, mild language", "Edgy — strong language, mature themes", "Spicy — very adult, nothing held back"];
+
+function LevelBadge({ label, value, tooltip }: { label: string; value: number; tooltip: string }) {
     if (value === 0) return null;
     const colors = ["gray", "yellow", "orange", "red"] as const;
-    return <Badge size="xs" color={colors[value]}>{label} {value}</Badge>;
+    return (
+        <Tooltip label={tooltip} withArrow>
+            <Badge size="xs" color={colors[value]}>{label} {value}</Badge>
+        </Tooltip>
+    );
+}
+
+// ─── Lazy thumbnail ────────────────────────────────────────────────────────────
+
+function LazyThumbnail({ imageId, apiBaseUrl }: { imageId: string; apiBaseUrl: string }) {
+    const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
+    return (
+        <div
+            ref={ref}
+            style={{ width: 28, height: 28, flexShrink: 0, borderRadius: 3, overflow: "hidden", background: "var(--mantine-color-dark-5)" }}
+        >
+            {inView && (
+                <img
+                    src={`${apiBaseUrl}/api/images/${imageId}`}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+            )}
+        </div>
+    );
 }
 
 // ─── Card Detail Drawer ────────────────────────────────────────────────────────
@@ -42,6 +73,22 @@ function CardDrawer({
     const adminFetch = useAdminFetch();
     const [isPending, startTransition] = useTransition();
     const [versions, setVersions] = useState<CardVersion[]>([]);
+    const [editing, setEditing] = useState(false);
+
+    // Edit form state
+    const [games, setGames] = useState<GameOption[]>([]);
+    const [elements, setElements] = useState<ElementOption[]>([]);
+    const [editTitle, setEditTitle] = useState("");
+    const [editDescription, setEditDescription] = useState("");
+    const [editHidden, setEditHidden] = useState("");
+    const [editDrinking, setEditDrinking] = useState("0");
+    const [editSpice, setEditSpice] = useState("0");
+    const [editGameChanger, setEditGameChanger] = useState(false);
+    const [editCardType, setEditCardType] = useState<string>("standard");
+    const [editGameTags, setEditGameTags] = useState<string[]>([]);
+    const [editRequirements, setEditRequirements] = useState<string[]>([]);
+    const [saving, setSaving] = useState(false);
+
     const cv = card.currentVersion;
 
     useEffect(() => {
@@ -49,6 +96,29 @@ function CardDrawer({
             .then((r) => r.json())
             .then((d) => { if (d.ok) setVersions(d.data as CardVersion[]); });
     }, [card.id, adminFetch]);
+
+    const loadEditData = useCallback(async () => {
+        const [gamesRes, elementsRes] = await Promise.all([
+            adminFetch("/api/admin/games").then((r) => r.json()),
+            adminFetch("/api/admin/requirement-elements").then((r) => r.json()),
+        ]);
+        if (gamesRes.ok) setGames(gamesRes.data as GameOption[]);
+        if (elementsRes.ok) setElements(elementsRes.data as ElementOption[]);
+    }, [adminFetch]);
+
+    function startEdit() {
+        setEditTitle(cv.title);
+        setEditDescription(cv.description);
+        setEditHidden(cv.hiddenInstructions ?? "");
+        setEditDrinking(String(cv.drinkingLevel));
+        setEditSpice(String(cv.spiceLevel));
+        setEditGameChanger(cv.isGameChanger);
+        setEditCardType(card.cardType);
+        setEditGameTags(cv.gameTags.map((g) => g.id));
+        setEditRequirements(cv.requirements.map((r) => r.id));
+        void loadEditData();
+        setEditing(true);
+    }
 
     function action(url: string, method = "POST") {
         startTransition(async () => {
@@ -61,6 +131,149 @@ function CardDrawer({
                 notifications.show({ message: data.error?.message ?? "Error", color: "red" });
             }
         });
+    }
+
+    async function saveEdit() {
+        setSaving(true);
+        try {
+            // Change cardType if needed (separate admin endpoint)
+            if (editCardType !== card.cardType) {
+                const typeRes = await adminFetch(`/api/admin/cards/${card.id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ cardType: editCardType }),
+                });
+                const typeData = await typeRes.json();
+                if (!typeData.ok) {
+                    notifications.show({ message: typeData.error?.message ?? "Error", color: "red" });
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            // Update card content (creates new version)
+            const contentRes = await adminFetch(`/api/cards/${card.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    title: editTitle,
+                    description: editDescription,
+                    hiddenInstructions: editHidden || null,
+                    imageId: cv.imageId ?? "",
+                    drinkingLevel: Number(editDrinking),
+                    spiceLevel: Number(editSpice),
+                    isGameChanger: editCardType === "reparations" ? false : editGameChanger,
+                    cardType: editCardType,
+                    gameTags: editGameTags,
+                    requirementIds: editRequirements,
+                }),
+            });
+            const contentData = await contentRes.json();
+            if (contentData.ok) {
+                onChanged(contentData.data as Card);
+                setEditing(false);
+                notifications.show({ message: "Card updated", color: "green" });
+            } else {
+                notifications.show({ message: contentData.error?.message ?? "Error", color: "red" });
+            }
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    if (editing) {
+        return (
+            <Stack gap="md">
+                <Select
+                    label="Card type"
+                    data={[
+                        { value: "standard", label: "Standard" },
+                        { value: "reparations", label: "Reparations" },
+                    ]}
+                    value={editCardType}
+                    onChange={(v) => setEditCardType(v ?? "standard")}
+                />
+                <TextInput
+                    label="Title"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.currentTarget.value)}
+                />
+                <Textarea
+                    label="Description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.currentTarget.value)}
+                    autosize
+                    minRows={3}
+                />
+                <Textarea
+                    label="Hidden instructions"
+                    description="Revealed only to the drawing player initially"
+                    value={editHidden}
+                    onChange={(e) => setEditHidden(e.currentTarget.value)}
+                    autosize
+                    minRows={2}
+                />
+                <Stack gap={4}>
+                    <Text size="sm" fw={500}>Drinking level</Text>
+                    <SegmentedControl
+                        value={editDrinking}
+                        onChange={setEditDrinking}
+                        data={[
+                            { value: "0", label: "None" },
+                            { value: "1", label: "🍺" },
+                            { value: "2", label: "🍺🍺" },
+                            { value: "3", label: "🍺🍺🍺" },
+                        ]}
+                    />
+                </Stack>
+                <Stack gap={4}>
+                    <Text size="sm" fw={500}>Spice level</Text>
+                    <SegmentedControl
+                        value={editSpice}
+                        onChange={setEditSpice}
+                        data={[
+                            { value: "0", label: "Clean" },
+                            { value: "1", label: "Mild" },
+                            { value: "2", label: "Edgy" },
+                            { value: "3", label: "Spicy" },
+                        ]}
+                    />
+                </Stack>
+                {editCardType !== "reparations" && (
+                    <Switch
+                        label="Game changer"
+                        checked={editGameChanger}
+                        onChange={(e) => setEditGameChanger(e.currentTarget.checked)}
+                    />
+                )}
+                <MultiSelect
+                    label="Game tags"
+                    data={games.map((g) => ({ value: g.id, label: g.name }))}
+                    value={editGameTags}
+                    onChange={setEditGameTags}
+                    searchable
+                    clearable
+                />
+                <MultiSelect
+                    label="Requirements"
+                    data={elements.map((e) => ({ value: e.id, label: e.title }))}
+                    value={editRequirements}
+                    onChange={setEditRequirements}
+                    searchable
+                    clearable
+                />
+                <Group>
+                    <Button
+                        onClick={() => void saveEdit()}
+                        loading={saving}
+                        disabled={!editTitle.trim() || !editDescription.trim()}
+                    >
+                        Save
+                    </Button>
+                    <Button variant="subtle" color="gray" onClick={() => setEditing(false)}>
+                        Cancel
+                    </Button>
+                </Group>
+            </Stack>
+        );
     }
 
     return (
@@ -77,14 +290,33 @@ function CardDrawer({
             <Stack gap={4}>
                 <Text fw={700} size="lg">{cv.title}</Text>
                 <Group gap="xs">
-                    <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
-                        {card.cardType}
-                    </Badge>
-                    {card.isGlobal && <Badge size="sm" color="violet">global</Badge>}
-                    {!card.active && <Badge size="sm" color="gray">inactive</Badge>}
-                    {cv.isGameChanger && <Badge size="sm" color="yellow">game changer</Badge>}
-                    <LevelBadge label="🍺" value={cv.drinkingLevel} />
-                    <LevelBadge label="🌶" value={cv.spiceLevel} />
+                    <Tooltip label={card.cardType === "reparations" ? "Reparations — drawn as a penalty card" : "Standard chance card"} withArrow>
+                        <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
+                            {card.cardType}
+                        </Badge>
+                    </Tooltip>
+                    {card.isGlobal && (
+                        <Tooltip label="In the global pool — eligible for all sessions" withArrow>
+                            <Badge size="sm" color="violet">global</Badge>
+                        </Tooltip>
+                    )}
+                    {card.pendingGlobal && (
+                        <Tooltip label="Nominated for global pool — pending admin review" withArrow>
+                            <Badge size="sm" color="orange">nominated</Badge>
+                        </Tooltip>
+                    )}
+                    {!card.active && (
+                        <Tooltip label="Inactive — excluded from all draw pools" withArrow>
+                            <Badge size="sm" color="gray">inactive</Badge>
+                        </Tooltip>
+                    )}
+                    {cv.isGameChanger && (
+                        <Tooltip label="Game changer — alters gameplay rules mid-session" withArrow>
+                            <Badge size="sm" color="yellow">game changer</Badge>
+                        </Tooltip>
+                    )}
+                    <LevelBadge label="🍺" value={cv.drinkingLevel} tooltip={DRINKING_TOOLTIPS[cv.drinkingLevel]} />
+                    <LevelBadge label="🌶" value={cv.spiceLevel} tooltip={SPICE_TOOLTIPS[cv.spiceLevel]} />
                 </Group>
             </Stack>
 
@@ -115,7 +347,10 @@ function CardDrawer({
 
             <Divider />
 
-            <Group>
+            <Group wrap="wrap">
+                <Button size="xs" variant="outline" onClick={startEdit}>
+                    Edit card
+                </Button>
                 <Button
                     size="xs"
                     variant="outline"
@@ -131,6 +366,17 @@ function CardDrawer({
                 >
                     {card.isGlobal ? "Remove from global" : "Promote to global"}
                 </Button>
+                {card.pendingGlobal && !card.isGlobal && (
+                    <Button
+                        size="xs"
+                        variant="outline"
+                        color="red"
+                        loading={isPending}
+                        onClick={() => action(`/api/cards/${card.id}/unnominate`)}
+                    >
+                        Reject nomination
+                    </Button>
+                )}
                 <Button
                     size="xs"
                     variant="outline"
@@ -172,11 +418,19 @@ export default function CardsPage() {
     const adminFetch = useAdminFetch();
     const [cards, setCards] = useState<Card[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState<FilterState>({ search: "", active: "", isGlobal: "" });
+    const [filters, setFilters] = useState<FilterState>({ search: "", active: "", isGlobal: "", pendingGlobal: "", gameId: "", drinkingLevel: "", spiceLevel: "" });
+    const [filterGames, setFilterGames] = useState<GameOption[]>([]);
     const [selected, setSelected] = useState<Card | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+    useEffect(() => {
+        adminFetch("/api/admin/games")
+            .then((r) => r.json())
+            .then((d) => { if (d.ok) setFilterGames(d.data as GameOption[]); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     function loadCards() {
         setLoading(true);
@@ -184,6 +438,10 @@ export default function CardsPage() {
         if (filters.search) params.set("search", filters.search);
         if (filters.active) params.set("active", filters.active);
         if (filters.isGlobal) params.set("isGlobal", filters.isGlobal);
+        if (filters.pendingGlobal) params.set("pendingGlobal", filters.pendingGlobal);
+        if (filters.gameId) params.set("gameId", filters.gameId);
+        if (filters.drinkingLevel) params.set("drinkingLevel", filters.drinkingLevel);
+        if (filters.spiceLevel) params.set("spiceLevel", filters.spiceLevel);
 
         adminFetch(`/api/cards?${params}`)
             .then((r) => r.json())
@@ -227,6 +485,11 @@ export default function CardsPage() {
             onClick={() => setSelected(card)}
         >
             <Table.Td>
+                {card.currentVersion.imageId
+                    ? <LazyThumbnail imageId={card.currentVersion.imageId} apiBaseUrl={apiBaseUrl} />
+                    : <div style={{ width: 28, height: 28 }} />}
+            </Table.Td>
+            <Table.Td>
                 <Text size="sm" truncate maw={280}>{card.currentVersion.title}</Text>
             </Table.Td>
             <Table.Td>
@@ -243,9 +506,38 @@ export default function CardsPage() {
                 />
             </Table.Td>
             <Table.Td>
+                <Group gap={4} wrap="nowrap">
+                    {card.currentVersion.isGameChanger && (
+                        <Badge size="xs" color="yellow">game changer</Badge>
+                    )}
+                    {card.pendingGlobal && <Badge size="xs" color="orange">nominated</Badge>}
+                </Group>
+            </Table.Td>
+            <Table.Td>
+                <Group gap={4} wrap="nowrap">
+                    {card.currentVersion.drinkingLevel > 0 && (
+                        <Text size="xs" c="dimmed">🍺{card.currentVersion.drinkingLevel}</Text>
+                    )}
+                    {card.currentVersion.spiceLevel > 0 && (
+                        <Text size="xs" c="dimmed">🌶{card.currentVersion.spiceLevel}</Text>
+                    )}
+                </Group>
+            </Table.Td>
+            <Table.Td>
                 <Badge size="xs" color={card.active ? "green" : "gray"} variant="dot">
                     {card.active ? "active" : "inactive"}
                 </Badge>
+            </Table.Td>
+            <Table.Td>
+                {card.currentVersion.gameTags.length > 0 ? (
+                    <Group gap={4} wrap="wrap" maw={160}>
+                        {card.currentVersion.gameTags.map((g) => (
+                            <Badge key={g.id} size="xs" variant="outline" color="teal">{g.name}</Badge>
+                        ))}
+                    </Group>
+                ) : (
+                    <Text size="xs" c="dimmed" fs="italic">all</Text>
+                )}
             </Table.Td>
             <Table.Td>
                 <Text size="xs" c="dimmed">{card.currentVersion.authorDisplayName}</Text>
@@ -265,7 +557,7 @@ export default function CardsPage() {
                     <TextInput
                         placeholder="Search title…"
                         value={filters.search}
-                        onChange={(e) => setFilters((f) => ({ ...f, search: e.currentTarget.value }))}
+                        onChange={(e) => { const v = e.currentTarget.value; setFilters((f) => ({ ...f, search: v })); }}
                         style={{ flex: 1 }}
                     />
                     <Select
@@ -284,6 +576,49 @@ export default function CardsPage() {
                         clearable
                         w={140}
                     />
+                    <Select
+                        placeholder="Nominated"
+                        data={[{ value: "true", label: "Nominated" }]}
+                        value={filters.pendingGlobal || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, pendingGlobal: v ?? "" }))}
+                        clearable
+                        w={140}
+                    />
+                    <Select
+                        placeholder="Game"
+                        data={filterGames.map((g) => ({ value: g.id, label: g.name }))}
+                        value={filters.gameId || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, gameId: v ?? "" }))}
+                        clearable
+                        searchable
+                        w={160}
+                    />
+                    <Select
+                        placeholder="Drinking"
+                        data={[
+                            { value: "0", label: "None" },
+                            { value: "1", label: "🍺 Light" },
+                            { value: "2", label: "🍺🍺 Moderate" },
+                            { value: "3", label: "🍺🍺🍺 Heavy" },
+                        ]}
+                        value={filters.drinkingLevel || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, drinkingLevel: v ?? "" }))}
+                        clearable
+                        w={150}
+                    />
+                    <Select
+                        placeholder="Spice"
+                        data={[
+                            { value: "0", label: "Clean" },
+                            { value: "1", label: "Mild" },
+                            { value: "2", label: "Edgy" },
+                            { value: "3", label: "Spicy" },
+                        ]}
+                        value={filters.spiceLevel || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, spiceLevel: v ?? "" }))}
+                        clearable
+                        w={120}
+                    />
                 </Group>
 
                 {loading ? (
@@ -293,10 +628,14 @@ export default function CardsPage() {
                         <Table striped highlightOnHover withTableBorder>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th w={36} />
                                     <Table.Th>Title</Table.Th>
                                     <Table.Th>Type</Table.Th>
                                     <Table.Th>Global</Table.Th>
+                                    <Table.Th>Flags</Table.Th>
+                                    <Table.Th>Levels</Table.Th>
                                     <Table.Th>Status</Table.Th>
+                                    <Table.Th>Games</Table.Th>
                                     <Table.Th>Author</Table.Th>
                                     <Table.Th>Created</Table.Th>
                                 </Table.Tr>
