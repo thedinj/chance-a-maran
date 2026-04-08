@@ -9,3 +9,21 @@
 .join-code-input::placeholder {
     color: var(--color-text-secondary);
 }
+
+.join-code-input:focus {
+    border-color: var(--color-accent-amber) !important;
+    box-shadow: 0 0 0 1px var(--color-accent-amber);
+}
+
+/* Past games list — dividers between rows, not after the last */
+.past-game-row:not(:last-child) {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.past-game-row:hover {
+    background: color-mix(in srgb, var(--color-accent-primary) 5%, transparent);
+}
+
+.past-game-row:active {
+    background: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+}

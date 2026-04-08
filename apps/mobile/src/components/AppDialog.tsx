@@ -60,6 +60,7 @@ export function AppDialog({
                     {buttons.map((btn, i) => (
                         <button
                             key={i}
+                            className="app-dialog-btn"
                             style={{
                                 ...styles.actionBtn,
                                 color: variantColor[btn.variant ?? "default"],
@@ -155,6 +156,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-body)",
         cursor: "pointer",
         letterSpacing: "0.04em",
-        transition: "background 140ms var(--ease), color 140ms var(--ease), opacity 140ms",
+        transition:
+            "background 140ms var(--ease), color 140ms var(--ease), opacity 140ms var(--ease)",
     },
 };

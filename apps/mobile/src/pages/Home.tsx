@@ -161,198 +161,203 @@ export default function Home() {
                 <div style={hasPastGames ? styles.rootScrollable : styles.root}>
                     {/* ── Above-the-fold wrapper (always viewport height) ────── */}
                     <div style={hasPastGames ? styles.aboveFold : styles.aboveFoldFill}>
-                    {/* ── Background layers ──────────────────────────────────── */}
+                        {/* ── Background layers ──────────────────────────────────── */}
 
-                    {/* Image fades in slowly — atmospheric reveal */}
-                    <motion.div
-                        style={styles.bgImage}
-                        variants={bgVariants}
-                        initial={initial}
-                        animate="show"
-                    />
-                    {/* Gradient overlay is static — always present to maintain legibility */}
-                    <div style={styles.bgOverlay} />
-
-                    {/* ── Hero ───────────────────────────────────────────────── */}
-
-                    <div style={styles.heroArea}>
-                        {/*
-                         * Shimmer — a diagonal light sweep that passes over the hero
-                         * every ~7 seconds, evoking the gold filigree catching light.
-                         * Starts after entrance settles; skipped if reduced motion.
-                         */}
-                        {!prefersReducedMotion && (
-                            <motion.div
-                                aria-hidden="true"
-                                style={styles.shimmer}
-                                initial={{ x: "-160%" }}
-                                animate={{ x: "260%" }}
-                                transition={{
-                                    duration: 2.8,
-                                    ease: "easeInOut",
-                                    repeat: Infinity,
-                                    repeatDelay: 11,
-                                    delay: 2.4,
-                                }}
-                            />
-                        )}
-
-                        {/* Wordmark — slides up from below */}
-                        <motion.h1
-                            style={styles.wordmark}
-                            variants={wordmarkVariants}
-                            initial={initial}
-                            animate="show"
-                        >
-                            Chance
-                        </motion.h1>
-
-                        {/*
-                         * Rule — draws from left, then Framer Motion owns the neon pulse.
-                         * CSS class approach dropped: Framer Motion inline styles override
-                         * CSS animations on the same property.
-                         */}
+                        {/* Image fades in slowly — atmospheric reveal */}
                         <motion.div
-                            style={{ ...styles.rule, transformOrigin: "left" }}
-                            variants={ruleVariants}
+                            style={styles.bgImage}
+                            variants={bgVariants}
                             initial={initial}
                             animate="show"
                         />
+                        {/* Gradient overlay is static — always present to maintain legibility */}
+                        <div style={styles.bgOverlay} />
 
-                        {/* Tagline — fades up last */}
-                        <motion.p
-                            style={styles.tagline}
-                            variants={taglineVariants}
+                        {/* ── Hero ───────────────────────────────────────────────── */}
+
+                        <div style={styles.heroArea}>
+                            {/*
+                             * Shimmer — a diagonal light sweep that passes over the hero
+                             * every ~7 seconds, evoking the gold filigree catching light.
+                             * Starts after entrance settles; skipped if reduced motion.
+                             */}
+                            {!prefersReducedMotion && (
+                                <motion.div
+                                    aria-hidden="true"
+                                    style={styles.shimmer}
+                                    initial={{ x: "-160%" }}
+                                    animate={{ x: "260%" }}
+                                    transition={{
+                                        duration: 2.8,
+                                        ease: "easeInOut",
+                                        repeat: Infinity,
+                                        repeatDelay: 11,
+                                        delay: 2.4,
+                                    }}
+                                />
+                            )}
+
+                            {/* Wordmark — slides up from below */}
+                            <motion.h1
+                                style={styles.wordmark}
+                                variants={wordmarkVariants}
+                                initial={initial}
+                                animate="show"
+                            >
+                                Chance
+                            </motion.h1>
+
+                            {/*
+                             * Rule — draws from left, then Framer Motion owns the neon pulse.
+                             * CSS class approach dropped: Framer Motion inline styles override
+                             * CSS animations on the same property.
+                             */}
+                            <motion.div
+                                style={{ ...styles.rule, transformOrigin: "left" }}
+                                variants={ruleVariants}
+                                initial={initial}
+                                animate="show"
+                            />
+
+                            {/* Tagline — fades up last */}
+                            <motion.p
+                                style={styles.tagline}
+                                variants={taglineVariants}
+                                initial={initial}
+                                animate="show"
+                            >
+                                Consider yourself warned.
+                            </motion.p>
+                        </div>
+
+                        {/* ── Actions ────────────────────────────────────────────── */}
+
+                        <motion.div
+                            style={styles.actions}
+                            variants={actionsVariants}
                             initial={initial}
                             animate="show"
                         >
-                            Consider yourself warned.
-                        </motion.p>
-                    </div>
-
-                    {/* ── Actions ────────────────────────────────────────────── */}
-
-                    <motion.div
-                        style={styles.actions}
-                        variants={actionsVariants}
-                        initial={initial}
-                        animate="show"
-                    >
-                        {session && (
-                            <motion.div whileTap={{ scale: 0.97 }} transition={TAP_SPRING}>
-                                <IonButton
-                                    expand="block"
-                                    style={styles.returnButton}
-                                    onClick={() => {
-                                        void hapticMedium();
-                                        history.push(`/game/${session.id}`);
-                                    }}
-                                    disabled={isPending}
-                                >
-                                    Return to game
-                                </IonButton>
-                            </motion.div>
-                        )}
-
-                        {hasAccount && (
-                            <div>
+                            {session && (
                                 <motion.div whileTap={{ scale: 0.97 }} transition={TAP_SPRING}>
                                     <IonButton
                                         expand="block"
-                                        style={styles.primaryButton}
-                                        onClick={handleCreateSession}
-                                        disabled={!!session || isPending}
+                                        style={styles.returnButton}
+                                        onClick={() => {
+                                            void hapticMedium();
+                                            history.push(`/game/${session.id}`);
+                                        }}
+                                        disabled={isPending}
                                     >
-                                        Create game
+                                        Return to game
                                     </IonButton>
                                 </motion.div>
-                            </div>
-                        )}
+                            )}
 
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                handleJoin();
-                            }}
-                        >
-                            <button type="submit" aria-hidden="true" style={{ display: "none" }} />
-                            <div style={styles.joinRow}>
-                                <input
-                                    className="join-code-input"
-                                    style={styles.codeInput}
-                                    placeholder="Enter code"
-                                    value={joinCode}
-                                    onChange={(e) => setJoinCode(e.target.value)}
-                                    maxLength={MAX_JOIN_CODE_LENGTH}
-                                    autoCapitalize="characters"
-                                    autoComplete="off"
-                                    disabled={!!session}
-                                />
-                                {/*
-                                 * Join button subtly halos amber when a code is entered —
-                                 * a quiet signal that the button is ready.
-                                 */}
-                                <IonButton
+                            {hasAccount && (
+                                <div>
+                                    <motion.div whileTap={{ scale: 0.97 }} transition={TAP_SPRING}>
+                                        <IonButton
+                                            expand="block"
+                                            style={styles.primaryButton}
+                                            onClick={handleCreateSession}
+                                            disabled={!!session || isPending}
+                                        >
+                                            Create game
+                                        </IonButton>
+                                    </motion.div>
+                                </div>
+                            )}
+
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleJoin();
+                                }}
+                            >
+                                <button
                                     type="submit"
-                                    style={styles.joinButton}
-                                    disabled={!hasCode || !!session || isPending}
-                                >
-                                    Join
-                                </IonButton>
-                            </div>
-                        </form>
-
-                        {joinError && <p style={styles.error}>{joinError}</p>}
-                        {session && (
-                            <p style={styles.sessionHint}>
-                                Leave your current game to join or create a new one.
-                            </p>
-                        )}
-
-                        {/* Register block — prominent amber CTA for new users */}
-                        {!hasAccount && !isGuest && (
-                            <div style={styles.registerBlock}>
-                                <motion.div whileTap={{ scale: 0.97 }} transition={TAP_SPRING}>
+                                    aria-hidden="true"
+                                    style={{ display: "none" }}
+                                />
+                                <div style={styles.joinRow}>
+                                    <input
+                                        className="join-code-input"
+                                        style={styles.codeInput}
+                                        placeholder="Enter code"
+                                        value={joinCode}
+                                        onChange={(e) => setJoinCode(e.target.value)}
+                                        maxLength={MAX_JOIN_CODE_LENGTH}
+                                        autoCapitalize="characters"
+                                        autoComplete="off"
+                                        disabled={!!session}
+                                    />
+                                    {/*
+                                     * Join button subtly halos amber when a code is entered —
+                                     * a quiet signal that the button is ready.
+                                     */}
                                     <IonButton
-                                        expand="block"
-                                        style={styles.registerButton}
+                                        type="submit"
+                                        style={styles.joinButton}
+                                        disabled={!hasCode || !!session || isPending}
+                                    >
+                                        Join
+                                    </IonButton>
+                                </div>
+                            </form>
+
+                            {joinError && <p style={styles.error}>{joinError}</p>}
+                            {session && (
+                                <p style={styles.sessionHint}>
+                                    Leave your current game to join or create a new one.
+                                </p>
+                            )}
+
+                            {/* Register block — prominent amber CTA for new users */}
+                            {!hasAccount && !isGuest && (
+                                <div style={styles.registerBlock}>
+                                    <motion.div whileTap={{ scale: 0.97 }} transition={TAP_SPRING}>
+                                        <IonButton
+                                            expand="block"
+                                            style={styles.registerButton}
+                                            onClick={() => {
+                                                void hapticLight();
+                                                history.push("/register");
+                                            }}
+                                        >
+                                            Create an account
+                                        </IonButton>
+                                    </motion.div>
+                                    <button
+                                        style={styles.signInLink}
                                         onClick={() => {
                                             void hapticLight();
-                                            history.push("/register");
+                                            history.push("/login");
                                         }}
                                     >
-                                        Create an account
-                                    </IonButton>
-                                </motion.div>
-                                <button
-                                    style={styles.signInLink}
-                                    onClick={() => {
-                                        void hapticLight();
-                                        history.push("/login");
-                                    }}
-                                >
-                                    Already have one? Sign in
-                                </button>
-                            </div>
-                        )}
+                                        Already have one? Sign in
+                                    </button>
+                                </div>
+                            )}
 
-                        {/* Logged-in account block */}
-                        {hasAccount && (
-                            <p style={styles.accountBlock}>
-                                Signed in as {user!.displayName}.{" "}
-                                <button
-                                    style={styles.logoutLink}
-                                    onClick={() => {
-                                        void hapticLight();
-                                        void logout();
-                                    }}
-                                >
-                                    Log out
-                                </button>
-                            </p>
-                        )}
-                    </motion.div>
-                    </div>{/* end aboveFold wrapper */}
+                            {/* Logged-in account block */}
+                            {hasAccount && (
+                                <p style={styles.accountBlock}>
+                                    Signed in as {user!.displayName}.{" "}
+                                    <button
+                                        style={styles.logoutLink}
+                                        onClick={() => {
+                                            void hapticLight();
+                                            void logout();
+                                        }}
+                                    >
+                                        Log out
+                                    </button>
+                                </p>
+                            )}
+                        </motion.div>
+                    </div>
+                    {/* end aboveFold wrapper */}
 
                     {/* ── Past Games ──────────────────────────────────────── */}
                     {hasPastGames && (
@@ -364,6 +369,7 @@ export default function Home() {
                             {activeGames.map((g) => (
                                 <button
                                     key={g.id}
+                                    className="past-game-row"
                                     style={styles.pastGameRow}
                                     disabled={isPending}
                                     onClick={() => handleJoinActiveGame(g)}
@@ -390,7 +396,11 @@ export default function Home() {
                     message={`You're currently in "${session?.name}". Switch to "${confirmSwitch.name}"?`}
                     onDismiss={() => setConfirmSwitch(null)}
                     buttons={[
-                        { label: "Cancel", variant: "ghost", onClick: () => setConfirmSwitch(null) },
+                        {
+                            label: "Cancel",
+                            variant: "ghost",
+                            onClick: () => setConfirmSwitch(null),
+                        },
                         {
                             label: "Switch",
                             variant: "accent",
@@ -495,7 +505,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     wordmark: {
         fontFamily: "var(--font-display)",
-        fontSize: "88px",
+        fontSize: "clamp(64px, 20vw, 88px)",
         fontWeight: 700,
         color: "var(--color-text-primary)",
         letterSpacing: "-0.04em",
@@ -685,11 +695,11 @@ const styles: Record<string, React.CSSProperties> = {
         gap: "var(--space-3)",
         background: "none",
         border: "none",
-        borderBottom: "1px solid var(--color-border)",
         padding: "var(--space-3) 0",
         cursor: "pointer",
         textAlign: "left" as const,
         width: "100%",
+        transition: "background 140ms var(--ease)",
     },
     pastGameMain: {
         display: "flex",

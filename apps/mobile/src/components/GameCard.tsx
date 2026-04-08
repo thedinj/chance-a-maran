@@ -77,14 +77,22 @@ export function CardFront({
     const isDrawer = event.playerId === activePlayerId;
     const [descriptionShared, setDescriptionShared] = useState(event.descriptionShared);
     const [descrRevealed, setDescrRevealed] = useState(
-        !cv.hiddenInstructions !== null || event.descriptionShared
+        cv.hiddenInstructions === null || event.descriptionShared
     );
     const [sharing, setSharing] = useState(false);
 
     const showHiddenToggle =
-        !readOnly && cv.hiddenInstructions !== null && !descriptionShared && isDrawer && !descrRevealed;
+        !readOnly &&
+        cv.hiddenInstructions !== null &&
+        !descriptionShared &&
+        isDrawer &&
+        !descrRevealed;
     const showShareBtn =
-        !readOnly && cv.hiddenInstructions !== null && !descriptionShared && isDrawer && descrRevealed;
+        !readOnly &&
+        cv.hiddenInstructions !== null &&
+        !descriptionShared &&
+        isDrawer &&
+        descrRevealed;
 
     async function handleShare() {
         setSharing(true);
@@ -291,7 +299,11 @@ export function FlippingCard({
 
                 {/* Front face — initially hidden (rotated 180deg away from viewer) */}
                 <div style={{ ...styles.revealFlipFace, transform: "rotateY(180deg)" }}>
-                    <CardFront event={event} flipInFlight={flipInFlight} flipDurationMs={flipDurationMs} />
+                    <CardFront
+                        event={event}
+                        flipInFlight={flipInFlight}
+                        flipDurationMs={flipDurationMs}
+                    />
                 </div>
             </div>
         </div>
