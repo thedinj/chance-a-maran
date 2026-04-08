@@ -59,6 +59,8 @@ function LazyThumbnail({ imageId, apiBaseUrl }: { imageId: string; apiBaseUrl: s
 
 // ─── Card Detail Drawer ────────────────────────────────────────────────────────
 
+interface UserOption { id: string; displayName: string; email: string; }
+
 function CardDrawer({
     card,
     onClose,
@@ -74,6 +76,10 @@ function CardDrawer({
     const [isPending, startTransition] = useTransition();
     const [versions, setVersions] = useState<CardVersion[]>([]);
     const [editing, setEditing] = useState(false);
+    const [transferring, setTransferring] = useState(false);
+    const [users, setUsers] = useState<UserOption[]>([]);
+    const [newOwnerUserId, setNewOwnerUserId] = useState<string | null>(null);
+    const [transferSaving, setTransferSaving] = useState(false);
 
     // Edit form state
     const [games, setGames] = useState<GameOption[]>([]);
@@ -118,6 +124,37 @@ function CardDrawer({
         setEditRequirements(cv.requirements.map((r) => r.id));
         void loadEditData();
         setEditing(true);
+    }
+
+    function startTransfer() {
+        setNewOwnerUserId(null);
+        if (users.length === 0) {
+            adminFetch("/api/admin/users")
+                .then((r) => r.json())
+                .then((d) => { if (d.ok) setUsers(d.data as UserOption[]); });
+        }
+        setTransferring(true);
+    }
+
+    async function saveTransfer() {
+        if (!newOwnerUserId) return;
+        setTransferSaving(true);
+        try {
+            const res = await adminFetch(`/api/admin/cards/${card.id}/transfer-owner`, {
+                method: "POST",
+                body: JSON.stringify({ newOwnerUserId }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                onChanged(data.data as Card);
+                setTransferring(false);
+                notifications.show({ message: "Ownership transferred", color: "green" });
+            } else {
+                notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+            }
+        } finally {
+            setTransferSaving(false);
+        }
     }
 
     function action(url: string, method = "POST") {
@@ -177,6 +214,37 @@ function CardDrawer({
         } finally {
             setSaving(false);
         }
+    }
+
+    if (transferring) {
+        return (
+            <Stack gap="md">
+                <Text size="sm" fw={500}>Transfer ownership of &ldquo;{cv.title}&rdquo;</Text>
+                <Text size="xs" c="dimmed">Current owner: {cv.authorDisplayName}</Text>
+                <Select
+                    label="New owner"
+                    placeholder="Search users…"
+                    data={users.map((u) => ({ value: u.id, label: `${u.displayName} (${u.email})` }))}
+                    value={newOwnerUserId}
+                    onChange={setNewOwnerUserId}
+                    searchable
+                    clearable
+                />
+                <Group>
+                    <Button
+                        onClick={() => void saveTransfer()}
+                        loading={transferSaving}
+                        disabled={!newOwnerUserId || newOwnerUserId === card.authorUserId}
+                        color="orange"
+                    >
+                        Transfer
+                    </Button>
+                    <Button variant="subtle" color="gray" onClick={() => setTransferring(false)}>
+                        Cancel
+                    </Button>
+                </Group>
+            </Stack>
+        );
     }
 
     if (editing) {
@@ -350,6 +418,9 @@ function CardDrawer({
             <Group wrap="wrap">
                 <Button size="xs" variant="outline" onClick={startEdit}>
                     Edit card
+                </Button>
+                <Button size="xs" variant="outline" color="orange" onClick={startTransfer}>
+                    Transfer ownership
                 </Button>
                 <Button
                     size="xs"

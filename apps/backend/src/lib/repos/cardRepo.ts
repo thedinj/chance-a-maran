@@ -364,6 +364,10 @@ export function setCardType(id: string, cardType: "standard" | "reparations"): v
     db.prepare("UPDATE cards SET card_type = ? WHERE id = ?").run(cardType, id);
 }
 
+export function setAuthorUserId(id: string, userId: string): void {
+    db.prepare("UPDATE cards SET author_user_id = ? WHERE id = ?").run(userId, id);
+}
+
 // ─── Draw pool query ──────────────────────────────────────────────────────────
 
 export function getDrawPool(

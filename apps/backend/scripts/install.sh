@@ -56,6 +56,18 @@ set -e
 # - Installs and configures Caddy to serve the mobile SPA and proxy the API
 # - Optionally configures HTTPS with Let's Encrypt
 # - Optionally installs Samba for Windows network file access
+#
+# POST-INSTALL: Import legacy card data
+# --------------------------------------
+# The install script seeds the database (admin user, app settings) but does NOT
+# import legacy card data. After installation completes, run:
+#
+#   cd ~/chance-a-maran/apps/backend
+#   pnpm db:import
+#
+# This reads raw_assets/old_database.sql (included in the repo — no manual copy
+# needed) and imports cards, images, and requirement elements into SQLite.
+# The import is idempotent: safe to re-run, it skips if data already exists.
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

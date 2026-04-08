@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Backend — Next.js",
+            "name": "[server] Backend",
             "type": "node",
             "request": "launch",
             "cwd": "${workspaceFolder}/apps/backend",
@@ -11,15 +11,17 @@
             "env": {
                 "NODE_OPTIONS": "--inspect"
             },
-            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/**/node_modules/**"],
-            "serverReadyAction": {
-                "pattern": "started server on .+, url: (https?://.+)",
-                "uriFormat": "%s",
-                "action": "openExternally"
-            }
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/**/node_modules/**"]
         },
         {
-            "name": "Mobile — Chrome",
+            "name": "[browser] Admin (localhost:3000)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:3000/admin",
+            "webRoot": "${workspaceFolder}/apps/backend/src"
+        },
+        {
+            "name": "[browser] Mobile (localhost:8100)",
             "type": "chrome",
             "request": "launch",
             "url": "http://localhost:8100",
@@ -29,8 +31,13 @@
     ],
     "compounds": [
         {
-            "name": "All Apps",
-            "configurations": ["Backend — Next.js", "Mobile — Chrome"],
+            "name": "Backend",
+            "configurations": ["[server] Backend", "[browser] Admin (localhost:3000)"],
+            "stopAll": true
+        },
+        {
+            "name": "Mobile",
+            "configurations": ["[server] Backend", "[browser] Mobile (localhost:8100)"],
             "stopAll": true
         }
     ]

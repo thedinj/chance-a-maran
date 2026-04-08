@@ -50,7 +50,7 @@ const actionsVariants = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Home() {
-    const { user, isGuest, isInitializing } = useAuth();
+    const { user, isGuest, isInitializing, logout } = useAuth();
     const { session, initSession } = useSession();
     const exitSession = useExitSession();
     const history = useHistory();
@@ -275,6 +275,7 @@ export default function Home() {
                                 handleJoin();
                             }}
                         >
+                            <button type="submit" aria-hidden="true" style={{ display: "none" }} />
                             <div style={styles.joinRow}>
                                 <input
                                     className="join-code-input"
@@ -333,6 +334,22 @@ export default function Home() {
                                     Already have one? Sign in
                                 </button>
                             </div>
+                        )}
+
+                        {/* Logged-in account block */}
+                        {hasAccount && (
+                            <p style={styles.accountBlock}>
+                                Signed in as {user!.displayName}.{" "}
+                                <button
+                                    style={styles.logoutLink}
+                                    onClick={() => {
+                                        void hapticLight();
+                                        void logout();
+                                    }}
+                                >
+                                    Log out
+                                </button>
+                            </p>
                         )}
                     </motion.div>
                     </div>{/* end aboveFold wrapper */}
@@ -617,6 +634,29 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
         textAlign: "center" as const,
         letterSpacing: "0.03em",
+    },
+
+    // ── Account block ────────────────────────────────────────────────────────
+
+    accountBlock: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        textAlign: "center" as const,
+        letterSpacing: "0.03em",
+        margin: 0,
+        paddingTop: "var(--space-1)",
+    },
+    logoutLink: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        cursor: "pointer",
+        padding: 0,
+        letterSpacing: "0.03em",
+        textDecoration: "none",
     },
 
     // ── Past Games section ────────────────────────────────────────────────────

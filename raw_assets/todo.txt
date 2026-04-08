@@ -1,8 +1,8 @@
-Host venue settings (required elements)
-Timing of sfx
+Polish task
+Favicons/icons for frontend and backend
 Test hidden instructions
-Setup/update scripts
-LLM tool in admin portal to parse card for spicines/drunkenness?
+Test setup/update scripts
+Test multiple players
 DDNS
 
 Mobile/Android version

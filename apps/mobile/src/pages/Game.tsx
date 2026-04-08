@@ -580,6 +580,7 @@ function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             onPointerCancel={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
             disabled={!isEnabled && !isPending}
         >
             <div

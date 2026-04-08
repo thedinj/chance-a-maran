@@ -72,7 +72,7 @@ export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormPr
     }
 
     return (
-        <div style={styles.form}>
+        <form style={styles.form} onSubmit={(e) => { e.preventDefault(); void handleSubmit(onSubmit)(); }}>
             <IonInput
                 style={styles.input}
                 type="email"
@@ -106,8 +106,8 @@ export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormPr
 
             <IonButton
                 expand="block"
+                type="submit"
                 style={styles.submitButton}
-                onClick={() => void handleSubmit(onSubmit)()}
                 disabled={isPending}
             >
                 {isPending ? (
@@ -121,6 +121,7 @@ export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormPr
                 <p style={styles.nudge}>
                     Have an invite?{" "}
                     <button
+                        type="button"
                         style={styles.textLink}
                         onClick={() => {
                             onCancel?.();
@@ -131,7 +132,7 @@ export function LoginForm({ onSuccess, onCancel, showNudge = true }: LoginFormPr
                     </button>
                 </p>
             )}
-        </div>
+        </form>
     );
 }
 

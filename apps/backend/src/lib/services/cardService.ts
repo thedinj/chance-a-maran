@@ -17,6 +17,7 @@ import * as cardVoteRepo from "../repos/cardVoteRepo";
 import * as sessionRepo from "../repos/sessionRepo";
 import * as playerRepo from "../repos/playerRepo";
 import * as cardPicker from "../card-picker";
+import * as userRepo from "../repos/userRepo";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,15 @@ export function withdrawNomination(userId: string, cardId: string, isAdmin: bool
         throw new AuthorizationError("You can only withdraw nominations for your own cards");
     }
     cardRepo.setGlobalNomination(cardId, false);
+    return cardRepo.findById(cardId)!;
+}
+
+export function transferOwnership(cardId: string, newOwnerUserId: string): Card {
+    const card = cardRepo.findById(cardId);
+    if (!card) throw new NotFoundError("Card not found");
+    const newOwner = userRepo.findById(newOwnerUserId);
+    if (!newOwner) throw new NotFoundError("User not found");
+    cardRepo.setAuthorUserId(cardId, newOwnerUserId);
     return cardRepo.findById(cardId)!;
 }
 
