@@ -22,22 +22,20 @@ const JoinNameSchema = z.object({
         .trim()
         .min(1, "Please enter a name to join.")
         .max(MAX_DISPLAY_NAME_LENGTH),
-    cardSharing: z.enum(["none", "mine", "network"]),
+    cardSharing: z.enum(["none", "mine"]),
 });
 
 type JoinNameValues = z.infer<typeof JoinNameSchema>;
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
-const SHARING_LABELS: Record<"none" | "mine" | "network", string> = {
-    network: "My network",
+const SHARING_LABELS: Record<"none" | "mine", string> = {
     mine: "My cards",
     none: "None",
 };
 
-const SHARING_DESCRIPTIONS: Record<"none" | "mine" | "network", string> = {
-    network: "Your cards + cards from players in your recent sessions",
-    mine: "Your own library cards only",
+const SHARING_DESCRIPTIONS: Record<"none" | "mine", string> = {
+    mine: "Your own library cards enter the draw pool",
     none: "Don't contribute cards to this session",
 };
 
@@ -85,7 +83,7 @@ export default function Join() {
         defaultValues: {
             // Pre-fill from registered user's display name — they can edit it if they want
             displayName: user?.displayName ?? "",
-            cardSharing: "network",
+            cardSharing: "mine",
         },
     });
 
@@ -360,7 +358,7 @@ function JoinDetailsStep({
                             control={control}
                             render={({ field }) => (
                                 <div style={styles.radioStack}>
-                                    {(["network", "mine", "none"] as const).map((level) => (
+                                    {(["mine", "none"] as const).map((level) => (
                                         <button
                                             key={level}
                                             style={

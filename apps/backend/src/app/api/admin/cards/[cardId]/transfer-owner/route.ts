@@ -16,7 +16,7 @@ export const POST = withAdmin(async (req, { params }) => {
             return fail(new ValidationError("newOwnerUserId is required"));
         }
 
-        const updated = cardService.transferOwnership(cardId, newOwnerUserId);
+        const updated = await cardService.transferOwnership(cardId, newOwnerUserId);
         return ok(updated);
     } catch (err) {
         return handleError(err);

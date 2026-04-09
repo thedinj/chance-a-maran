@@ -10,12 +10,11 @@ export const PlayerSchema = z.object({
     active: z.boolean(),
     /**
      * Controls how this registered player contributes cards to the session pool.
-     * - 'none'    — contributes nothing
-     * - 'mine'    — contributes own library cards
-     * - 'network' — contributes own cards + cards from players in their recent sessions (default)
+     * - 'none' — contributes nothing
+     * - 'mine' — contributes own library cards (default)
      * Null for guest players (no card library).
      */
-    cardSharing: z.enum(["none", "mine", "network"]).nullable(),
+    cardSharing: z.enum(["none", "mine"]).nullable(),
 });
 
 export type Player = z.infer<typeof PlayerSchema>;

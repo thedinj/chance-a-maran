@@ -50,6 +50,8 @@ export type CardVersion = z.infer<typeof CardVersionSchema>;
 export const CardSchema = z.object({
     id: z.string(),
     authorUserId: z.string(),
+    /** Denormalised display name of the current owner (cards.author_user_id). Changes when ownership is transferred. */
+    ownerDisplayName: z.string(),
     /**
      * 'standard' — drawn normally from the main pool.
      * 'reparations' — drawn as a penalty; pulled from a separate pool on demand.

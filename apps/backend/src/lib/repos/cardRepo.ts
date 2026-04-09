@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { db } from "../db/db";
 import { boolToInt, intToBool } from "../db/boolBridge";
+import * as mediaRepo from "./mediaRepo";
 import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
@@ -8,12 +9,14 @@ import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
 export interface DbCard {
     id: string;
     author_user_id: string;
+    owner_display_name: string;
     card_type: "standard" | "reparations";
     active: number;
     is_global: number;
     pending_global: number;
     created_in_session_id: string | null;
     current_version_id: string;
+    net_votes: number;
     created_at: string;
 }
 
@@ -103,6 +106,7 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
     return {
         id: cardRow.id,
         authorUserId: cardRow.author_user_id,
+        ownerDisplayName: cardRow.owner_display_name,
         cardType: cardRow.card_type,
         active: intToBool(cardRow.active),
         isGlobal: intToBool(cardRow.is_global),
@@ -117,7 +121,16 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function findRawById(id: string): DbCard | null {
-    return (db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as DbCard | undefined) ?? null;
+    return (
+        db
+            .prepare(
+                `SELECT c.*, u.display_name AS owner_display_name
+                 FROM cards c
+                 JOIN users u ON u.id = c.author_user_id
+                 WHERE c.id = ?`
+            )
+            .get(id) as DbCard | undefined
+    ) ?? null;
 }
 
 function findRawVersionById(id: string): DbCardVersion | null {
@@ -164,7 +177,13 @@ export function findVersionsByCardId(cardId: string): CardVersion[] {
 
 export function findByAuthorUserId(userId: string): Card[] {
     const cards = db
-        .prepare("SELECT * FROM cards WHERE author_user_id = ? ORDER BY created_at DESC")
+        .prepare(
+            `SELECT c.*, u.display_name AS owner_display_name
+             FROM cards c
+             JOIN users u ON u.id = c.author_user_id
+             WHERE c.author_user_id = ?
+             ORDER BY c.created_at DESC`
+        )
         .all(userId) as DbCard[];
     return cards.flatMap((card) => {
         const version = findRawVersionById(card.current_version_id);
@@ -216,8 +235,10 @@ export function findAll(filters?: {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const cards = db
         .prepare(
-            `SELECT c.* FROM cards c
+            `SELECT c.*, u.display_name AS owner_display_name
+             FROM cards c
              JOIN card_versions cv ON cv.id = c.current_version_id
+             JOIN users u ON u.id = c.author_user_id
              ${where}
              ORDER BY c.created_at DESC`
         )
@@ -343,9 +364,46 @@ export function createVersion(
                 "INSERT OR IGNORE INTO card_version_requirements (card_version_id, element_id) VALUES (?, ?)"
             ).run(versionId, elementId);
         }
+        // Prune old versions no longer referenced by the current card or any draw event
+        pruneOldVersions(cardId, versionId);
     })();
 
     return findById(cardId)!;
+}
+
+/**
+ * Delete card versions that are neither the current version nor referenced by any draw event.
+ * Also cleans up orphaned media files from deleted versions.
+ */
+export function pruneOldVersions(cardId: string, currentVersionId?: string): void {
+    const cvId =
+        currentVersionId ??
+        (findRawById(cardId)?.current_version_id ?? null);
+    if (!cvId) return;
+
+    const orphaned = db
+        .prepare(
+            `SELECT id, image_id FROM card_versions
+             WHERE card_id = ?
+               AND id != ?
+               AND id NOT IN (SELECT card_version_id FROM draw_events)`
+        )
+        .all(cardId, cvId) as Array<{ id: string; image_id: string | null }>;
+
+    for (const v of orphaned) {
+        // CASCADE deletes card_game_tags and card_version_requirements
+        db.prepare("DELETE FROM card_versions WHERE id = ?").run(v.id);
+
+        // Remove media if no remaining version references it
+        if (v.image_id) {
+            const stillUsed = db.prepare(
+                "SELECT 1 FROM card_versions WHERE image_id = ? LIMIT 1"
+            ).get(v.image_id);
+            if (!stillUsed) {
+                mediaRepo.deleteById(v.image_id);
+            }
+        }
+    }
 }
 
 export function setActive(id: string, active: boolean): void {
@@ -383,11 +441,7 @@ export function getDrawPool(
                c.id              AS card_id,
                cv.id             AS card_version_id,
                c.created_in_session_id,
-               COALESCE(
-                 (SELECT SUM(CASE WHEN direction = 'up' THEN 1 ELSE -1 END)
-                  FROM card_votes WHERE card_id = c.id),
-                 0
-               )                 AS net_votes,
+               c.net_votes,
                (SELECT GROUP_CONCAT(game_id)
                 FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids,
                (SELECT GROUP_CONCAT(element_id)

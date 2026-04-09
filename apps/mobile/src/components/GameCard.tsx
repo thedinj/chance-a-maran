@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { apiClient } from "../lib/api";
 import type { DrawEvent } from "../lib/api";
 import { useCards } from "../cards/useCards";
@@ -15,7 +15,7 @@ interface CardBackProps {
 export function CardBack({ event }: CardBackProps): React.JSX.Element {
     const isReparations = event.card.cardType === "reparations";
     const imageUrl = event.cardVersion.imageId
-        ? apiClient.resolveImageUrl(event.cardVersion.imageId)
+        ? apiClient.resolveMediaUrl(event.cardVersion.imageId)
         : null;
 
     return (
@@ -132,7 +132,7 @@ export function CardFront({
                         <div style={styles.revealImageSlot}>
                             {cv.imageId ? (
                                 <img
-                                    src={apiClient.resolveImageUrl(cv.imageId) ?? ""}
+                                    src={apiClient.resolveMediaUrl(cv.imageId) ?? ""}
                                     alt={cv.title}
                                     style={{
                                         width: "100%",
@@ -201,9 +201,11 @@ interface FlippingCardProps {
     event: DrawEvent;
     /** Fires once when the flip animation completes. */
     onFlipComplete?: () => void;
-    /** Override flip duration in ms — bypasses isGameChanger timing and sets delay to 0. */
+    /** Override flip duration in ms. Default 1180ms. */
     overrideDuration?: number;
-    /** Explicit pre-flip hold time in ms. Takes precedence over overrideDuration's implicit 0-delay. */
+    /** Override CSS easing. Default expo-out. */
+    overrideEasing?: string;
+    /** Pre-flip hold time in ms. Default 120ms. */
     dramaDelayMs?: number;
     /** When true, suppress flip timers entirely. Flip starts when this transitions to false. */
     flipHeld?: boolean;
@@ -213,32 +215,20 @@ export function FlippingCard({
     event,
     onFlipComplete,
     overrideDuration,
+    overrideEasing,
     dramaDelayMs,
     flipHeld,
 }: FlippingCardProps): React.JSX.Element {
-    const cv = event.cardVersion;
-    const isGameChanger = Boolean(cv.isGameChanger);
+    const isGameChanger = Boolean(event.cardVersion.isGameChanger);
     const prefersReducedMotion =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const flipDelayMs = prefersReducedMotion
-        ? 0
-        : dramaDelayMs != null
-          ? dramaDelayMs
-          : overrideDuration != null
-            ? 0
-            : isGameChanger
-              ? 1100
-              : 120;
-    const flipDurationMs = prefersReducedMotion
-        ? 170
-        : (overrideDuration ?? (isGameChanger ? 2400 : 1180));
+    const flipDelayMs = prefersReducedMotion ? 0 : (dramaDelayMs ?? 120);
+    const flipDurationMs = prefersReducedMotion ? 170 : (overrideDuration ?? 1180);
     const flipEasing = prefersReducedMotion
         ? "linear"
-        : isGameChanger
-          ? "cubic-bezier(0.22, 1, 0.36, 1)"
-          : "cubic-bezier(0.16, 1, 0.3, 1)";
+        : (overrideEasing ?? "cubic-bezier(0.16, 1, 0.3, 1)");
 
     const [flipStarted, setFlipStarted] = useState(false);
     const [flipComplete, setFlipComplete] = useState(false);
@@ -262,8 +252,15 @@ export function FlippingCard({
         };
     }, [event.id, flipDelayMs, flipDurationMs, flipHeld]);
 
+    const firedRef = useRef(false);
     useEffect(() => {
-        if (flipComplete) onFlipComplete?.();
+        firedRef.current = false;
+    }, [event.id]);
+    useEffect(() => {
+        if (flipComplete && !firedRef.current) {
+            firedRef.current = true;
+            onFlipComplete?.();
+        }
     }, [flipComplete, onFlipComplete]);
 
     return (

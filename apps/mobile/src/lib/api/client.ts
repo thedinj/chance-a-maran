@@ -11,7 +11,7 @@ import type {
     FilterSettings,
     Game,
     GetAllCardsFilters,
-    ImageUploadResponse,
+    MediaUploadResponse,
     JoinByCodeRequest,
     JoinByCodeResponse,
     LoginRequest,
@@ -347,7 +347,7 @@ export class ApiClient {
     updatePlayerSettings(
         sessionId: string,
         playerId: string,
-        patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" }
+        patch: { displayName?: string; cardSharing?: "none" | "mine" }
     ) {
         return this.request<Player>(
             "PATCH",
@@ -373,25 +373,25 @@ export class ApiClient {
         return this.request<void>("POST", "/api/users/me/change-password", req);
     }
 
-    // ── Images ────────────────────────────────────────────────────────────────
+    // ── Media ─────────────────────────────────────────────────────────────────
 
-    uploadImage(file: File) {
+    uploadMedia(file: File) {
         const form = new FormData();
         form.append("file", file);
-        return this.request<ImageUploadResponse>("POST", "/api/images", form);
+        return this.request<MediaUploadResponse>("POST", "/api/media", form);
     }
 
-    deleteImage(imageId: string) {
-        return this.request<void>("DELETE", `/api/images/${imageId}`);
+    deleteMedia(mediaId: string) {
+        return this.request<void>("DELETE", `/api/media/${mediaId}`);
     }
 
     /**
-     * Constructs a fully-qualified display URL from a stored imageId UUID.
+     * Constructs a fully-qualified display URL from a stored media UUID.
      * Returns null for null input.
      */
-    resolveImageUrl(imageId: string | null): string | null {
-        if (!imageId) return null;
-        return `${this.baseUrl}/api/images/${imageId}`;
+    resolveMediaUrl(mediaId: string | null): string | null {
+        if (!mediaId) return null;
+        return `${this.baseUrl}/api/media/${mediaId}`;
     }
 
     // ── Games ─────────────────────────────────────────────────────────────────

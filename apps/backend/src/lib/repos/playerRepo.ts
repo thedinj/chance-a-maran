@@ -8,7 +8,7 @@ export interface DbPlayer {
     user_id: string | null;
     display_name: string;
     player_token: string | null;
-    card_sharing: "none" | "mine" | "network";
+    card_sharing: "none" | "mine";
     active: number;
     joined_at: string;
 }
@@ -30,7 +30,7 @@ export function create(data: {
     userId?: string;
     displayName: string;
     playerToken?: string;
-    cardSharing?: "none" | "mine" | "network";
+    cardSharing?: "none" | "mine";
 }): DbPlayer {
     const now = new Date().toISOString();
     db.prepare(`
@@ -42,7 +42,7 @@ export function create(data: {
         data.userId ?? null,
         data.displayName,
         data.playerToken ?? null,
-        data.cardSharing ?? "network",
+        data.cardSharing ?? "mine",
         now
     );
     return findById(data.id)!;
@@ -85,7 +85,7 @@ export function findBySessionAndUserId(sessionId: string, userId: string): DbPla
 
 export function update(
     id: string,
-    patch: Partial<{ active: boolean; displayName: string; cardSharing: "none" | "mine" | "network"; playerToken: string | null }>
+    patch: Partial<{ active: boolean; displayName: string; cardSharing: "none" | "mine"; playerToken: string | null }>
 ): DbPlayer {
     const sets: string[] = [];
     const params: unknown[] = [];

@@ -45,8 +45,8 @@ export function initializeDatabase() {
             user_id      TEXT REFERENCES users(id),
             display_name TEXT NOT NULL,
             player_token TEXT,
-            card_sharing TEXT NOT NULL DEFAULT 'network'
-                CHECK(card_sharing IN ('none', 'mine', 'network')),
+            card_sharing TEXT NOT NULL DEFAULT 'mine'
+                CHECK(card_sharing IN ('none', 'mine')),
             active       INTEGER NOT NULL DEFAULT 1,
             joined_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -67,9 +67,8 @@ export function initializeDatabase() {
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS card_images (
+        CREATE TABLE IF NOT EXISTS media (
             id                  TEXT NOT NULL PRIMARY KEY,
-            data                BLOB NOT NULL,
             mime_type           TEXT NOT NULL,
             size                INTEGER NOT NULL,
             uploaded_by_user_id TEXT NOT NULL REFERENCES users(id),
@@ -106,6 +105,7 @@ export function initializeDatabase() {
             pending_global       INTEGER NOT NULL DEFAULT 0,
             created_in_session_id TEXT REFERENCES sessions(id),
             current_version_id   TEXT NOT NULL,
+            net_votes            INTEGER NOT NULL DEFAULT 0,
             created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -116,7 +116,7 @@ export function initializeDatabase() {
             title                TEXT NOT NULL,
             description          TEXT NOT NULL,
             hidden_instructions  TEXT,
-            image_id             TEXT REFERENCES card_images(id),
+            image_id             TEXT REFERENCES media(id),
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,
@@ -160,6 +160,7 @@ export function initializeDatabase() {
             id                  TEXT NOT NULL PRIMARY KEY,
             session_id          TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
             player_id           TEXT NOT NULL REFERENCES session_players(id),
+            card_id             TEXT NOT NULL REFERENCES cards(id),
             card_version_id     TEXT NOT NULL REFERENCES card_versions(id),
             drawn_at            DATETIME NOT NULL,
             revealed_to_all_at  DATETIME,

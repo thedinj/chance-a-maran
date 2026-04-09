@@ -107,6 +107,29 @@ export function findHistoryByUserId(userId: string): DbSessionSummary[] {
         .all(userId) as DbSessionSummary[];
 }
 
+export interface DbAdminSessionRow extends DbSession {
+    host_display_name: string | null;
+    player_count: number;
+    draw_count: number;
+}
+
+export function findAllAdmin(): DbAdminSessionRow[] {
+    return db
+        .prepare(
+            `SELECT s.*,
+                    hp.display_name AS host_display_name,
+                    COUNT(DISTINCT sp.id) AS player_count,
+                    COUNT(DISTINCT de.id) AS draw_count
+             FROM sessions s
+             LEFT JOIN session_players hp ON hp.id = s.host_player_id
+             LEFT JOIN session_players sp ON sp.session_id = s.id
+             LEFT JOIN draw_events de ON de.session_id = s.id
+             GROUP BY s.id
+             ORDER BY s.created_at DESC`
+        )
+        .all() as DbAdminSessionRow[];
+}
+
 export function findActiveByUserId(userId: string): DbSessionSummary[] {
     return db
         .prepare(

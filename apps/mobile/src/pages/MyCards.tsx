@@ -323,6 +323,19 @@ export default function MyCards() {
                                 )}
                             </div>
 
+                            {/* ── Authorship ───────────────────────────────── */}
+                            <div style={styles.authorshipRow}>
+                                <span style={styles.authorshipText}>
+                                    by {selectedCard.currentVersion.authorDisplayName}
+                                </span>
+                                {selectedCard.authorUserId !==
+                                    selectedCard.currentVersion.authoredByUserId && (
+                                    <span style={styles.authorshipText}>
+                                        owned by {selectedCard.ownerDisplayName}
+                                    </span>
+                                )}
+                            </div>
+
                             {/* ── Card form ─────────────────────────────────── */}
                             <CardEditor
                                 key={selectedCard.id}
@@ -808,8 +821,20 @@ const styles: Record<string, React.CSSProperties> = {
     modalBadgeRow: {
         display: "flex",
         gap: "var(--space-2)",
-        padding: "0 var(--space-5) var(--space-4)",
+        padding: "0 var(--space-5) var(--space-2)",
         flexWrap: "wrap",
+    },
+    authorshipRow: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "var(--space-3)",
+        padding: "0 var(--space-5) var(--space-4)",
+    },
+    authorshipText: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        fontStyle: "italic",
     },
 
     // Shared section layout

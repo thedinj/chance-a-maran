@@ -222,6 +222,7 @@ function drawFromPool(
         id: randomUUID(),
         sessionId,
         playerId,
+        cardId: selected.cardId,
         cardVersionId: selected.cardVersionId,
         drawnAt: now.toISOString(),
         revealedToAllAt: revealedAt,
@@ -301,6 +302,7 @@ export function acceptTransfer(transferId: string, acceptingPlayerId: string): D
             id: randomUUID(),
             sessionId: originalEvent.sessionId,
             playerId: acceptingPlayerId,
+            cardId: originalEvent.card.id,
             cardVersionId: originalEvent.cardVersionId,
             drawnAt: now,
             revealedToAllAt: now, // already revealed — no delay on transfer

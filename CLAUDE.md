@@ -15,7 +15,7 @@ Chance is a social party app played on a single shared phone alongside physical 
 | **User** | A permanent registered account (email + password, invite-code-gated). |
 | **CardVersion** | Immutable snapshot of card content. Edits create new versions; draw history references the version drawn. |
 | **cardType** | `chanceCard` or `reparationsCard` — set at creation, Card-level (not version-level), admin-only to change post-creation. |
-| **card_sharing** | Per-player, per-session setting: `none` / `mine` / `network` (default). Controls how a registered player contributes cards to the draw pool. |
+| **card_sharing** | Per-player, per-session setting: `none` / `mine` (default). Controls how a registered player contributes cards to the draw pool. |
 
 ## Project Status
 
@@ -157,5 +157,5 @@ The frontend targets **web browsers and native (iOS/Android) equally**. The web 
 - Cards are deactivated (`card.active = false`) by the owner or admin; this excludes them from all future draw pools but preserves draw history. No hard-delete.
 - `card.is_global` (admin-only) promotes a card to the global pool. `card.created_in_session_id` (nullable FK → sessions) tracks the session where the card was born — used for game-lineage pool tier and the 3× boost.
 - Only registered users can submit cards. Guests draw only.
-- `session_players.card_sharing` (`'none' | 'mine' | 'network'`, default `'network'`) controls how a registered player contributes to the session pool.
+- `session_players.card_sharing` (`'none' | 'mine'`, default `'mine'`) controls how a registered player contributes to the session pool.
 - Flags are a lightweight report signal only — no automatic hold.

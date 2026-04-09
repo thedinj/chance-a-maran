@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthorizationError, ConflictError, NotFoundError } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
-import * as imageRepo from "@/lib/repos/imageRepo";
+import * as mediaRepo from "@/lib/repos/mediaRepo";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/images/:imageId — public, no auth. Serves raw image bytes. */
+/** GET /api/media/:mediaId — public, no auth. Serves raw bytes. */
 export async function GET(
     _req: NextRequest,
-    { params }: { params: Promise<{ imageId: string }> }
+    { params }: { params: Promise<{ mediaId: string }> }
 ) {
-    const { imageId } = await params;
-    const row = imageRepo.findRawById(imageId);
+    const { mediaId } = await params;
+    const row = mediaRepo.findRawById(mediaId);
     if (!row) {
         return new NextResponse(null, { status: 404 });
     }
@@ -24,22 +24,22 @@ export async function GET(
     });
 }
 
-/** DELETE /api/images/:imageId — uploader only. Blocked by FK if referenced by a card version. */
+/** DELETE /api/media/:mediaId — uploader only. Blocked by FK if referenced by a card version. */
 export const DELETE = withAuth(async (req, context) => {
     try {
-        const { imageId } = await context.params;
+        const { mediaId } = await context.params;
 
-        const meta = imageRepo.findMetaById(imageId);
-        if (!meta) return fail(new NotFoundError("Image not found"));
+        const meta = mediaRepo.findMetaById(mediaId);
+        if (!meta) return fail(new NotFoundError("Media not found"));
 
         if (req.auth.type !== "user" || meta.uploaded_by_user_id !== req.auth.sub) {
-            return fail(new AuthorizationError("You can only delete your own images"));
+            return fail(new AuthorizationError("You can only delete your own media"));
         }
 
         try {
-            imageRepo.deleteById(imageId);
+            mediaRepo.deleteById(mediaId);
         } catch {
-            return fail(new ConflictError("Image is in use and cannot be deleted"));
+            return fail(new ConflictError("Media is in use and cannot be deleted"));
         }
 
         return ok(undefined);

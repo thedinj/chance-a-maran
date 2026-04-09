@@ -2,6 +2,9 @@ import {
     CreateSessionRequestSchema,
     FilterSettingsSchema,
     MAX_SESSION_NAME_LENGTH,
+    DRINKING_LEVEL_OPTIONS,
+    DRINKING_FILTER_DESCRIPTIONS,
+    SPICE_LEVEL_LABELS,
 } from "@chance/core";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
@@ -36,22 +39,20 @@ const GameSettingsFormSchema = CreateSessionRequestSchema.extend({
         includeGlobalCards: z.boolean(),
     }),
     // Client-only field; not sent to the create/update endpoints
-    cardSharing: z.enum(["none", "mine", "network"]),
+    cardSharing: z.enum(["none", "mine"]),
 });
 
 type GameSettingsFormValues = z.infer<typeof GameSettingsFormSchema>;
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
-const SHARING_LABELS: Record<"none" | "mine" | "network", string> = {
-    network: "My network",
+const SHARING_LABELS: Record<"none" | "mine", string> = {
     mine: "My cards",
     none: "None",
 };
 
-const SHARING_DESCRIPTIONS: Record<"none" | "mine" | "network", string> = {
-    network: "Your cards + cards from players in your recent sessions",
-    mine: "Your own library cards only",
+const SHARING_DESCRIPTIONS: Record<"none" | "mine", string> = {
+    mine: "Your own library cards enter the draw pool",
     none: "Don't contribute cards to this session",
 };
 
@@ -93,7 +94,7 @@ export default function GameSettings() {
                 availableElementIds: session?.filterSettings.availableElementIds,
             },
             // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
-            cardSharing: "network",
+            cardSharing: "mine",
         },
     });
 
@@ -125,9 +126,7 @@ export default function GameSettings() {
                         // Fall back to default-available elements
                         setValue(
                             "filterSettings.availableElementIds",
-                            elResult.data
-                                .filter((el) => el.defaultAvailable)
-                                .map((el) => el.id)
+                            elResult.data.filter((el) => el.defaultAvailable).map((el) => el.id)
                         );
                     }
                     setElementsLoading(false);
@@ -228,8 +227,8 @@ export default function GameSettings() {
                     <div style={styles.section}>
                         <p style={styles.sectionLabel}>FILTERS</p>
                         <p style={styles.hint}>
-                            Drinking and content themes are independent — a session can
-                            be max drinking and fully Clean.
+                            Drinking and content themes are independent — a session can be max
+                            drinking and fully Clean.
                         </p>
 
                         <Controller
@@ -239,26 +238,23 @@ export default function GameSettings() {
                                 <div style={styles.toggleRow}>
                                     <div style={styles.toggleText}>
                                         <span style={styles.toggleTitle}>Drinking limit</span>
+                                        <span style={styles.toggleSub}>
+                                            {DRINKING_FILTER_DESCRIPTIONS[field.value]}
+                                        </span>
                                     </div>
                                     <div style={styles.selectorGroup}>
-                                        {([0, 1, 2, 3] as const).map((level) => (
+                                        {DRINKING_LEVEL_OPTIONS.map(({ value, label }) => (
                                             <button
-                                                key={level}
+                                                key={value}
                                                 style={
-                                                    field.value === level
+                                                    field.value === value
                                                         ? styles.toggleOn
                                                         : styles.toggleOff
                                                 }
-                                                onClick={() => field.onChange(level)}
+                                                onClick={() => field.onChange(value)}
                                                 disabled={isPending}
                                             >
-                                                {level === 0
-                                                    ? "∅"
-                                                    : level === 1
-                                                      ? "🍺"
-                                                      : level === 2
-                                                        ? "🍺🍺"
-                                                        : "🍺🍺🍺"}
+                                                {label}
                                             </button>
                                         ))}
                                     </div>
@@ -286,13 +282,7 @@ export default function GameSettings() {
                                                 onClick={() => field.onChange(level)}
                                                 disabled={isPending}
                                             >
-                                                {level === 0
-                                                    ? "Clean"
-                                                    : level === 1
-                                                      ? "Mild"
-                                                      : level === 2
-                                                        ? "Edgy"
-                                                        : "Spicy"}
+                                                {SPICE_LEVEL_LABELS[level]}
                                             </button>
                                         ))}
                                     </div>
@@ -382,8 +372,7 @@ export default function GameSettings() {
                                             >
                                                 <span style={styles.sectionLabel}>VENUE</span>
                                                 <span style={styles.collapsibleMeta}>
-                                                    {selectedCount}/{totalCount}
-                                                    {" "}
+                                                    {selectedCount}/{totalCount}{" "}
                                                     {venueExpanded ? "▴" : "▾"}
                                                 </span>
                                             </button>
@@ -417,8 +406,9 @@ export default function GameSettings() {
                                                             </p>
                                                             <div style={styles.tagList}>
                                                                 {defaultOnElements.map((el) => {
-                                                                    const isOn =
-                                                                        selected.includes(el.id);
+                                                                    const isOn = selected.includes(
+                                                                        el.id
+                                                                    );
                                                                     return (
                                                                         <button
                                                                             key={el.id}
@@ -447,8 +437,9 @@ export default function GameSettings() {
                                                             </p>
                                                             <div style={styles.tagList}>
                                                                 {extraElements.map((el) => {
-                                                                    const isOn =
-                                                                        selected.includes(el.id);
+                                                                    const isOn = selected.includes(
+                                                                        el.id
+                                                                    );
                                                                     return (
                                                                         <button
                                                                             key={el.id}
@@ -491,7 +482,7 @@ export default function GameSettings() {
                                     How much of your library enters the draw pool.
                                 </p>
                                 <div style={styles.radioStack}>
-                                    {(["network", "mine", "none"] as const).map((level) => (
+                                    {(["mine", "none"] as const).map((level) => (
                                         <button
                                             key={level}
                                             style={

@@ -31,16 +31,18 @@ import { useTransfers } from "../transfers/useTransfers";
 // ─── Draw Drama ──────────────────────────────────────────────────────────────
 
 interface DrawDrama {
-    /** Sound to loop (standard) or play once before flip (introOnly) */
+    /** One-shot intro sound. Flip is held until it finishes (via onended). */
+    introSound?: string;
+    /** Sound looped during the flip (and reparations intro). */
     loopSound: string;
-    /** If true, loopSound plays once and flip waits for onended before starting */
-    introOnly?: boolean;
     /** One-shot sound fired when flip completes */
     hitSound: string;
-    /** ms to show card back (static) before the flip begins — ignored when introOnly */
+    /** ms to show card back (static) before the flip begins — ignored when introSound is set */
     backMs: number;
     /** flip animation duration ms (passed as overrideDuration to FlippingCard) */
     flipMs: number;
+    /** CSS easing for the flip animation */
+    flipEasing?: string;
     /** Optional label badge shown during the back phase (e.g. "GAME CHANGER") */
     preFlipLabel?: string;
 }
@@ -73,12 +75,21 @@ const STANDARD_DRAW_DRAMA: DrawDrama = {
 };
 
 const GAME_CHANGER_DRAMA: DrawDrama = {
-    loopSound: "/sound/drama.mp3",
-    introOnly: true,
+    introSound: "/sound/drama.mp3",
+    loopSound: "/sound/drumrollloop.mp3",
     hitSound: "/sound/cymbal.mp3",
     backMs: 0, // unused — drama.mp3 duration drives the hold
     flipMs: 3000,
+    flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 3s
     preFlipLabel: "GAME CHANGER",
+};
+
+const REPARATIONS_DRAMA: DrawDrama = {
+    loopSound: "/sound/drumrollloop.mp3",
+    hitSound: "/sound/cymbal.mp3",
+    backMs: 1400, // long hold on the back — let dread build
+    flipMs: 2600, // slow, inevitable flip
+    flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 2.6s
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -92,12 +103,6 @@ function useIsLandscape(): boolean {
         return () => window.removeEventListener("resize", handler);
     }, []);
     return landscape;
-}
-
-function getInitials(name: string): string {
-    const words = name.trim().split(/\s+/);
-    if (words.length >= 2) return (words[0]![0]! + words[1]![0]!).toUpperCase();
-    return name.trim()[0]!.toUpperCase();
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -603,65 +608,461 @@ function DrawButton({ isEnabled, isPending, onDraw }: DrawButtonProps) {
     );
 }
 
+// ── SpotlightCanvas ───────────────────────────────────────────────────────────
+
+interface SpotlightCanvasProps {
+    isGameChanger: boolean;
+    isReparations: boolean;
+    /** Flip animation is currently in progress */
+    flipping: boolean;
+    /** Flip complete — card front is fully revealed */
+    locked: boolean;
+}
+
+function SpotlightCanvas({ isGameChanger, isReparations, flipping, locked }: SpotlightCanvasProps) {
+    const prefersReduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animRef = useRef({
+        flipping: false,
+        locked: false,
+        lockedAt: null as number | null,
+        rings: [] as Array<{ bornAt: number }>,
+    });
+
+    useEffect(() => {
+        animRef.current.flipping = flipping;
+        animRef.current.locked = locked;
+        if (locked && animRef.current.lockedAt === null) {
+            animRef.current.lockedAt = performance.now();
+            // Reparations: fire 3 shockwave rings staggered 180ms apart
+            if (isReparations) {
+                const now = performance.now();
+                animRef.current.rings = [
+                    { bornAt: now },
+                    { bornAt: now + 180 },
+                    { bornAt: now + 360 },
+                ];
+            }
+        }
+    }, [flipping, locked, isReparations]);
+
+    useEffect(() => {
+        if (prefersReduced) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        function resize() {
+            if (canvas) {
+                canvas.width = canvas.offsetWidth || window.innerWidth;
+                canvas.height = canvas.offsetHeight || window.innerHeight;
+            }
+        }
+        resize();
+        const ro = new ResizeObserver(resize);
+        ro.observe(canvas);
+
+        const startTime = performance.now();
+        // Reparations: blackest void + deep vein-red. GC: blood crimson. Standard: amber.
+        const [cr, cg, cb]: [number, number, number] = isReparations
+            ? [110, 8, 8] // dark vein-red — deeper than GC
+            : isGameChanger
+              ? [165, 18, 18] // blood crimson
+              : [212, 168, 71]; // amber
+
+        function easeOut(t: number) {
+            return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+        }
+        function lerp(a: number, b: number, t: number) {
+            return a + (b - a) * Math.max(0, Math.min(1, t));
+        }
+
+        let frameId = 0;
+
+        function draw() {
+            if (!canvas || !ctx) return;
+            const W = canvas.width;
+            const H = canvas.height;
+            if (W === 0 || H === 0) {
+                frameId = requestAnimationFrame(draw);
+                return;
+            }
+
+            const now = performance.now();
+            const elapsed = now - startTime;
+            const { flipping, locked, lockedAt } = animRef.current;
+
+            // Sweep: 0→1 over 2.4s for GC (slow, ominous), 1.4s for standard
+            const sweepDuration = isGameChanger ? 2400 : 1400;
+            const sweepT = easeOut(elapsed / sweepDuration);
+
+            // Card center approximation in canvas space
+            const cardX = W * 0.5;
+            const cardY = H * 0.44;
+
+            ctx.clearRect(0, 0, W, H);
+
+            // ── Vignette: deepen theatrical darkness at edges ─────────────────
+            const vigR = Math.max(W, H) * 1.1;
+            const vigGrad = ctx.createRadialGradient(cardX, cardY, H * 0.08, cardX, cardY, vigR);
+            vigGrad.addColorStop(0, "rgba(0,0,0,0)");
+            if (isReparations) {
+                vigGrad.addColorStop(0.45, "rgba(2,0,0,0.22)");
+                vigGrad.addColorStop(1, "rgba(4,0,0,0.72)"); // deeper void for reparations
+            } else {
+                vigGrad.addColorStop(0.55, `rgba(${isGameChanger ? "4,0,0" : "0,0,4"},0.1)`);
+                vigGrad.addColorStop(1, `rgba(${isGameChanger ? "6,0,0" : "0,0,6"},0.42)`);
+            }
+            ctx.fillStyle = vigGrad;
+            ctx.fillRect(0, 0, W, H);
+
+            // ── Light source position ─────────────────────────────────────────
+            let srcX: number, srcY: number;
+            if (isReparations) {
+                // Dead center overhead — the light never moves, it was always there
+                // Slight sinusoidal drift like a single bulb on a cord swaying
+                const sway = Math.sin(elapsed * 0.0006) * W * 0.025;
+                srcX = cardX + sway;
+                srcY = H * -0.08;
+            } else if (isGameChanger) {
+                // Ominous sweep from upper-left into position — slow, deliberate
+                const drift = Math.sin(elapsed * 0.0008) * W * 0.04;
+                srcX = lerp(W * -0.25, cardX + drift, sweepT);
+                srcY = lerp(H * -0.55, H * -0.18, sweepT);
+            } else {
+                // Standard: centrally overhead, static
+                srcX = cardX;
+                srcY = H * -0.12;
+            }
+
+            // ── Intensity ─────────────────────────────────────────────────────
+            let intensity: number;
+            if (isReparations) {
+                // Already there from the start — no sweep. Breathes slowly.
+                const breath = 1 + Math.sin(elapsed * 0.0018) * 0.12;
+                intensity = 0.38 * breath;
+            } else if (isGameChanger) {
+                intensity = lerp(0.0, 0.42, sweepT);
+                // GC: subtle flicker while unrevealed
+                if (!locked) intensity *= 1 + Math.sin(elapsed * 0.0031) * 0.07;
+            } else {
+                intensity = lerp(0.18, 0.44, sweepT);
+            }
+
+            if (flipping) intensity = Math.min(intensity + 0.14, 0.72);
+            if (locked) intensity = Math.min(intensity + (isReparations ? 0.28 : 0.2), 0.88);
+
+            // ── Main spotlight cone ───────────────────────────────────────────
+            const coneGrad = ctx.createRadialGradient(
+                srcX,
+                srcY,
+                0,
+                cardX,
+                cardY,
+                Math.max(W, H) * 0.75
+            );
+            coneGrad.addColorStop(0, `rgba(${cr},${cg},${cb},${intensity * 0.85})`);
+            coneGrad.addColorStop(0.12, `rgba(${cr},${cg},${cb},${intensity * 0.55})`);
+            coneGrad.addColorStop(0.38, `rgba(${cr},${cg},${cb},${intensity * 0.18})`);
+            coneGrad.addColorStop(0.65, `rgba(${cr},${cg},${cb},${intensity * 0.05})`);
+            coneGrad.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = coneGrad;
+            ctx.fillRect(0, 0, W, H);
+
+            // ── Bloom on reveal ───────────────────────────────────────────────
+            if (locked && lockedAt !== null) {
+                const bloomAge = (now - lockedAt) / 1000;
+                const bloomT = Math.min(bloomAge / 0.9, 1);
+                const bloomEased = easeOut(bloomT);
+
+                // Opacity arc: ramps up sharply then settles to ~55%
+                const bloomOpacity =
+                    bloomT < 0.3 ? bloomT / 0.3 : 1 - ((bloomT - 0.3) / 0.7) * 0.45;
+
+                const bloomR = lerp(10, isGameChanger ? W * 0.82 : W * 0.68, bloomEased);
+                const bloomGrad = ctx.createRadialGradient(cardX, cardY, 0, cardX, cardY, bloomR);
+                bloomGrad.addColorStop(0, `rgba(${cr},${cg},${cb},${bloomOpacity * 0.34})`);
+                bloomGrad.addColorStop(0.32, `rgba(${cr},${cg},${cb},${bloomOpacity * 0.15})`);
+                bloomGrad.addColorStop(0.68, `rgba(${cr},${cg},${cb},${bloomOpacity * 0.05})`);
+                bloomGrad.addColorStop(1, "rgba(0,0,0,0)");
+                ctx.fillStyle = bloomGrad;
+                ctx.fillRect(0, 0, W, H);
+            }
+
+            // ── Shockwave rings (reparations only) ───────────────────────────
+            if (isReparations && animRef.current.rings.length > 0) {
+                const maxRadius = Math.max(W, H) * 0.72;
+                const ringDuration = 900; // ms per ring
+                for (const ring of animRef.current.rings) {
+                    const age = now - ring.bornAt;
+                    if (age < 0) continue; // staggered — not born yet
+                    const t = Math.min(age / ringDuration, 1);
+                    const eased = easeOut(t);
+                    const radius = lerp(20, maxRadius, eased);
+                    // Opacity: quick ramp-up, then long fade out
+                    const opacity = t < 0.08 ? t / 0.08 : 1 - (t - 0.08) / 0.92;
+                    ctx.beginPath();
+                    ctx.arc(cardX, cardY, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${cr},${cg},${cb},${opacity * 0.62})`;
+                    ctx.lineWidth = lerp(3.5, 0.5, eased); // ring thins as it expands
+                    ctx.stroke();
+                }
+            }
+
+            frameId = requestAnimationFrame(draw);
+        }
+
+        frameId = requestAnimationFrame(draw);
+        return () => {
+            cancelAnimationFrame(frameId);
+            ro.disconnect();
+        };
+    }, [isGameChanger, isReparations, prefersReduced]);
+
+    if (prefersReduced) return null;
+
+    return (
+        <canvas
+            ref={canvasRef}
+            aria-hidden="true"
+            style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                zIndex: 0,
+            }}
+        />
+    );
+}
+
+// ── ReparationsIntroSequence ──────────────────────────────────────────────────
+// Pre-reveal tribunal sequence: scanner sweep → 3 staccato name title-cards.
+// Calls onComplete when the sequence ends (~2100ms).
+
+const REPARATIONS_INTRO_CSS = `
+@keyframes repScanLine {
+    0%   { top: -2px;   opacity: 0; }
+    4%   { opacity: 1; }
+    96%  { opacity: 1; }
+    100% { top: 100%;   opacity: 0; }
+}
+@keyframes repNameFlash {
+    0%   { opacity: 0; }
+    6%   { opacity: 1; }
+    94%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+`;
+
+interface ReparationsIntroProps {
+    playerDisplayName: string;
+    onComplete: () => void;
+}
+
+function ReparationsIntroSequence({ playerDisplayName, onComplete }: ReparationsIntroProps) {
+    // frame: null = scanner phase, 1/2/3 = title-card flashes
+    const [frame, setFrame] = useState<null | 1 | 2 | 3>(null);
+
+    useEffect(() => {
+        // Scanner runs 900ms, then 3 frames at 200ms each with 60ms gaps
+        const t1 = window.setTimeout(() => setFrame(1), 900);
+        const t2 = window.setTimeout(() => setFrame(null), 1100);
+        const t3 = window.setTimeout(() => setFrame(2), 1180);
+        const t4 = window.setTimeout(() => setFrame(null), 1360);
+        const t5 = window.setTimeout(() => setFrame(3), 1440);
+        const t6 = window.setTimeout(() => setFrame(null), 1590);
+        const t7 = window.setTimeout(() => onComplete(), 1750);
+        return () => {
+            [t1, t2, t3, t4, t5, t6, t7].forEach(window.clearTimeout);
+        };
+    }, [onComplete]);
+
+    // Title-card parameters per frame — deliberately thrown off-axis
+    const frameParams: Record<1 | 2 | 3, { scale: number; x: number; opacity: number }> = {
+        1: { scale: 1.72, x: 18, opacity: 0.18 }, // huge, ghostly — barely there
+        2: { scale: 1.0, x: 0, opacity: 0.92 }, // full weight — the verdict
+        3: { scale: 0.84, x: -10, opacity: 0.55 }, // smaller, offset — unsettled
+    };
+
+    return (
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 200,
+                backgroundColor: "rgb(3, 0, 0)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+            }}
+            aria-hidden="true"
+        >
+            <style>{REPARATIONS_INTRO_CSS}</style>
+
+            {/* Red scanner line sweeping top → bottom */}
+            {frame === null && (
+                <div
+                    style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        height: "2px",
+                        background:
+                            "linear-gradient(90deg, transparent, rgba(180,12,12,0.9) 20%, rgb(220,14,14) 50%, rgba(180,12,12,0.9) 80%, transparent)",
+                        boxShadow:
+                            "0 0 18px 4px rgba(180,10,10,0.55), 0 0 40px 8px rgba(140,6,6,0.25)",
+                        animation: "repScanLine 900ms cubic-bezier(0.4, 0, 0.6, 1) forwards",
+                        pointerEvents: "none",
+                    }}
+                />
+            )}
+
+            {/* Staccato name title-card flashes */}
+            {frame !== null &&
+                (() => {
+                    const p = frameParams[frame];
+                    return (
+                        <div
+                            style={{
+                                fontFamily: "var(--font-display)",
+                                fontSize: "clamp(52px, 14vw, 88px)",
+                                fontWeight: 700,
+                                letterSpacing: "-0.03em",
+                                lineHeight: 1,
+                                color: "rgb(220, 14, 14)",
+                                opacity: p.opacity,
+                                transform: `scale(${p.scale}) translateX(${p.x}px)`,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                maxWidth: "85vw",
+                                userSelect: "none",
+                                textShadow:
+                                    frame === 2
+                                        ? "0 0 60px rgba(220,14,14,0.6), 0 0 120px rgba(180,8,8,0.3)"
+                                        : "none",
+                            }}
+                        >
+                            {playerDisplayName}
+                        </div>
+                    );
+                })()}
+        </div>
+    );
+}
+
 // ── CardRevealOverlay ─────────────────────────────────────────────────────────
 
 interface CardRevealOverlayProps {
     event: DrawEvent;
     onDismiss: () => void;
     drama?: DrawDrama;
+    playerDisplayName?: string;
 }
 
-function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) {
+type RevealPhase = "reparations-intro" | "audio-intro" | "flipping" | "revealed";
+
+function CardRevealOverlay({ event, onDismiss, drama, playerDisplayName }: CardRevealOverlayProps) {
     const loopRef = useRef<HTMLAudioElement | null>(null);
-    const [ready, setReady] = useState(false);
-    // introComplete starts true for standard (no intro hold), false for introOnly until audio ends
-    const [introComplete, setIntroComplete] = useState(!drama?.introOnly);
+    const isGameChanger = Boolean(event.cardVersion.isGameChanger);
+    const isReparations = event.card.cardType === "reparations";
 
+    const initialPhase: RevealPhase = isReparations
+        ? "reparations-intro"
+        : drama?.introSound
+          ? "audio-intro"
+          : "flipping";
+    const [phase, setPhase] = useState<RevealPhase>(initialPhase);
+
+    // ── Intro sound (game changer drama.mp3) ─────────────────────────────────
+    // Plays once during "audio-intro" phase. When it ends, advances to "flipping".
     useEffect(() => {
-        if (!drama) return;
-
-        const loop = getAudio(drama.loopSound);
-        loopRef.current = loop;
-
-        if (drama.introOnly) {
-            loop.loop = false;
-            loop.onended = () => setIntroComplete(true);
-            loop.play().catch(() => {});
-        } else {
-            loop.loop = true;
-            loop.play().catch(() => {});
-        }
-
+        if (phase !== "audio-intro" || !drama?.introSound) return;
+        const audio = getAudio(drama.introSound);
+        audio.loop = false;
+        audio.onended = () => setPhase("flipping");
+        audio.play().catch(() => {});
         return () => {
-            loop.onended = null;
-            loop.pause();
+            audio.onended = null;
+            audio.pause();
+        };
+    }, [phase, drama]);
+
+    // ── Loop sound (drumroll) ────────────────────────────────────────────────
+    // Plays during "flipping" and "reparations-intro" phases. For reparations,
+    // starts on mount (within user gesture chain) and continues uninterrupted
+    // through the intro into the flip. Cleanup pauses when phase → "revealed".
+    const loopActive = phase === "flipping" || phase === "reparations-intro";
+    useEffect(() => {
+        if (!loopActive || !drama) return;
+        const audio = getAudio(drama.loopSound);
+        loopRef.current = audio;
+        audio.loop = true;
+        audio.play().catch(() => {});
+        return () => {
+            audio.pause();
             loopRef.current = null;
         };
+    }, [loopActive, drama]);
+
+    const handleFlipComplete = useCallback(() => {
+        setPhase("revealed");
+        if (drama) getAudio(drama.hitSound).play().catch(() => {});
     }, [drama]);
+
+    const handleReparationsIntroDone = useCallback(() => {
+        setPhase(drama?.introSound ? "audio-intro" : "flipping");
+    }, [drama]);
+
+    if (phase === "reparations-intro") {
+        return (
+            <ReparationsIntroSequence
+                playerDisplayName={playerDisplayName ?? "—"}
+                onComplete={handleReparationsIntroDone}
+            />
+        );
+    }
+
+    const ready = phase === "revealed";
+    const flipping = phase === "flipping";
 
     return (
         <div
             style={{ ...styles.overlayBackdrop, pointerEvents: ready ? "auto" : "none" }}
             onClick={ready ? onDismiss : undefined}
         >
+            <SpotlightCanvas
+                isGameChanger={isGameChanger}
+                isReparations={isReparations}
+                flipping={flipping}
+                locked={ready}
+            />
             <div
-                style={{ ...styles.revealCardWrap, position: "relative", pointerEvents: "auto" }}
+                style={{
+                    ...styles.revealCardWrap,
+                    position: "relative",
+                    pointerEvents: "auto",
+                    zIndex: 1,
+                }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {drama?.preFlipLabel && !introComplete && (
+                {drama?.preFlipLabel && phase === "audio-intro" && (
                     <div style={styles.preFlipBadge}>{drama.preFlipLabel}</div>
                 )}
                 <FlippingCard
                     event={event}
-                    dramaDelayMs={drama?.introOnly ? 0 : drama?.backMs}
+                    dramaDelayMs={drama?.introSound ? 0 : drama?.backMs}
                     overrideDuration={drama?.flipMs}
-                    flipHeld={drama?.introOnly ? !introComplete : false}
-                    onFlipComplete={() => {
-                        setReady(true);
-                        loopRef.current?.pause();
-                        loopRef.current = null;
-                        if (drama) getAudio(drama.hitSound).play().catch(() => {});
-                    }}
+                    overrideEasing={drama?.flipEasing}
+                    flipHeld={phase === "audio-intro"}
+                    onFlipComplete={handleFlipComplete}
                 />
                 <p
                     style={{
@@ -670,7 +1071,7 @@ function CardRevealOverlay({ event, onDismiss, drama }: CardRevealOverlayProps) 
                         transition: ready ? "opacity 280ms ease" : "none",
                     }}
                 >
-                    Tap outside to dismiss
+                    {isReparations ? "This is yours now." : "Tap outside to dismiss"}
                 </p>
             </div>
         </div>
@@ -689,7 +1090,7 @@ interface CardDetailOverlayProps {
     onResolve: (drawEventId: string, resolved: boolean) => Promise<void>;
     onTransfer: (drawEventId: string, toPlayerId: string) => Promise<void>;
     onCancelTransfer: (transferId: string) => Promise<void>;
-    onShareDescription: (drawEventId: string) => Promise<void>;
+    onShareDescription: (drawEventId: string) => Promise<boolean>;
     allPlayers: Player[];
 }
 
@@ -765,8 +1166,8 @@ function CardDetailOverlay({
     async function handleShare() {
         setSharing(true);
         hapticLight();
-        await onShareDescription(event.id);
-        setSharedViaActionBar(true);
+        const ok = await onShareDescription(event.id);
+        if (ok) setSharedViaActionBar(true);
         setSharing(false);
     }
 
@@ -1176,7 +1577,7 @@ export default function Game() {
             const prefersReduced =
                 typeof window !== "undefined" &&
                 window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            setRevealDrama(prefersReduced ? null : STANDARD_DRAW_DRAMA);
+            setRevealDrama(prefersReduced ? null : REPARATIONS_DRAMA);
             setRevealCard(result.data);
         });
     }, [activePlayerId, addDrawEvent, session, startReparationsTransition]);
@@ -1222,12 +1623,14 @@ export default function Game() {
     );
 
     const handleShareDescription = useCallback(
-        async (drawEventId: string) => {
+        async (drawEventId: string): Promise<boolean> => {
             const result = await apiClient.shareDescription(drawEventId);
             if (result.ok) {
                 updateDrawEvent(result.data);
                 if (selectedCard?.id === drawEventId) setSelectedCard(result.data);
+                return true;
             }
+            return false;
         },
         [selectedCard, updateDrawEvent]
     );
@@ -1235,7 +1638,12 @@ export default function Game() {
     const handleLeaveOrRemove = useCallback(async () => {
         if (!actionSheetTarget || !session) return;
         const hasCards = drawHistory.some((e) => e.playerId === actionSheetTarget.id);
-        await apiClient.leaveSession(session.id, actionSheetTarget.id);
+        const leaveResult = await apiClient.leaveSession(session.id, actionSheetTarget.id);
+        if (!leaveResult.ok) {
+            setError(leaveResult.error.message);
+            setActionSheetTarget(null);
+            return;
+        }
         if (!hasCards) removeDevicePlayer(actionSheetTarget.id);
         const remainingDeviceIds = hasCards
             ? devicePlayerIds
@@ -1377,6 +1785,9 @@ export default function Game() {
                 <CardRevealOverlay
                     event={revealCard}
                     drama={revealDrama ?? undefined}
+                    playerDisplayName={
+                        players.find((p) => p.id === revealCard.playerId)?.displayName
+                    }
                     onDismiss={() => {
                         setRevealCard(null);
                         setRevealDrama(null);
@@ -1539,6 +1950,10 @@ const styles: Record<string, React.CSSProperties> = {
         margin: 0,
         flex: 1,
         textAlign: "center",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        minWidth: 0,
     },
     joinCodeButton: {
         background: "none",
@@ -1692,6 +2107,9 @@ const styles: Record<string, React.CSSProperties> = {
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        maxWidth: "120px",
     },
     avatarActive: {},
     avatarInactive: {},
@@ -1882,6 +2300,8 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: "column",
         gap: "var(--space-3)",
         paddingBottom: "var(--space-6)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
     },
     resolvedToggle: {
         background: "none",
@@ -2195,6 +2615,11 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: "pointer",
         textAlign: "left",
         minHeight: "44px",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        width: "100%",
+        boxSizing: "border-box" as const,
     },
     transferCancelBtn: {
         background: "none",

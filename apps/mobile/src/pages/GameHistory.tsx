@@ -1,14 +1,10 @@
+import { DRINKING_LEVEL_EMOJI, SPICE_LEVEL_EMOJI } from "@chance/core";
 import { IonContent, IonPage } from "@ionic/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useHistory, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { apiClient } from "../lib/api";
 import type { DrawEvent, Player, SessionState } from "../lib/api/types";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SPICE_LABELS: Record<number, string> = { 0: "Clean", 1: "Mild", 2: "Edgy", 3: "Spicy" };
-const DRINK_EMOJI: Record<number, string> = { 1: "🍺", 2: "🍺🍺", 3: "🍺🍺🍺" };
 
 function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -47,8 +43,8 @@ function DrawEntry({
     onToggle: () => void;
 }) {
     const cv = event.cardVersion;
-    const drinkEmoji = cv.drinkingLevel > 0 ? DRINK_EMOJI[cv.drinkingLevel] : null;
-    const spiceLabel = cv.spiceLevel > 0 ? SPICE_LABELS[cv.spiceLevel] : null;
+    const drinkEmoji = cv.drinkingLevel > 0 ? DRINKING_LEVEL_EMOJI[cv.drinkingLevel] : null;
+    const spiceEmoji = cv.spiceLevel > 0 ? SPICE_LEVEL_EMOJI[cv.spiceLevel] : null;
     const showLock = cv.hiddenInstructions !== null && !event.descriptionShared;
 
     return (
@@ -64,7 +60,7 @@ function DrawEntry({
                 <span style={styles.drawTitle}>{cv.title}</span>
                 <span style={styles.drawBadges}>
                     {drinkEmoji && <span style={styles.badge}>{drinkEmoji}</span>}
-                    {spiceLabel && <span style={styles.badge}>{spiceLabel}</span>}
+                    {spiceEmoji && <span style={styles.badge}>{spiceEmoji}</span>}
                     {event.resolved && <span style={styles.badge}>✓</span>}
                     {showLock && <span style={styles.badge}>🔒</span>}
                 </span>

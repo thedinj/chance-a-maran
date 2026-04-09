@@ -2,21 +2,53 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import {
-    Title, Table, Badge, Switch, TextInput, Group, Stack, Text,
-    Drawer, Image, Button, Divider, Select, ScrollArea, Loader, Center,
-    Textarea, SegmentedControl, MultiSelect, Tooltip,
+    Title,
+    Table,
+    Badge,
+    Switch,
+    TextInput,
+    Group,
+    Stack,
+    Text,
+    Drawer,
+    Image,
+    Button,
+    Divider,
+    Select,
+    ScrollArea,
+    Loader,
+    Center,
+    Textarea,
+    SegmentedControl,
+    MultiSelect,
+    Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion } from "@chance/core";
+import { DRINKING_LEVEL_TOOLTIPS, SPICE_LEVEL_TOOLTIPS } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type FilterState = { search: string; active: string; isGlobal: string; pendingGlobal: string; gameId: string; drinkingLevel: string; spiceLevel: string };
+type FilterState = {
+    search: string;
+    active: string;
+    isGlobal: string;
+    pendingGlobal: string;
+    gameId: string;
+    drinkingLevel: string;
+    spiceLevel: string;
+};
 
-interface GameOption { id: string; name: string; }
-interface ElementOption { id: string; title: string; }
+interface GameOption {
+    id: string;
+    name: string;
+}
+interface ElementOption {
+    id: string;
+    title: string;
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,15 +56,14 @@ function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString();
 }
 
-const DRINKING_TOOLTIPS = ["", "Light — 1 drink", "Moderate — 2 drinks", "Heavy — 3+ drinks"];
-const SPICE_TOOLTIPS = ["", "Mild — light innuendo, mild language", "Edgy — strong language, mature themes", "Spicy — very adult, nothing held back"];
-
 function LevelBadge({ label, value, tooltip }: { label: string; value: number; tooltip: string }) {
     if (value === 0) return null;
     const colors = ["gray", "yellow", "orange", "red"] as const;
     return (
         <Tooltip label={tooltip} withArrow>
-            <Badge size="xs" color={colors[value]}>{label} {value}</Badge>
+            <Badge size="xs" color={colors[value]}>
+                {label} {value}
+            </Badge>
         </Tooltip>
     );
 }
@@ -44,11 +75,18 @@ function LazyThumbnail({ imageId, apiBaseUrl }: { imageId: string; apiBaseUrl: s
     return (
         <div
             ref={ref}
-            style={{ width: 28, height: 28, flexShrink: 0, borderRadius: 3, overflow: "hidden", background: "var(--mantine-color-dark-5)" }}
+            style={{
+                width: 28,
+                height: 28,
+                flexShrink: 0,
+                borderRadius: 3,
+                overflow: "hidden",
+                background: "var(--mantine-color-dark-5)",
+            }}
         >
             {inView && (
                 <img
-                    src={`${apiBaseUrl}/api/images/${imageId}`}
+                    src={`${apiBaseUrl}/api/media/${imageId}`}
                     alt=""
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                 />
@@ -59,7 +97,11 @@ function LazyThumbnail({ imageId, apiBaseUrl }: { imageId: string; apiBaseUrl: s
 
 // ─── Card Detail Drawer ────────────────────────────────────────────────────────
 
-interface UserOption { id: string; displayName: string; email: string; }
+interface UserOption {
+    id: string;
+    displayName: string;
+    email: string;
+}
 
 function CardDrawer({
     card,
@@ -100,7 +142,9 @@ function CardDrawer({
     useEffect(() => {
         adminFetch(`/api/cards/${card.id}/versions`)
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setVersions(d.data as CardVersion[]); });
+            .then((d) => {
+                if (d.ok) setVersions(d.data as CardVersion[]);
+            });
     }, [card.id, adminFetch]);
 
     const loadEditData = useCallback(async () => {
@@ -131,7 +175,9 @@ function CardDrawer({
         if (users.length === 0) {
             adminFetch("/api/admin/users")
                 .then((r) => r.json())
-                .then((d) => { if (d.ok) setUsers(d.data as UserOption[]); });
+                .then((d) => {
+                    if (d.ok) setUsers(d.data as UserOption[]);
+                });
         }
         setTransferring(true);
     }
@@ -181,7 +227,10 @@ function CardDrawer({
                 });
                 const typeData = await typeRes.json();
                 if (!typeData.ok) {
-                    notifications.show({ message: typeData.error?.message ?? "Error", color: "red" });
+                    notifications.show({
+                        message: typeData.error?.message ?? "Error",
+                        color: "red",
+                    });
                     setSaving(false);
                     return;
                 }
@@ -209,7 +258,10 @@ function CardDrawer({
                 setEditing(false);
                 notifications.show({ message: "Card updated", color: "green" });
             } else {
-                notifications.show({ message: contentData.error?.message ?? "Error", color: "red" });
+                notifications.show({
+                    message: contentData.error?.message ?? "Error",
+                    color: "red",
+                });
             }
         } finally {
             setSaving(false);
@@ -219,12 +271,19 @@ function CardDrawer({
     if (transferring) {
         return (
             <Stack gap="md">
-                <Text size="sm" fw={500}>Transfer ownership of &ldquo;{cv.title}&rdquo;</Text>
-                <Text size="xs" c="dimmed">Current owner: {cv.authorDisplayName}</Text>
+                <Text size="sm" fw={500}>
+                    Transfer ownership of &ldquo;{cv.title}&rdquo;
+                </Text>
+                <Text size="xs" c="dimmed">
+                    Current owner: {card.ownerDisplayName}
+                </Text>
                 <Select
                     label="New owner"
                     placeholder="Search users…"
-                    data={users.map((u) => ({ value: u.id, label: `${u.displayName} (${u.email})` }))}
+                    data={users.map((u) => ({
+                        value: u.id,
+                        label: `${u.displayName} (${u.email})`,
+                    }))}
                     value={newOwnerUserId}
                     onChange={setNewOwnerUserId}
                     searchable
@@ -280,7 +339,9 @@ function CardDrawer({
                     minRows={2}
                 />
                 <Stack gap={4}>
-                    <Text size="sm" fw={500}>Drinking level</Text>
+                    <Text size="sm" fw={500}>
+                        Drinking level
+                    </Text>
                     <SegmentedControl
                         value={editDrinking}
                         onChange={setEditDrinking}
@@ -293,7 +354,9 @@ function CardDrawer({
                     />
                 </Stack>
                 <Stack gap={4}>
-                    <Text size="sm" fw={500}>Spice level</Text>
+                    <Text size="sm" fw={500}>
+                        Spice level
+                    </Text>
                     <SegmentedControl
                         value={editSpice}
                         onChange={setEditSpice}
@@ -348,7 +411,7 @@ function CardDrawer({
         <Stack gap="md">
             {cv.imageId && (
                 <Image
-                    src={`${apiBaseUrl}/api/images/${cv.imageId}`}
+                    src={`${apiBaseUrl}/api/media/${cv.imageId}`}
                     alt={cv.title}
                     fit="contain"
                     mah={200}
@@ -356,35 +419,60 @@ function CardDrawer({
             )}
 
             <Stack gap={4}>
-                <Text fw={700} size="lg">{cv.title}</Text>
+                <Text fw={700} size="lg">
+                    {cv.title}
+                </Text>
                 <Group gap="xs">
-                    <Tooltip label={card.cardType === "reparations" ? "Reparations — drawn as a penalty card" : "Standard chance card"} withArrow>
+                    <Tooltip
+                        label={
+                            card.cardType === "reparations"
+                                ? "Reparations — drawn as a penalty card"
+                                : "Standard chance card"
+                        }
+                        withArrow
+                    >
                         <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
                             {card.cardType}
                         </Badge>
                     </Tooltip>
                     {card.isGlobal && (
                         <Tooltip label="In the global pool — eligible for all sessions" withArrow>
-                            <Badge size="sm" color="violet">global</Badge>
+                            <Badge size="sm" color="violet">
+                                global
+                            </Badge>
                         </Tooltip>
                     )}
                     {card.pendingGlobal && (
                         <Tooltip label="Nominated for global pool — pending admin review" withArrow>
-                            <Badge size="sm" color="orange">nominated</Badge>
+                            <Badge size="sm" color="orange">
+                                nominated
+                            </Badge>
                         </Tooltip>
                     )}
                     {!card.active && (
                         <Tooltip label="Inactive — excluded from all draw pools" withArrow>
-                            <Badge size="sm" color="gray">inactive</Badge>
+                            <Badge size="sm" color="gray">
+                                inactive
+                            </Badge>
                         </Tooltip>
                     )}
                     {cv.isGameChanger && (
                         <Tooltip label="Game changer — alters gameplay rules mid-session" withArrow>
-                            <Badge size="sm" color="yellow">game changer</Badge>
+                            <Badge size="sm" color="yellow">
+                                game changer
+                            </Badge>
                         </Tooltip>
                     )}
-                    <LevelBadge label="🍺" value={cv.drinkingLevel} tooltip={DRINKING_TOOLTIPS[cv.drinkingLevel]} />
-                    <LevelBadge label="🌶" value={cv.spiceLevel} tooltip={SPICE_TOOLTIPS[cv.spiceLevel]} />
+                    <LevelBadge
+                        label="🍺"
+                        value={cv.drinkingLevel}
+                        tooltip={DRINKING_LEVEL_TOOLTIPS[cv.drinkingLevel]}
+                    />
+                    <LevelBadge
+                        label="🌶️"
+                        value={cv.spiceLevel}
+                        tooltip={SPICE_LEVEL_TOOLTIPS[cv.spiceLevel]}
+                    />
                 </Group>
             </Stack>
 
@@ -392,26 +480,45 @@ function CardDrawer({
 
             {cv.hiddenInstructions && (
                 <Stack gap={2}>
-                    <Text size="xs" c="dimmed" fw={500}>HIDDEN INSTRUCTIONS</Text>
-                    <Text size="sm" fs="italic">{cv.hiddenInstructions}</Text>
+                    <Text size="xs" c="dimmed" fw={500}>
+                        HIDDEN INSTRUCTIONS
+                    </Text>
+                    <Text size="sm" fs="italic">
+                        {cv.hiddenInstructions}
+                    </Text>
                 </Stack>
             )}
 
             {cv.gameTags.length > 0 && (
                 <Group gap="xs">
-                    <Text size="xs" c="dimmed">Games:</Text>
-                    {cv.gameTags.map((g) => <Badge key={g.id} size="xs" variant="outline">{g.name}</Badge>)}
+                    <Text size="xs" c="dimmed">
+                        Games:
+                    </Text>
+                    {cv.gameTags.map((g) => (
+                        <Badge key={g.id} size="xs" variant="outline">
+                            {g.name}
+                        </Badge>
+                    ))}
                 </Group>
             )}
 
             {cv.requirements.length > 0 && (
                 <Group gap="xs">
-                    <Text size="xs" c="dimmed">Requires:</Text>
-                    {cv.requirements.map((r) => <Badge key={r.id} size="xs" variant="dot">{r.title}</Badge>)}
+                    <Text size="xs" c="dimmed">
+                        Requires:
+                    </Text>
+                    {cv.requirements.map((r) => (
+                        <Badge key={r.id} size="xs" variant="dot">
+                            {r.title}
+                        </Badge>
+                    ))}
                 </Group>
             )}
 
-            <Text size="xs" c="dimmed">Author: {cv.authorDisplayName} · {formatDate(card.createdAt)}</Text>
+            <Text size="xs" c="dimmed">
+                Owner: {card.ownerDisplayName} · Author: {cv.authorDisplayName} ·{" "}
+                {formatDate(card.createdAt)}
+            </Text>
 
             <Divider />
 
@@ -471,9 +578,15 @@ function CardDrawer({
                     <Stack gap={4}>
                         {versions.map((v) => (
                             <Group key={v.id} gap="xs">
-                                <Text size="xs" c="dimmed" w={20}>v{v.versionNumber}</Text>
-                                <Text size="xs" style={{ flex: 1 }} truncate>{v.title}</Text>
-                                <Text size="xs" c="dimmed">{formatDate(v.createdAt)}</Text>
+                                <Text size="xs" c="dimmed" w={20}>
+                                    v{v.versionNumber}
+                                </Text>
+                                <Text size="xs" style={{ flex: 1 }} truncate>
+                                    {v.title}
+                                </Text>
+                                <Text size="xs" c="dimmed">
+                                    {formatDate(v.createdAt)}
+                                </Text>
                             </Group>
                         ))}
                     </Stack>
@@ -489,7 +602,15 @@ export default function CardsPage() {
     const adminFetch = useAdminFetch();
     const [cards, setCards] = useState<Card[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState<FilterState>({ search: "", active: "", isGlobal: "", pendingGlobal: "", gameId: "", drinkingLevel: "", spiceLevel: "" });
+    const [filters, setFilters] = useState<FilterState>({
+        search: "",
+        active: "",
+        isGlobal: "",
+        pendingGlobal: "",
+        gameId: "",
+        drinkingLevel: "",
+        spiceLevel: "",
+    });
     const [filterGames, setFilterGames] = useState<GameOption[]>([]);
     const [selected, setSelected] = useState<Card | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -499,8 +620,10 @@ export default function CardsPage() {
     useEffect(() => {
         adminFetch("/api/admin/games")
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setFilterGames(d.data as GameOption[]); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+            .then((d) => {
+                if (d.ok) setFilterGames(d.data as GameOption[]);
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function loadCards() {
@@ -556,12 +679,16 @@ export default function CardsPage() {
             onClick={() => setSelected(card)}
         >
             <Table.Td>
-                {card.currentVersion.imageId
-                    ? <LazyThumbnail imageId={card.currentVersion.imageId} apiBaseUrl={apiBaseUrl} />
-                    : <div style={{ width: 28, height: 28 }} />}
+                {card.currentVersion.imageId ? (
+                    <LazyThumbnail imageId={card.currentVersion.imageId} apiBaseUrl={apiBaseUrl} />
+                ) : (
+                    <div style={{ width: 28, height: 28 }} />
+                )}
             </Table.Td>
             <Table.Td>
-                <Text size="sm" truncate maw={280}>{card.currentVersion.title}</Text>
+                <Text size="sm" truncate maw={280}>
+                    {card.currentVersion.title}
+                </Text>
             </Table.Td>
             <Table.Td>
                 <Badge size="xs" color={card.cardType === "reparations" ? "red" : "blue"}>
@@ -579,18 +706,28 @@ export default function CardsPage() {
             <Table.Td>
                 <Group gap={4} wrap="nowrap">
                     {card.currentVersion.isGameChanger && (
-                        <Badge size="xs" color="yellow">game changer</Badge>
+                        <Badge size="xs" color="yellow">
+                            game changer
+                        </Badge>
                     )}
-                    {card.pendingGlobal && <Badge size="xs" color="orange">nominated</Badge>}
+                    {card.pendingGlobal && (
+                        <Badge size="xs" color="orange">
+                            nominated
+                        </Badge>
+                    )}
                 </Group>
             </Table.Td>
             <Table.Td>
                 <Group gap={4} wrap="nowrap">
                     {card.currentVersion.drinkingLevel > 0 && (
-                        <Text size="xs" c="dimmed">🍺{card.currentVersion.drinkingLevel}</Text>
+                        <Text size="xs" c="dimmed">
+                            🍺{card.currentVersion.drinkingLevel}
+                        </Text>
                     )}
                     {card.currentVersion.spiceLevel > 0 && (
-                        <Text size="xs" c="dimmed">🌶{card.currentVersion.spiceLevel}</Text>
+                        <Text size="xs" c="dimmed">
+                            🌶️{card.currentVersion.spiceLevel}
+                        </Text>
                     )}
                 </Group>
             </Table.Td>
@@ -603,18 +740,33 @@ export default function CardsPage() {
                 {card.currentVersion.gameTags.length > 0 ? (
                     <Group gap={4} wrap="wrap" maw={160}>
                         {card.currentVersion.gameTags.map((g) => (
-                            <Badge key={g.id} size="xs" variant="outline" color="teal">{g.name}</Badge>
+                            <Badge key={g.id} size="xs" variant="outline" color="teal">
+                                {g.name}
+                            </Badge>
                         ))}
                     </Group>
                 ) : (
-                    <Text size="xs" c="dimmed" fs="italic">all</Text>
+                    <Text size="xs" c="dimmed" fs="italic">
+                        all
+                    </Text>
                 )}
             </Table.Td>
             <Table.Td>
-                <Text size="xs" c="dimmed">{card.currentVersion.authorDisplayName}</Text>
+                <Stack gap={0}>
+                    <Text size="xs" c="dimmed">
+                        {card.ownerDisplayName}
+                    </Text>
+                    {card.authorUserId !== card.currentVersion.authoredByUserId && (
+                        <Text size="xs" c="dimmed" fs="italic">
+                            by {card.currentVersion.authorDisplayName}
+                        </Text>
+                    )}
+                </Stack>
             </Table.Td>
             <Table.Td>
-                <Text size="xs" c="dimmed">{formatDate(card.createdAt)}</Text>
+                <Text size="xs" c="dimmed">
+                    {formatDate(card.createdAt)}
+                </Text>
             </Table.Td>
         </Table.Tr>
     ));
@@ -622,18 +774,36 @@ export default function CardsPage() {
     return (
         <>
             <Stack gap="md">
-                <Title order={3}>Cards</Title>
+                <Group justify="space-between" align="baseline">
+                    <Title order={3}>Cards</Title>
+                    {!loading && (
+                        <Group gap="md">
+                            <Text size="sm" c="dimmed">
+                                {cards.length} cards
+                            </Text>
+                            <Text size="sm" c="dimmed">
+                                {cards.filter((c) => c.isGlobal).length} global
+                            </Text>
+                        </Group>
+                    )}
+                </Group>
 
                 <Group gap="sm">
                     <TextInput
                         placeholder="Search title…"
                         value={filters.search}
-                        onChange={(e) => { const v = e.currentTarget.value; setFilters((f) => ({ ...f, search: v })); }}
+                        onChange={(e) => {
+                            const v = e.currentTarget.value;
+                            setFilters((f) => ({ ...f, search: v }));
+                        }}
                         style={{ flex: 1 }}
                     />
                     <Select
                         placeholder="Status"
-                        data={[{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]}
+                        data={[
+                            { value: "true", label: "Active" },
+                            { value: "false", label: "Inactive" },
+                        ]}
                         value={filters.active || null}
                         onChange={(v) => setFilters((f) => ({ ...f, active: v ?? "" }))}
                         clearable
@@ -641,7 +811,10 @@ export default function CardsPage() {
                     />
                     <Select
                         placeholder="Global"
-                        data={[{ value: "true", label: "Global" }, { value: "false", label: "Not global" }]}
+                        data={[
+                            { value: "true", label: "Global" },
+                            { value: "false", label: "Not global" },
+                        ]}
                         value={filters.isGlobal || null}
                         onChange={(v) => setFilters((f) => ({ ...f, isGlobal: v ?? "" }))}
                         clearable
@@ -693,7 +866,9 @@ export default function CardsPage() {
                 </Group>
 
                 {loading ? (
-                    <Center py="xl"><Loader /></Center>
+                    <Center py="xl">
+                        <Loader />
+                    </Center>
                 ) : (
                     <ScrollArea>
                         <Table striped highlightOnHover withTableBorder>
@@ -707,13 +882,15 @@ export default function CardsPage() {
                                     <Table.Th>Levels</Table.Th>
                                     <Table.Th>Status</Table.Th>
                                     <Table.Th>Games</Table.Th>
-                                    <Table.Th>Author</Table.Th>
+                                    <Table.Th>Owner</Table.Th>
                                     <Table.Th>Created</Table.Th>
                                 </Table.Tr>
                             </Table.Thead>
                             <Table.Tbody>{rows}</Table.Tbody>
                         </Table>
-                        <Text size="xs" c="dimmed" mt="xs">{cards.length} cards</Text>
+                        <Text size="xs" c="dimmed" mt="xs">
+                            {cards.length} cards
+                        </Text>
                     </ScrollArea>
                 )}
             </Stack>

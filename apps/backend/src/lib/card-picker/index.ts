@@ -105,9 +105,17 @@ export function pick(
 
     // 4. Get set of already-drawn card IDs and exclude them entirely
     const drawnCardIds = drawEventRepo.getDrawnCardIds(sessionId);
-    const undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
+    let undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
 
-    if (undrawn.length === 0) return null;
+    if (undrawn.length === 0) {
+        if (process.env.NODE_ENV === "development") {
+            // Dev: all cards exhausted — reset draw history and start over
+            drawEventRepo.clearDrawEvents(sessionId);
+            undrawn = eligible;
+        } else {
+            return null;
+        }
+    }
 
     // 5. Calculate weights
     const weights = undrawn.map((entry) => calculateWeight(entry, sessionId));

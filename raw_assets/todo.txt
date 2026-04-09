@@ -1,4 +1,4 @@
-Polish task
+Game Sessions table in Admin portal (read only, only high-level stats incl join codes)
 Favicons/icons for frontend and backend
 Test hidden instructions
 Test setup/update scripts

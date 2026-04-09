@@ -13,6 +13,7 @@ import AdminSessionProvider from "@/lib/admin/AdminSessionProvider";
 import { useAdminSession } from "@/lib/admin/useAdminSession";
 
 const NAV_ITEMS = [
+    { href: "/admin/sessions", label: "Sessions" },
     { href: "/admin/cards", label: "Cards" },
     { href: "/admin/games", label: "Games" },
     { href: "/admin/requirement-elements", label: "Requirements" },

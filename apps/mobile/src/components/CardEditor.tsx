@@ -6,7 +6,7 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
-import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent } from "@chance/core";
+import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent, DRINKING_LEVEL_OPTIONS, DRINKING_LEVEL_DESCRIPTIONS } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     //   here — it is still referenced by the card version and must not be deleted.
     const existingDefaultImageId = defaultValues?.imageId ?? null;
     const [imagePreview, setImagePreview] = useState<string | null>(
-        existingDefaultImageId ? apiClient.resolveImageUrl(existingDefaultImageId) : null
+        existingDefaultImageId ? apiClient.resolveMediaUrl(existingDefaultImageId) : null
     );
     const [pendingImageId, setPendingImageId] = useState<string | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
@@ -177,7 +177,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
 
         // Delete the previous pending upload before replacing it
         if (pendingImageId) {
-            void apiClient.deleteImage(pendingImageId);
+            void apiClient.deleteMedia(pendingImageId);
             setPendingImageId(null);
         }
 
@@ -192,14 +192,14 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             fileType: "image/jpeg",
         });
 
-        const result = await apiClient.uploadImage(
+        const result = await apiClient.uploadMedia(
             new File([compressed], file.name, { type: "image/jpeg" })
         );
         setImageUploading(false);
 
         if (result.ok) {
-            setValue("imageId", result.data.imageId, { shouldValidate: true });
-            setPendingImageId(result.data.imageId);
+            setValue("imageId", result.data.mediaId, { shouldValidate: true });
+            setPendingImageId(result.data.mediaId);
         } else {
             setSubmitError(result.error.message);
             setImagePreview(null);
@@ -209,7 +209,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     function handleRemoveImage() {
         // Delete the pending upload — it's not yet saved to any card version
         if (pendingImageId) {
-            void apiClient.deleteImage(pendingImageId);
+            void apiClient.deleteMedia(pendingImageId);
             setPendingImageId(null);
         }
         setImagePreview(null);
@@ -355,32 +355,31 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             {/* ── Drinking ──────────────────────────────────────────────────── */}
             <div style={styles.section}>
                 <p style={styles.sectionLabel}>DRINKING</p>
-                <p style={styles.hint}>
-                    How much drinking this card involves for the drawing player.
-                </p>
                 <Controller
                     name="drinkingLevel"
                     control={control}
                     render={({ field }) => (
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {(
-                                [
-                                    ["∅", 0],
-                                    ["🍺", 1],
-                                    ["🍺🍺", 2],
-                                    ["🍺🍺🍺", 3],
-                                ] as const
-                            ).map(([label, val]) => (
-                                <button
-                                    key={val}
-                                    style={field.value === val ? styles.toggleOn : styles.toggleOff}
-                                    onClick={() => field.onChange(val)}
-                                    disabled={isDisabled}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                {DRINKING_LEVEL_OPTIONS.map(({ value, label }) => (
+                                    <button
+                                        key={value}
+                                        style={
+                                            field.value === value
+                                                ? styles.toggleOn
+                                                : styles.toggleOff
+                                        }
+                                        onClick={() => field.onChange(value)}
+                                        disabled={isDisabled}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p style={styles.hint}>
+                                {DRINKING_LEVEL_DESCRIPTIONS[field.value]}
+                            </p>
+                        </>
                     )}
                 />
             </div>

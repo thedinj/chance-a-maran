@@ -5,6 +5,6 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
     const setting = getAppSetting("REGISTRATION_INVITATION_CODE");
-    const inviteCodeRequired = !!setting?.value;
+    const inviteCodeRequired = setting?.value === "true";
     return ok({ inviteCodeRequired });
 }

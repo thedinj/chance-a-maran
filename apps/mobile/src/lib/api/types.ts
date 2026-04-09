@@ -36,7 +36,7 @@ export type {
     ChangePasswordRequest,
     // App config & image upload
     AppConfig,
-    ImageUploadResponse,
+    MediaUploadResponse,
     GetAllCardsFilters,
 } from "@chance/core";
 export { SubmitCardRequestSchema } from "@chance/core";

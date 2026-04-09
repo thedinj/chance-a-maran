@@ -103,11 +103,13 @@ export default function Home() {
             if (!joinResult.ok) {
                 // Invalidate so the list reflects the session's current state
                 void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+                setJoinError(joinResult.error.message);
                 return;
             }
             const { session: joinedSession, player } = joinResult.data;
             const stateResult = await apiClient.getSessionState(joinedSession.id);
             if (!stateResult.ok) {
+                setJoinError("Could not load session state. Please try again.");
                 return;
             }
             void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
@@ -145,7 +147,9 @@ export default function Home() {
     }
 
     function formatSessionDate(createdAt: string): string {
-        return new Date(createdAt).toLocaleDateString(undefined, {
+        const d = new Date(createdAt);
+        if (isNaN(d.getTime())) return "—";
+        return d.toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
             year: "numeric",

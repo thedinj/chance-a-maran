@@ -53,7 +53,7 @@ export const PATCH = withAuth(async (req, { params }) => {
             throw new AuthorizationError("You can only update your own settings");
         }
 
-        const patch = body as { displayName?: string; cardSharing?: "none" | "mine" | "network" };
+        const patch = body as { displayName?: string; cardSharing?: "none" | "mine" };
 
         if (patch.cardSharing !== undefined && target.user_id === null) {
             throw new AuthorizationError("Guests cannot set card sharing");

@@ -20,6 +20,89 @@ export const UPVOTE_BONUS_CAP = 2.0;
 /** Net-downvoted cards have their weight multiplied by 0.5. */
 export const DOWNVOTE_MULTIPLIER = 0.5;
 
+// ─── Drinking levels ─────────────────────────────────────────────────────────
+
+export const DRINKING_LEVEL_OPTIONS = [
+    { value: 0, label: "None" },
+    { value: 1, label: "Sip" },
+    { value: 2, label: "A drink" },
+    { value: 3, label: "Multiple" },
+] as const;
+
+export const DRINKING_LEVEL_DESCRIPTIONS = [
+    "No alcohol — a dare, challenge, or rule.",
+    "A sip or small taste. Not a full serving.",
+    "One drink — a shot, a full can, or finish your glass.",
+    "Multiple drinks — several shots, a waterfall, or sustained drinking. A few of these set the pace for the whole night.",
+] as const;
+
+export const DRINKING_FILTER_DESCRIPTIONS = [
+    "No drinking cards at all",
+    "Sips only — nothing stronger than a taste",
+    "Up to a shot or full drink per card",
+    "No limit — multiple-drink cards included",
+] as const;
+
+// ─── Spice levels ────────────────────────────────────────────────────────────
+
+/** Short display label for each spice level (index = level 0–3). */
+export const SPICE_LEVEL_LABELS = ["Clean", "Mild", "Edgy", "Spicy"] as const;
+
+/**
+ * Short display label for each spice level, combining emoji and name (index = level 0–3).
+ * Level 0 has no emoji. Suitable for tables, badges, and compact UI.
+ */
+export const SPICE_LEVEL_DISPLAY_LABELS = [
+    "Clean",
+    "🌶️ Mild",
+    "🌶️🌶️ Edgy",
+    "🌶️🌶️🌶️ Spicy",
+] as const;
+
+/**
+ * Emoji string for each spice level (index = level 0–3).
+ * Level 0 is an empty string (no spice).
+ */
+export const SPICE_LEVEL_EMOJI = ["", "🌶️", "🌶️🌶️", "🌶️🌶️🌶️"] as const;
+
+/** Tooltip description for each spice level (index = level 0–3). Empty string for level 0. */
+export const SPICE_LEVEL_TOOLTIPS = [
+    "",
+    "Mild — light innuendo, mild language",
+    "Edgy — strong language, more mature themes",
+    "Spicy — very adult, nothing held back",
+] as const;
+
+// ─── Drinking level display ───────────────────────────────────────────────────
+
+/** Short display label for each drinking level (index = level 0–3). */
+export const DRINKING_LEVEL_LABELS = ["None", "Light", "Moderate", "Heavy"] as const;
+
+/**
+ * Short display label for each drinking level, combining emoji and name (index = level 0–3).
+ * Level 0 has no emoji. Suitable for tables, badges, and compact UI.
+ */
+export const DRINKING_LEVEL_DISPLAY_LABELS = [
+    "None",
+    "🍺 Light",
+    "🍺🍺 Moderate",
+    "🍺🍺🍺 Heavy",
+] as const;
+
+/**
+ * Emoji string for each drinking level (index = level 0–3).
+ * Level 0 is an empty string (no drinking).
+ */
+export const DRINKING_LEVEL_EMOJI = ["", "🍺", "🍺🍺", "🍺🍺🍺"] as const;
+
+/** Tooltip description for each drinking level (index = level 0–3). Empty string for level 0. */
+export const DRINKING_LEVEL_TOOLTIPS = [
+    "",
+    "Light — a sip or taste",
+    "Moderate — a drink",
+    "Heavy — multiple drinks",
+] as const;
+
 // ─── Timing ───────────────────────────────────────────────────────────────────
 
 /** Milliseconds after a draw before the card is revealed to all other players. */

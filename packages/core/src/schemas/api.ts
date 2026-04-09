@@ -94,9 +94,9 @@ export const JoinByCodeRequestSchema = z.object({
     /**
      * Registered players may specify their card-sharing preference at join time.
      * Ignored for guest players (whose cardSharing is always null).
-     * Defaults to "network" on the server when absent.
+     * Defaults to "mine" on the server when absent.
      */
-    cardSharing: z.enum(["none", "mine", "network"]).optional(),
+    cardSharing: z.enum(["none", "mine"]).optional(),
 });
 export type JoinByCodeRequest = z.infer<typeof JoinByCodeRequestSchema>;
 
@@ -177,12 +177,12 @@ export const AppConfigSchema = z.object({
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
-// ─── Image upload response ────────────────────────────────────────────────────
+// ─── Media upload response ───────────────────────────────────────────────────
 
-export const ImageUploadResponseSchema = z.object({
-    imageId: z.string(),
+export const MediaUploadResponseSchema = z.object({
+    mediaId: z.string(),
 });
-export type ImageUploadResponse = z.infer<typeof ImageUploadResponseSchema>;
+export type MediaUploadResponse = z.infer<typeof MediaUploadResponseSchema>;
 
 // ─── Card query filters ───────────────────────────────────────────────────────
 
@@ -206,12 +206,26 @@ export const VoteRequestSchema = z.object({
 });
 export type VoteRequest = z.infer<typeof VoteRequestSchema>;
 
-// ─── Image upload constraints ─────────────────────────────────────────────────
+// ─── Media upload constraints ────────────────────────────────────────────────
 
-/** Maximum image file size accepted by POST /api/images (bytes). */
-export const IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+/** Maximum file size accepted by POST /api/media (bytes). */
+export const MEDIA_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
-/** MIME types accepted by POST /api/images. */
-export const IMAGE_UPLOAD_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif"] as const;
-export type ImageMimeType = (typeof IMAGE_UPLOAD_ALLOWED_TYPES)[number];
+/** MIME types accepted by POST /api/media. */
+export const MEDIA_UPLOAD_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif"] as const;
+export type MediaMimeType = (typeof MEDIA_UPLOAD_ALLOWED_TYPES)[number];
+
+/** Map from MIME type to file extension for on-disk media storage. */
+export const MIME_TO_EXT: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+};
+
+/** Derive the relative path for a media file: `{shard}/{id}.{ext}` */
+export function mediaRelativePath(id: string, mimeType: string): string {
+    const ext = MIME_TO_EXT[mimeType] ?? "bin";
+    const shard = id.slice(0, 2);
+    return `${shard}/${id}.${ext}`;
+}
 

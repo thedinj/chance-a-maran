@@ -59,7 +59,7 @@ async function main() {
     console.log("Initializing database...");
     initializeDatabase();
 
-    setAppSetting("REGISTRATION_INVITATION_CODE", inviteCode);
+    setAppSetting("REGISTRATION_INVITATION_CODE", "true");
 
     await upsertUser(adminEmail, adminPassword, adminName, true, inviteCode);
 

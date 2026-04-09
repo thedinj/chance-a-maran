@@ -8,15 +8,13 @@ import { MAX_DISPLAY_NAME_LENGTH } from "@chance/core";
 
 // ─── Card sharing copy ────────────────────────────────────────────────────────
 
-const SHARING_LABELS: Record<"none" | "mine" | "network", string> = {
-    network: "My network",
+const SHARING_LABELS: Record<"none" | "mine", string> = {
     mine: "My cards",
     none: "None",
 };
 
-const SHARING_DESCRIPTIONS: Record<"none" | "mine" | "network", string> = {
-    network: "Your cards + cards from players in your recent sessions",
-    mine: "Your own library cards only",
+const SHARING_DESCRIPTIONS: Record<"none" | "mine", string> = {
+    mine: "Your own library cards enter the draw pool",
     none: "Don't contribute cards to this session",
 };
 
@@ -31,8 +29,8 @@ export default function PlayerGameOptions() {
     const targetPlayer = players.find((p) => p.id === playerId) ?? null;
 
     const [displayName, setDisplayName] = useState(targetPlayer?.displayName ?? "");
-    const [cardSharing, setCardSharing] = useState<"none" | "mine" | "network">(
-        targetPlayer?.cardSharing ?? "network"
+    const [cardSharing, setCardSharing] = useState<"none" | "mine">(
+        targetPlayer?.cardSharing ?? "mine"
     );
     const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +64,7 @@ export default function PlayerGameOptions() {
         }
         setError(null);
 
-        const patch: { displayName?: string; cardSharing?: "none" | "mine" | "network" } = {};
+        const patch: { displayName?: string; cardSharing?: "none" | "mine" } = {};
         if (trimmedName !== currentPlayer.displayName) patch.displayName = trimmedName;
         if (isRegistered && cardSharing !== currentPlayer.cardSharing) patch.cardSharing = cardSharing;
 
@@ -126,7 +124,7 @@ export default function PlayerGameOptions() {
                                     How much of your library enters the draw pool.
                                 </p>
                                 <div style={styles.radioStack}>
-                                    {(["network", "mine", "none"] as const).map((level) => (
+                                    {(["mine", "none"] as const).map((level) => (
                                         <button
                                             key={level}
                                             style={

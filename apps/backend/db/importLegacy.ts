@@ -9,15 +9,15 @@
  *   1. Reads raw_assets/old_database.sql from the project root
  *   2. Parses ChanceCardElements, ChanceCards, ChanceCardRequirements
  *   3. Skips cards where Inactive = 1
- *   4. Imports images as BLOBs, maps ratings to drinking/spice levels
+ *   4. Imports images to the filesystem (data/), maps ratings to drinking/spice levels
  *   5. All cards are set to pending_global = 1 (nominated for global promotion) and attributed to the admin user
  */
 
 import { randomUUID } from "crypto";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, resolve } from "path";
 import { config } from "dotenv";
-import { applyContentFloors } from "@chance/core";
+import { applyContentFloors, mediaRelativePath } from "@chance/core";
 import { initializeDatabase } from "../src/db/init";
 import { db } from "../src/lib/db/db";
 
@@ -177,6 +177,19 @@ function mimeTypeFromNameOrBlob(imageName: string | null, blob: Buffer | null): 
     return "image/jpeg"; // safe fallback for this legacy data
 }
 
+// ─── Filesystem media helpers ────────────────────────────────────────────────
+
+const DATA_ROOT = resolve(__dirname, "../data");
+
+function writeMediaFile(id: string, mimeType: string, buffer: Buffer): void {
+    const filePath = resolve(DATA_ROOT, mediaRelativePath(id, mimeType));
+    const dir = dirname(filePath);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(filePath, buffer);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -259,8 +272,8 @@ async function main() {
              VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         );
         const insertImage = db.prepare(
-            `INSERT INTO card_images (id, data, mime_type, size, uploaded_by_user_id, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`
+            `INSERT INTO media (id, mime_type, size, uploaded_by_user_id, created_at)
+             VALUES (?, ?, ?, ?, ?)`
         );
 
         for (const row of cardRows) {
@@ -294,7 +307,8 @@ async function main() {
             if (imageBlob && imageBlob.length > 0) {
                 const mimeType = mimeTypeFromNameOrBlob(imageName, imageBlob);
                 imageId = randomUUID();
-                insertImage.run(imageId, imageBlob, mimeType, imageBlob.length, adminId, createdAt);
+                insertImage.run(imageId, mimeType, imageBlob.length, adminId, createdAt);
+                writeMediaFile(imageId, mimeType, imageBlob);
                 imagesImported++;
             }
 

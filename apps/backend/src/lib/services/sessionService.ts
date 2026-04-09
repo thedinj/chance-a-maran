@@ -73,7 +73,7 @@ export function createSession(userId: string, req: CreateSessionRequest): Sessio
             sessionId,
             userId,
             displayName: hostDisplayName,
-            cardSharing: "network",
+            cardSharing: "mine",
         });
 
         sessionRepo.setHostPlayer(sessionId, playerId);
@@ -115,7 +115,7 @@ export function joinByCode(
                 sessionId: session.id,
                 userId: auth.sub,
                 displayName,
-                cardSharing: req.cardSharing ?? "network",
+                cardSharing: req.cardSharing ?? "mine",
             });
         } else if (player.active === 0) {
             player = playerRepo.update(player.id, { active: true });
