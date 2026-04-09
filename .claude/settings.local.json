@@ -48,7 +48,8 @@
       "Bash(echo '{\"model\":{\"display_name\":\"Claude Sonnet 4.6\"},\"context_window\":{\"used_percentage\":5},\"workspace\":{\"current_dir\":\"D:\\\\\\\\test\"}}')",
       "Bash(\"/c/Program Files/PowerShell/7/pwsh.exe\" -NoProfile -NonInteractive -File \"C:/Users/thedinj/.claude/statusline-command.ps1\")",
       "Bash(\"/c/Program Files/PowerShell/7/pwsh.exe\" -NoProfile -NonInteractive -File \"C:\\\\Users\\\\thedinj\\\\.claude\\\\statusline-command.ps1\")",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(echo \"EXIT: $?\")"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

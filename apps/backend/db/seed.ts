@@ -61,6 +61,27 @@ async function main() {
 
     setAppSetting("REGISTRATION_INVITATION_CODE", "true");
 
+    // Seed OpenAI settings from env if provided (optional)
+    if (process.env.OPENAI_API_KEY) {
+        setAppSetting("OPENAI_API_KEY", process.env.OPENAI_API_KEY);
+        console.log("Seeded OPENAI_API_KEY from environment.");
+    }
+    if (process.env.OPENAI_MODEL) {
+        setAppSetting("OPENAI_MODEL", process.env.OPENAI_MODEL);
+        console.log(`Seeded OPENAI_MODEL: ${process.env.OPENAI_MODEL}`);
+    }
+
+    // Seed initial games
+    const existingGame = db.prepare("SELECT id FROM games WHERE name = ?").get("Catan");
+    if (!existingGame) {
+        db.prepare(
+            `INSERT INTO games (id, name, active, created_at) VALUES (?, ?, 1, datetime('now'))`
+        ).run(randomUUID(), "Catan");
+        console.log("Created game: Catan");
+    } else {
+        console.log("Game 'Catan' already exists. Skipping.");
+    }
+
     await upsertUser(adminEmail, adminPassword, adminName, true, inviteCode);
 
     // Optional second test user

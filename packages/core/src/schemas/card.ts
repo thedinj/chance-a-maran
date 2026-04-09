@@ -71,6 +71,8 @@ export const CardSchema = z.object({
     createdInSessionId: z.string().nullable(),
     currentVersionId: z.string(),
     currentVersion: CardVersionSchema,
+    /** Net upvotes minus downvotes across all sessions. */
+    netVotes: z.number().int().default(0),
     createdAt: z.string(),
 });
 

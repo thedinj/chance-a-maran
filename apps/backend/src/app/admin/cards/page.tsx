@@ -24,6 +24,11 @@ import {
     Tooltip,
     Slider,
     Box,
+    Modal,
+    Checkbox,
+    Paper,
+    Alert,
+    LoadingOverlay,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useInView } from "react-intersection-observer";
@@ -32,6 +37,24 @@ import type { Card, CardVersion } from "@chance/core";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface AnalysisSuggestion {
+    spiceLevel: number;
+    drinkingLevel: number;
+    gameTagIds: string[];
+    requirementElementIds: string[];
+}
+
+interface CardAnalysisResult {
+    cardId: string;
+    title: string;
+    current: AnalysisSuggestion;
+    suggested: AnalysisSuggestion;
+    changed: boolean;
+    error?: string;
+    gameLookup: Record<string, string>;
+    elementLookup: Record<string, string>;
+}
 
 type FilterState = {
     search: string;
@@ -140,6 +163,14 @@ function CardDrawer({
     const [saving, setSaving] = useState(false);
     const imgDragStartY = useRef(0);
     const imgDragStartOffset = useRef(0.5);
+
+    // Analysis modal state
+    const [analysisOpen, setAnalysisOpen] = useState(false);
+    const [analysisLoading, setAnalysisLoading] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<CardAnalysisResult | null>(null);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [analysisApplying, setAnalysisApplying] = useState(false);
+    const [checkedFields, setCheckedFields] = useState<Set<string>>(new Set());
 
     const cv = card.currentVersion;
 
@@ -273,6 +304,81 @@ function CardDrawer({
             }
         } finally {
             setSaving(false);
+        }
+    }
+
+    async function openAnalysis() {
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        setCheckedFields(new Set());
+        setAnalysisOpen(true);
+        setAnalysisLoading(true);
+        try {
+            const res = await adminFetch("/api/admin/cards/analyze", {
+                method: "POST",
+                body: JSON.stringify({ cardId: card.id }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const result = data.data as CardAnalysisResult;
+                setAnalysisResult(result);
+                // Pre-check all changed fields
+                if (result.changed) {
+                    const changed = new Set<string>();
+                    if (result.current.spiceLevel !== result.suggested.spiceLevel) changed.add("spiceLevel");
+                    if (result.current.drinkingLevel !== result.suggested.drinkingLevel) changed.add("drinkingLevel");
+                    const sortedCG = [...result.current.gameTagIds].sort().join(",");
+                    const sortedSG = [...result.suggested.gameTagIds].sort().join(",");
+                    if (sortedCG !== sortedSG) changed.add("gameTagIds");
+                    const sortedCE = [...result.current.requirementElementIds].sort().join(",");
+                    const sortedSE = [...result.suggested.requirementElementIds].sort().join(",");
+                    if (sortedCE !== sortedSE) changed.add("requirementElementIds");
+                    setCheckedFields(changed);
+                }
+            } else {
+                setAnalysisError(data.error?.message ?? "Analysis failed");
+            }
+        } catch {
+            setAnalysisError("Network error — could not reach the server");
+        } finally {
+            setAnalysisLoading(false);
+        }
+    }
+
+    async function applyAnalysis() {
+        if (!analysisResult) return;
+        setAnalysisApplying(true);
+        try {
+            const suggested = analysisResult.suggested;
+            const payload = {
+                title: cv.title,
+                description: cv.description,
+                hiddenInstructions: cv.hiddenInstructions ?? null,
+                imageId: cv.imageId ?? "",
+                imageYOffset: cv.imageYOffset ?? 0.5,
+                drinkingLevel: checkedFields.has("drinkingLevel") ? suggested.drinkingLevel : cv.drinkingLevel,
+                spiceLevel: checkedFields.has("spiceLevel") ? suggested.spiceLevel : cv.spiceLevel,
+                isGameChanger: cv.isGameChanger,
+                cardType: card.cardType,
+                gameTags: checkedFields.has("gameTagIds") ? suggested.gameTagIds : cv.gameTags.map((g) => g.id),
+                requirementIds: checkedFields.has("requirementElementIds")
+                    ? suggested.requirementElementIds
+                    : cv.requirements.map((r) => r.id),
+            };
+            const res = await adminFetch(`/api/cards/${card.id}`, {
+                method: "PATCH",
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                onChanged(data.data as Card);
+                setAnalysisOpen(false);
+                notifications.show({ message: "AI recommendations applied", color: "teal" });
+            } else {
+                notifications.show({ message: data.error?.message ?? "Apply failed", color: "red" });
+            }
+        } finally {
+            setAnalysisApplying(false);
         }
     }
 
@@ -474,206 +580,438 @@ function CardDrawer({
         );
     }
 
+    const drinkingLevelInfo = DRINKING_LEVELS.levels[cv.drinkingLevel];
+    const spiceLevelInfo = SPICE_LEVELS.levels[cv.spiceLevel];
+
     return (
-        <Stack gap="md">
-            {cv.imageId && (
-                <Box
-                    style={{
-                        width: "100%",
-                        aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
-                        overflow: "hidden",
-                        borderRadius: 4,
-                    }}
-                >
-                    <img
-                        src={`${apiBaseUrl}/api/media/${cv.imageId}`}
-                        alt={cv.title}
+        <>
+            {/* ── Analysis Modal ─────────────────────────────────────── */}
+            <Modal
+                opened={analysisOpen}
+                onClose={() => !analysisLoading && !analysisApplying && setAnalysisOpen(false)}
+                title={analysisResult?.changed ? `AI Recommendations` : "AI Analysis"}
+                size="md"
+            >
+                <Box pos="relative">
+                    <LoadingOverlay visible={analysisLoading || analysisApplying} overlayProps={{ blur: 2 }} />
+
+                    {analysisError && (
+                        <Alert color="red" mb="md">
+                            {analysisError}
+                        </Alert>
+                    )}
+
+                    {analysisResult && !analysisResult.changed && !analysisResult.error && (
+                        <Stack gap="xs" align="center" py="md">
+                            <Text size="xl">✓</Text>
+                            <Text size="sm" ta="center" c="dimmed">
+                                No changes recommended — current categorization looks good.
+                            </Text>
+                        </Stack>
+                    )}
+
+                    {analysisResult?.error && (
+                        <Alert color="red" mb="md">
+                            {analysisResult.error}
+                        </Alert>
+                    )}
+
+                    {analysisResult?.changed && (
+                        <Stack gap="md">
+                            <Text size="xs" c="dimmed">
+                                Select the recommendations you want to apply to &ldquo;{analysisResult.title}&rdquo;.
+                            </Text>
+
+                            {analysisResult.current.spiceLevel !== analysisResult.suggested.spiceLevel && (
+                                <Paper withBorder p="sm">
+                                    <Checkbox
+                                        checked={checkedFields.has("spiceLevel")}
+                                        onChange={(e) => {
+                                            const next = new Set(checkedFields);
+                                            if (e.currentTarget.checked) next.add("spiceLevel");
+                                            else next.delete("spiceLevel");
+                                            setCheckedFields(next);
+                                        }}
+                                        label={
+                                            <Group gap="xs">
+                                                <Text size="sm" fw={500}>Spice level</Text>
+                                                <Badge size="xs" color="gray" variant="outline">
+                                                    {SPICE_LEVELS.levels[analysisResult.current.spiceLevel].emoji || SPICE_LEVELS.levels[analysisResult.current.spiceLevel].label}
+                                                </Badge>
+                                                <Text size="xs" c="dimmed">→</Text>
+                                                <Badge size="xs" color="orange" variant="light">
+                                                    {SPICE_LEVELS.levels[analysisResult.suggested.spiceLevel].emoji || SPICE_LEVELS.levels[analysisResult.suggested.spiceLevel].label}
+                                                </Badge>
+                                            </Group>
+                                        }
+                                    />
+                                </Paper>
+                            )}
+
+                            {analysisResult.current.drinkingLevel !== analysisResult.suggested.drinkingLevel && (
+                                <Paper withBorder p="sm">
+                                    <Checkbox
+                                        checked={checkedFields.has("drinkingLevel")}
+                                        onChange={(e) => {
+                                            const next = new Set(checkedFields);
+                                            if (e.currentTarget.checked) next.add("drinkingLevel");
+                                            else next.delete("drinkingLevel");
+                                            setCheckedFields(next);
+                                        }}
+                                        label={
+                                            <Group gap="xs">
+                                                <Text size="sm" fw={500}>Drinking level</Text>
+                                                <Badge size="xs" color="gray" variant="outline">
+                                                    {DRINKING_LEVELS.levels[analysisResult.current.drinkingLevel].emoji || DRINKING_LEVELS.levels[analysisResult.current.drinkingLevel].label}
+                                                </Badge>
+                                                <Text size="xs" c="dimmed">→</Text>
+                                                <Badge size="xs" color="blue" variant="light">
+                                                    {DRINKING_LEVELS.levels[analysisResult.suggested.drinkingLevel].emoji || DRINKING_LEVELS.levels[analysisResult.suggested.drinkingLevel].label}
+                                                </Badge>
+                                            </Group>
+                                        }
+                                    />
+                                </Paper>
+                            )}
+
+                            {[...analysisResult.current.gameTagIds].sort().join(",") !==
+                                [...analysisResult.suggested.gameTagIds].sort().join(",") && (
+                                <Paper withBorder p="sm">
+                                    <Checkbox
+                                        checked={checkedFields.has("gameTagIds")}
+                                        onChange={(e) => {
+                                            const next = new Set(checkedFields);
+                                            if (e.currentTarget.checked) next.add("gameTagIds");
+                                            else next.delete("gameTagIds");
+                                            setCheckedFields(next);
+                                        }}
+                                        label={
+                                            <Stack gap={4}>
+                                                <Text size="sm" fw={500}>Game tags</Text>
+                                                <Group gap={4}>
+                                                    {analysisResult.current.gameTagIds.length === 0
+                                                        ? <Text size="xs" c="dimmed">none</Text>
+                                                        : analysisResult.current.gameTagIds.map((id) => (
+                                                            <Badge key={id} size="xs" color="gray" variant="outline">
+                                                                {analysisResult.gameLookup[id] ?? id}
+                                                            </Badge>
+                                                        ))
+                                                    }
+                                                    <Text size="xs" c="dimmed">→</Text>
+                                                    {analysisResult.suggested.gameTagIds.length === 0
+                                                        ? <Text size="xs" c="dimmed">none</Text>
+                                                        : analysisResult.suggested.gameTagIds.map((id) => (
+                                                            <Badge key={id} size="xs" color="violet" variant="light">
+                                                                {analysisResult.gameLookup[id] ?? id}
+                                                            </Badge>
+                                                        ))
+                                                    }
+                                                </Group>
+                                            </Stack>
+                                        }
+                                    />
+                                </Paper>
+                            )}
+
+                            {[...analysisResult.current.requirementElementIds].sort().join(",") !==
+                                [...analysisResult.suggested.requirementElementIds].sort().join(",") && (
+                                <Paper withBorder p="sm">
+                                    <Checkbox
+                                        checked={checkedFields.has("requirementElementIds")}
+                                        onChange={(e) => {
+                                            const next = new Set(checkedFields);
+                                            if (e.currentTarget.checked) next.add("requirementElementIds");
+                                            else next.delete("requirementElementIds");
+                                            setCheckedFields(next);
+                                        }}
+                                        label={
+                                            <Stack gap={4}>
+                                                <Text size="sm" fw={500}>Requirements</Text>
+                                                <Group gap={4}>
+                                                    {analysisResult.current.requirementElementIds.length === 0
+                                                        ? <Text size="xs" c="dimmed">none</Text>
+                                                        : analysisResult.current.requirementElementIds.map((id) => (
+                                                            <Badge key={id} size="xs" color="gray" variant="outline">
+                                                                {analysisResult.elementLookup[id] ?? id}
+                                                            </Badge>
+                                                        ))
+                                                    }
+                                                    <Text size="xs" c="dimmed">→</Text>
+                                                    {analysisResult.suggested.requirementElementIds.length === 0
+                                                        ? <Text size="xs" c="dimmed">none</Text>
+                                                        : analysisResult.suggested.requirementElementIds.map((id) => (
+                                                            <Badge key={id} size="xs" color="green" variant="light">
+                                                                {analysisResult.elementLookup[id] ?? id}
+                                                            </Badge>
+                                                        ))
+                                                    }
+                                                </Group>
+                                            </Stack>
+                                        }
+                                    />
+                                </Paper>
+                            )}
+
+                            <Group justify="flex-end" mt="xs">
+                                <Button variant="subtle" color="gray" onClick={() => setAnalysisOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    color="teal"
+                                    onClick={() => void applyAnalysis()}
+                                    loading={analysisApplying}
+                                    disabled={checkedFields.size === 0}
+                                >
+                                    Apply selected
+                                </Button>
+                            </Group>
+                        </Stack>
+                    )}
+
+                    {!analysisLoading && !analysisResult && !analysisError && (
+                        <Center py="xl">
+                            <Loader size="sm" />
+                        </Center>
+                    )}
+
+                    {(analysisResult && !analysisResult.changed) || analysisError ? (
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="subtle" color="gray" onClick={() => setAnalysisOpen(false)}>
+                                Close
+                            </Button>
+                        </Group>
+                    ) : null}
+                </Box>
+            </Modal>
+
+            {/* ── Card View ──────────────────────────────────────────── */}
+            <Stack gap="md">
+                {cv.imageId && (
+                    <Box
                         style={{
                             width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            objectPosition: `center ${(cv.imageYOffset ?? 0.5) * 100}%`,
-                            display: "block",
+                            aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
+                            overflow: "hidden",
+                            borderRadius: 4,
                         }}
-                    />
-                </Box>
-            )}
-
-            <Stack gap={4}>
-                <Text fw={700} size="lg">
-                    {cv.title}
-                </Text>
-                <Group gap="xs">
-                    <Tooltip
-                        label={
-                            card.cardType === "reparations"
-                                ? "Reparations — drawn as a penalty card"
-                                : "Standard chance card"
-                        }
-                        withArrow
                     >
-                        <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
-                            {card.cardType}
-                        </Badge>
-                    </Tooltip>
-                    {card.isGlobal && (
-                        <Tooltip label="In the global pool — eligible for all sessions" withArrow>
-                            <Badge size="sm" color="violet">
-                                global
-                            </Badge>
-                        </Tooltip>
-                    )}
-                    {card.pendingGlobal && (
-                        <Tooltip label="Nominated for global pool — pending admin review" withArrow>
-                            <Badge size="sm" color="orange">
-                                nominated
-                            </Badge>
-                        </Tooltip>
-                    )}
-                    {!card.active && (
-                        <Tooltip label="Inactive — excluded from all draw pools" withArrow>
-                            <Badge size="sm" color="gray">
-                                inactive
-                            </Badge>
-                        </Tooltip>
-                    )}
-                    {cv.isGameChanger && (
-                        <Tooltip label="Game changer — alters gameplay rules mid-session" withArrow>
-                            <Badge size="sm" color="yellow">
-                                game changer
-                            </Badge>
-                        </Tooltip>
-                    )}
-                    <LevelBadge
-                        label="🍺"
-                        value={cv.drinkingLevel}
-                        tooltip={DRINKING_LEVELS.levels[cv.drinkingLevel].tooltip}
-                    />
-                    <LevelBadge
-                        label="🌶️"
-                        value={cv.spiceLevel}
-                        tooltip={SPICE_LEVELS.levels[cv.spiceLevel].tooltip}
-                    />
-                </Group>
-            </Stack>
+                        <img
+                            src={`${apiBaseUrl}/api/media/${cv.imageId}`}
+                            alt={cv.title}
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                objectPosition: `center ${(cv.imageYOffset ?? 0.5) * 100}%`,
+                                display: "block",
+                            }}
+                        />
+                    </Box>
+                )}
 
-            <Text size="sm">{cv.description}</Text>
-
-            {cv.hiddenInstructions && (
-                <Stack gap={2}>
-                    <Text size="xs" c="dimmed" fw={500}>
-                        HIDDEN INSTRUCTIONS
-                    </Text>
-                    <Text size="sm" fs="italic">
-                        {cv.hiddenInstructions}
-                    </Text>
+                <Stack gap={4}>
+                    <Group gap="xs" align="baseline">
+                        <Text fw={700} size="lg" style={{ flex: 1 }}>
+                            {cv.title}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                            v{cv.versionNumber}
+                        </Text>
+                    </Group>
+                    <Group gap="xs" wrap="wrap">
+                        <Tooltip
+                            label={
+                                card.cardType === "reparations"
+                                    ? "Reparations — drawn as a penalty card"
+                                    : "Standard chance card"
+                            }
+                            withArrow
+                        >
+                            <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
+                                {card.cardType}
+                            </Badge>
+                        </Tooltip>
+                        {card.isGlobal && (
+                            <Tooltip label="In the global pool — eligible for all sessions" withArrow>
+                                <Badge size="sm" color="violet">
+                                    global
+                                </Badge>
+                            </Tooltip>
+                        )}
+                        {card.pendingGlobal && (
+                            <Tooltip label="Nominated for global pool — pending admin review" withArrow>
+                                <Badge size="sm" color="orange">
+                                    nominated
+                                </Badge>
+                            </Tooltip>
+                        )}
+                        {!card.active && (
+                            <Tooltip label="Inactive — excluded from all draw pools" withArrow>
+                                <Badge size="sm" color="gray">
+                                    inactive
+                                </Badge>
+                            </Tooltip>
+                        )}
+                        {cv.isGameChanger && (
+                            <Tooltip label="Game changer — alters gameplay rules mid-session" withArrow>
+                                <Badge size="sm" color="yellow">
+                                    game changer
+                                </Badge>
+                            </Tooltip>
+                        )}
+                    </Group>
                 </Stack>
-            )}
 
-            {cv.gameTags.length > 0 && (
-                <Group gap="xs">
-                    <Text size="xs" c="dimmed">
-                        Games:
-                    </Text>
-                    {cv.gameTags.map((g) => (
-                        <Badge key={g.id} size="xs" variant="outline">
-                            {g.name}
-                        </Badge>
-                    ))}
+                {/* Levels row — always shown */}
+                <Group gap="md">
+                    <Tooltip label={drinkingLevelInfo.tooltip || `Drinking: ${drinkingLevelInfo.label}`} withArrow>
+                        <Group gap={4}>
+                            <Text size="xs" c="dimmed">🍺</Text>
+                            <Text size="xs">{drinkingLevelInfo.label}</Text>
+                        </Group>
+                    </Tooltip>
+                    <Tooltip label={spiceLevelInfo.tooltip || `Spice: ${spiceLevelInfo.label}`} withArrow>
+                        <Group gap={4}>
+                            <Text size="xs" c="dimmed">🌶️</Text>
+                            <Text size="xs">{spiceLevelInfo.label}</Text>
+                        </Group>
+                    </Tooltip>
                 </Group>
-            )}
 
-            {cv.requirements.length > 0 && (
-                <Group gap="xs">
-                    <Text size="xs" c="dimmed">
-                        Requires:
-                    </Text>
-                    {cv.requirements.map((r) => (
-                        <Badge key={r.id} size="xs" variant="dot">
-                            {r.title}
-                        </Badge>
-                    ))}
-                </Group>
-            )}
+                <Text size="sm">{cv.description}</Text>
 
-            <Text size="xs" c="dimmed">
-                Owner: {card.ownerDisplayName} · Author: {cv.authorDisplayName} ·{" "}
-                {formatDate(card.createdAt)}
-            </Text>
+                {cv.hiddenInstructions ? (
+                    <Stack gap={2}>
+                        <Text size="xs" c="dimmed" fw={500}>
+                            HIDDEN INSTRUCTIONS
+                        </Text>
+                        <Text size="sm" fs="italic">
+                            {cv.hiddenInstructions}
+                        </Text>
+                    </Stack>
+                ) : (
+                    <Text size="xs" c="dimmed" fs="italic">No hidden instructions</Text>
+                )}
 
-            <Divider />
-
-            <Group wrap="wrap">
-                <Button size="xs" variant="outline" onClick={startEdit}>
-                    Edit card
-                </Button>
-                <Button size="xs" variant="outline" color="orange" onClick={startTransfer}>
-                    Transfer ownership
-                </Button>
-                <Button
-                    size="xs"
-                    variant="outline"
-                    color={card.isGlobal ? "gray" : "violet"}
-                    loading={isPending}
-                    onClick={() =>
-                        action(
-                            card.isGlobal
-                                ? `/api/cards/${card.id}/demote`
-                                : `/api/cards/${card.id}/promote`
-                        )
+                <Group gap="xs" wrap="wrap">
+                    <Text size="xs" c="dimmed">Games:</Text>
+                    {cv.gameTags.length > 0
+                        ? cv.gameTags.map((g) => (
+                            <Badge key={g.id} size="xs" variant="outline">
+                                {g.name}
+                            </Badge>
+                        ))
+                        : <Text size="xs" c="dimmed">none</Text>
                     }
-                >
-                    {card.isGlobal ? "Remove from global" : "Promote to global"}
-                </Button>
-                {card.pendingGlobal && !card.isGlobal && (
+                </Group>
+
+                <Group gap="xs" wrap="wrap">
+                    <Text size="xs" c="dimmed">Requires:</Text>
+                    {cv.requirements.length > 0
+                        ? cv.requirements.map((r) => (
+                            <Badge key={r.id} size="xs" variant="dot">
+                                {r.title}
+                            </Badge>
+                        ))
+                        : <Text size="xs" c="dimmed">nothing</Text>
+                    }
+                </Group>
+
+                <Text size="xs" c="dimmed">
+                    Owner: {card.ownerDisplayName} · Author: {cv.authorDisplayName} ·{" "}
+                    {formatDate(card.createdAt)}
+                    {card.netVotes !== 0 && (
+                        <> · <span style={{ color: card.netVotes > 0 ? "var(--mantine-color-teal-6)" : "var(--mantine-color-red-6)" }}>
+                            {card.netVotes > 0 ? `+${card.netVotes}` : card.netVotes} votes
+                        </span></>
+                    )}
+                </Text>
+
+                <Divider />
+
+                {/* Primary actions */}
+                <Group gap="xs" wrap="wrap">
+                    <Button size="xs" variant="outline" onClick={startEdit}>
+                        Edit
+                    </Button>
+                    <Button size="xs" variant="outline" color="teal" onClick={() => void openAnalysis()}>
+                        Analyze with AI
+                    </Button>
+                </Group>
+
+                {/* Secondary / status actions */}
+                <Group gap="xs" wrap="wrap">
+                    <Button size="xs" variant="subtle" color="orange" onClick={startTransfer}>
+                        Transfer ownership
+                    </Button>
                     <Button
                         size="xs"
-                        variant="outline"
-                        color="red"
+                        variant="subtle"
+                        color={card.isGlobal ? "gray" : "violet"}
                         loading={isPending}
-                        onClick={() => action(`/api/cards/${card.id}/unnominate`)}
+                        onClick={() =>
+                            action(
+                                card.isGlobal
+                                    ? `/api/cards/${card.id}/demote`
+                                    : `/api/cards/${card.id}/promote`
+                            )
+                        }
                     >
-                        Reject nomination
+                        {card.isGlobal ? "Remove from global" : "Promote to global"}
                     </Button>
-                )}
-                <Button
-                    size="xs"
-                    variant="outline"
-                    color={card.active ? "red" : "green"}
-                    loading={isPending}
-                    onClick={() =>
-                        action(
-                            card.active
-                                ? `/api/cards/${card.id}/deactivate`
-                                : `/api/cards/${card.id}/reactivate`
-                        )
-                    }
-                >
-                    {card.active ? "Deactivate" : "Reactivate"}
-                </Button>
-            </Group>
+                    {card.pendingGlobal && !card.isGlobal && (
+                        <Button
+                            size="xs"
+                            variant="subtle"
+                            color="red"
+                            loading={isPending}
+                            onClick={() => action(`/api/cards/${card.id}/unnominate`)}
+                        >
+                            Reject nomination
+                        </Button>
+                    )}
+                    <Button
+                        size="xs"
+                        variant="subtle"
+                        color={card.active ? "red" : "green"}
+                        loading={isPending}
+                        onClick={() =>
+                            action(
+                                card.active
+                                    ? `/api/cards/${card.id}/deactivate`
+                                    : `/api/cards/${card.id}/reactivate`
+                            )
+                        }
+                    >
+                        {card.active ? "Deactivate" : "Reactivate"}
+                    </Button>
+                </Group>
 
-            {versions.length > 1 && (
-                <>
-                    <Divider label="Version history" labelPosition="left" />
-                    <Stack gap={4}>
-                        {versions.map((v) => (
-                            <Group key={v.id} gap="xs">
-                                <Text size="xs" c="dimmed" w={20}>
-                                    v{v.versionNumber}
-                                </Text>
-                                <Text size="xs" style={{ flex: 1 }} truncate>
-                                    {v.title}
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                    {formatDate(v.createdAt)}
-                                </Text>
-                            </Group>
-                        ))}
-                    </Stack>
-                </>
-            )}
-        </Stack>
+                {versions.length > 0 && (
+                    <>
+                        <Divider label="Version history" labelPosition="left" />
+                        <Stack gap={4}>
+                            {versions.map((v) => (
+                                <Group key={v.id} gap="xs">
+                                    <Text size="xs" c="dimmed" w={20}>
+                                        v{v.versionNumber}
+                                    </Text>
+                                    <Text size="xs" style={{ flex: 1 }} truncate>
+                                        {v.title}
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        {v.authorDisplayName}
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        {formatDate(v.createdAt)}
+                                    </Text>
+                                </Group>
+                            ))}
+                        </Stack>
+                    </>
+                )}
+            </Stack>
+        </>
     );
 }
 

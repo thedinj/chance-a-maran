@@ -116,6 +116,7 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
         createdInSessionId: cardRow.created_in_session_id,
         currentVersionId: cardRow.current_version_id,
         currentVersion: mapCardVersion(versionRow),
+        netVotes: cardRow.net_votes,
         createdAt: cardRow.created_at,
     };
 }

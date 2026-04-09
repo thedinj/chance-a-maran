@@ -8,6 +8,8 @@ Set up DDNS
 
 ====
 more menacing Game Changer graphic
+Read querystring when F5 refreshing page?
+Browse global cards? (or do we want to keep it a secret?)
 
 ====
 
