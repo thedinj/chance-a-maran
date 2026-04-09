@@ -33,28 +33,11 @@ import {
 import { notifications } from "@mantine/notifications";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
-import type { Card, CardVersion } from "@chance/core";
+import type { Card, CardVersion, CardAnalysisResult } from "@chance/core";
+import { BulkAnalysisModal } from "./BulkAnalysisModal";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-
-interface AnalysisSuggestion {
-    spiceLevel: number;
-    drinkingLevel: number;
-    gameTagIds: string[];
-    requirementElementIds: string[];
-}
-
-interface CardAnalysisResult {
-    cardId: string;
-    title: string;
-    current: AnalysisSuggestion;
-    suggested: AnalysisSuggestion;
-    changed: boolean;
-    error?: string;
-    gameLookup: Record<string, string>;
-    elementLookup: Record<string, string>;
-}
 
 type FilterState = {
     search: string;
@@ -132,11 +115,13 @@ function CardDrawer({
     card,
     onClose,
     onChanged,
+    onAnalyzed,
     apiBaseUrl,
 }: {
     card: Card;
     onClose: () => void;
     onChanged: (updated: Card) => void;
+    onAnalyzed: (versionIds: string[]) => void;
     apiBaseUrl: string;
 }) {
     const adminFetch = useAdminFetch();
@@ -316,12 +301,14 @@ function CardDrawer({
         try {
             const res = await adminFetch("/api/admin/cards/analyze", {
                 method: "POST",
-                body: JSON.stringify({ cardId: card.id }),
+                body: JSON.stringify({ cardIds: [card.id] }),
             });
             const data = await res.json();
             if (data.ok) {
-                const result = data.data as CardAnalysisResult;
+                const response = data.data as { results: CardAnalysisResult[] };
+                const result = response.results[0] ?? null;
                 setAnalysisResult(result);
+                onAnalyzed([card.currentVersionId]);
                 // Pre-check all changed fields
                 if (result.changed) {
                     const changed = new Set<string>();
@@ -1032,6 +1019,9 @@ export default function CardsPage() {
     });
     const [filterGames, setFilterGames] = useState<GameOption[]>([]);
     const [selected, setSelected] = useState<Card | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
+    const [analyzedVersionIds, setAnalyzedVersionIds] = useState<Set<string>>(new Set());
     const [isPending, startTransition] = useTransition();
 
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -1097,6 +1087,24 @@ export default function CardsPage() {
             bg={selected?.id === card.id ? "var(--mantine-color-dark-6)" : undefined}
             onClick={() => setSelected(card)}
         >
+            <Table.Td onClick={(e) => e.stopPropagation()}>
+                <Tooltip
+                    label="Maximum 20 cards selected"
+                    disabled={selectedIds.has(card.id) || selectedIds.size < 20}
+                    withArrow
+                >
+                    <Checkbox
+                        checked={selectedIds.has(card.id)}
+                        disabled={!selectedIds.has(card.id) && selectedIds.size >= 20}
+                        onChange={(e) => {
+                            const next = new Set(selectedIds);
+                            if (e.currentTarget.checked) next.add(card.id);
+                            else next.delete(card.id);
+                            setSelectedIds(next);
+                        }}
+                    />
+                </Tooltip>
+            </Table.Td>
             <Table.Td>
                 {card.currentVersion.imageId ? (
                     <LazyThumbnail imageId={card.currentVersion.imageId} apiBaseUrl={apiBaseUrl} />
@@ -1133,6 +1141,13 @@ export default function CardsPage() {
                         <Badge size="xs" color="orange">
                             nominated
                         </Badge>
+                    )}
+                    {analyzedVersionIds.has(card.currentVersionId) && (
+                        <Tooltip label="AI analysis run this session" withArrow>
+                            <Badge size="xs" color="teal" variant="light">
+                                AI
+                            </Badge>
+                        </Tooltip>
                     )}
                 </Group>
             </Table.Td>
@@ -1280,6 +1295,44 @@ export default function CardsPage() {
                     />
                 </Group>
 
+                {selectedIds.size > 0 && (
+                    <Group
+                        justify="space-between"
+                        px="sm"
+                        py="xs"
+                        style={{
+                            background: "var(--mantine-color-dark-7)",
+                            borderRadius: 6,
+                        }}
+                    >
+                        <Group gap="sm">
+                            <Text size="sm" fw={500}>
+                                {selectedIds.size} selected
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                                (max 20)
+                            </Text>
+                        </Group>
+                        <Group gap="sm">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                color="gray"
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Clear
+                            </Button>
+                            <Button
+                                size="xs"
+                                color="teal"
+                                onClick={() => setBulkAnalysisOpen(true)}
+                            >
+                                Analyze {selectedIds.size} card{selectedIds.size !== 1 ? "s" : ""}
+                            </Button>
+                        </Group>
+                    </Group>
+                )}
+
                 {loading ? (
                     <Center py="xl">
                         <Loader />
@@ -1289,6 +1342,7 @@ export default function CardsPage() {
                         <Table striped highlightOnHover withTableBorder>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th w={40} />
                                     <Table.Th w={36} />
                                     <Table.Th>Title</Table.Th>
                                     <Table.Th>Type</Table.Th>
@@ -1323,10 +1377,25 @@ export default function CardsPage() {
                         card={selected}
                         onClose={() => setSelected(null)}
                         onChanged={handleCardChanged}
+                        onAnalyzed={(ids) => setAnalyzedVersionIds((prev) => new Set([...prev, ...ids]))}
                         apiBaseUrl={apiBaseUrl}
                     />
                 )}
             </Drawer>
+
+            <BulkAnalysisModal
+                opened={bulkAnalysisOpen}
+                onClose={() => setBulkAnalysisOpen(false)}
+                cards={cards.filter((c) => selectedIds.has(c.id))}
+                onCardsChanged={(updated) => {
+                    setCards((prev) =>
+                        prev.map((c) => updated.find((u) => u.id === c.id) ?? c)
+                    );
+                    setSelectedIds(new Set());
+                    setBulkAnalysisOpen(false);
+                }}
+                onAnalyzed={(ids) => setAnalyzedVersionIds((prev) => new Set([...prev, ...ids]))}
+            />
         </>
     );
 }

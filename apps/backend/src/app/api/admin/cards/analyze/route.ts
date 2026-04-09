@@ -5,13 +5,13 @@ import * as cardRepo from "@/lib/repos/cardRepo";
 import * as gameRepo from "@/lib/repos/gameRepo";
 import * as requirementElementRepo from "@/lib/repos/requirementElementRepo";
 import { getAppSetting } from "@/lib/repos/referenceRepo";
-import { analyzeCard, type CardAnalysisInput } from "@/lib/services/aiAnalysisService";
+import { analyzeCards, type CardAnalysisInput } from "@/lib/services/aiAnalysisService";
 import { ValidationError, NotFoundError } from "@chance/core";
 
 export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
-    cardId: z.string().uuid(),
+    cardIds: z.array(z.string().uuid()).min(1).max(100),
 });
 
 export const POST = withAdmin(async (req) => {
@@ -31,29 +31,37 @@ export const POST = withAdmin(async (req) => {
         const modelSetting = getAppSetting("OPENAI_MODEL");
         const model = modelSetting?.value ?? "gpt-4o-mini";
 
-        const card = cardRepo.findById(parsed.data.cardId);
-        if (!card) {
-            throw new NotFoundError("Card not found");
+        const inputs: CardAnalysisInput[] = [];
+        const missingIds: string[] = [];
+        for (const cardId of parsed.data.cardIds) {
+            const card = cardRepo.findById(cardId);
+            if (!card) {
+                missingIds.push(cardId);
+                continue;
+            }
+            const cv = card.currentVersion;
+            inputs.push({
+                cardId: card.id,
+                title: cv.title,
+                description: cv.description,
+                hiddenInstructions: cv.hiddenInstructions ?? null,
+                currentSpiceLevel: cv.spiceLevel,
+                currentDrinkingLevel: cv.drinkingLevel,
+                currentGameTagIds: cv.gameTags.map((g) => g.id),
+                currentRequirementElementIds: cv.requirements.map((r) => r.id),
+            });
         }
 
-        const cv = card.currentVersion;
-        const input: CardAnalysisInput = {
-            cardId: card.id,
-            title: cv.title,
-            description: cv.description,
-            hiddenInstructions: cv.hiddenInstructions ?? null,
-            currentSpiceLevel: cv.spiceLevel,
-            currentDrinkingLevel: cv.drinkingLevel,
-            currentGameTagIds: cv.gameTags.map((g) => g.id),
-            currentRequirementElementIds: cv.requirements.map((r) => r.id),
-        };
+        if (missingIds.length > 0) {
+            throw new NotFoundError(`Cards not found: ${missingIds.join(", ")}`);
+        }
 
         const games = gameRepo.findAll();
         const elements = requirementElementRepo.listActive();
 
-        const result = await analyzeCard(input, games, elements, apiKey, model);
+        const results = await analyzeCards(inputs, games, elements, apiKey, model);
 
-        return ok(result);
+        return ok({ results });
     } catch (err) {
         return handleError(err);
     }

@@ -77,3 +77,39 @@ export const CardSchema = z.object({
 });
 
 export type Card = z.infer<typeof CardSchema>;
+
+// ─── AI Analysis ──────────────────────────────────────────────────────────────
+
+export const CardAnalysisSuggestionSchema = z.object({
+    spiceLevel: z.number().int().min(0).max(3),
+    drinkingLevel: z.number().int().min(0).max(3),
+    gameTagIds: z.array(z.string()),
+    requirementElementIds: z.array(z.string()),
+});
+export type CardAnalysisSuggestion = z.infer<typeof CardAnalysisSuggestionSchema>;
+
+export const CardAnalysisResultSchema = z.object({
+    cardId: z.string(),
+    title: z.string(),
+    current: CardAnalysisSuggestionSchema,
+    suggested: CardAnalysisSuggestionSchema,
+    /** true if any field differs between current and suggested */
+    changed: z.boolean(),
+    /** set if the OpenAI call failed for this card */
+    error: z.string().optional(),
+    /** ID → name lookup for all games available during analysis */
+    gameLookup: z.record(z.string()),
+    /** ID → title lookup for all requirement elements available during analysis */
+    elementLookup: z.record(z.string()),
+});
+export type CardAnalysisResult = z.infer<typeof CardAnalysisResultSchema>;
+
+export const CardAnalyzeRequestSchema = z.object({
+    cardIds: z.array(z.string().uuid()).min(1).max(100),
+});
+export type CardAnalyzeRequest = z.infer<typeof CardAnalyzeRequestSchema>;
+
+export const CardAnalyzeResponseSchema = z.object({
+    results: z.array(CardAnalysisResultSchema),
+});
+export type CardAnalyzeResponse = z.infer<typeof CardAnalyzeResponseSchema>;

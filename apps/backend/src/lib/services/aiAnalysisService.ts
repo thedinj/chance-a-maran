@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { Game, RequirementElement } from "@chance/core";
+import type { Game, RequirementElement, CardAnalysisSuggestion, CardAnalysisResult } from "@chance/core";
 import { DRINKING_LEVELS, SPICE_LEVELS } from "@chance/core";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -13,28 +13,6 @@ export interface CardAnalysisInput {
     currentDrinkingLevel: number;
     currentGameTagIds: string[];
     currentRequirementElementIds: string[];
-}
-
-export interface CardAnalysisSuggestion {
-    spiceLevel: number;
-    drinkingLevel: number;
-    gameTagIds: string[];
-    requirementElementIds: string[];
-}
-
-export interface CardAnalysisResult {
-    cardId: string;
-    title: string;
-    current: CardAnalysisSuggestion;
-    suggested: CardAnalysisSuggestion;
-    /** true if any field differs between current and suggested */
-    changed: boolean;
-    /** set if the OpenAI call failed for this card */
-    error?: string;
-    /** ID → name lookup for all games available during analysis */
-    gameLookup: Record<string, string>;
-    /** ID → title lookup for all requirement elements available during analysis */
-    elementLookup: Record<string, string>;
 }
 
 // ─── Prompt helpers ───────────────────────────────────────────────────────────
@@ -128,12 +106,15 @@ function hasDiff(current: CardAnalysisSuggestion, suggested: CardAnalysisSuggest
     return false;
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Internal single-card helper ─────────────────────────────────────────────
 
-export async function analyzeCard(
+async function _analyzeOne(
     card: CardAnalysisInput,
-    games: Game[],
-    elements: RequirementElement[],
+    gameLookup: Record<string, string>,
+    elementLookup: Record<string, string>,
+    availableGameIds: Set<string>,
+    availableElementIds: Set<string>,
+    systemPrompt: string,
     apiKey: string,
     model: string
 ): Promise<CardAnalysisResult> {
@@ -143,11 +124,6 @@ export async function analyzeCard(
         gameTagIds: card.currentGameTagIds,
         requirementElementIds: card.currentRequirementElementIds,
     };
-
-    const gameLookup: Record<string, string> = Object.fromEntries(games.map((g) => [g.id, g.name]));
-    const elementLookup: Record<string, string> = Object.fromEntries(
-        elements.map((e) => [e.id, e.title])
-    );
 
     try {
         const client = new OpenAI({ apiKey });
@@ -162,7 +138,7 @@ export async function analyzeCard(
             model,
             response_format: { type: "json_object" },
             messages: [
-                { role: "system", content: buildSystemPrompt(games, elements) },
+                { role: "system", content: systemPrompt },
                 { role: "user", content: userMessage },
             ],
             temperature: 0.2,
@@ -170,9 +146,6 @@ export async function analyzeCard(
 
         const rawText = response.choices[0]?.message?.content ?? "{}";
         const parsed: unknown = JSON.parse(rawText);
-
-        const availableGameIds = new Set(games.map((g) => g.id));
-        const availableElementIds = new Set(elements.map((e) => e.id));
         const suggested = validateAndClamp(parsed, availableGameIds, availableElementIds);
 
         return {
@@ -197,4 +170,50 @@ export async function analyzeCard(
             elementLookup,
         };
     }
+}
+
+// ─── Public exports ───────────────────────────────────────────────────────────
+
+/** Analyze multiple cards sequentially (one OpenAI request at a time). */
+export async function analyzeCards(
+    cards: CardAnalysisInput[],
+    games: Game[],
+    elements: RequirementElement[],
+    apiKey: string,
+    model: string
+): Promise<CardAnalysisResult[]> {
+    const gameLookup: Record<string, string> = Object.fromEntries(games.map((g) => [g.id, g.name]));
+    const elementLookup: Record<string, string> = Object.fromEntries(
+        elements.map((e) => [e.id, e.title])
+    );
+    const availableGameIds = new Set(games.map((g) => g.id));
+    const availableElementIds = new Set(elements.map((e) => e.id));
+    const systemPrompt = buildSystemPrompt(games, elements);
+
+    const results: CardAnalysisResult[] = [];
+    for (const card of cards) {
+        results.push(
+            await _analyzeOne(
+                card,
+                gameLookup,
+                elementLookup,
+                availableGameIds,
+                availableElementIds,
+                systemPrompt,
+                apiKey,
+                model
+            )
+        );
+    }
+    return results;
+}
+
+export async function analyzeCard(
+    card: CardAnalysisInput,
+    games: Game[],
+    elements: RequirementElement[],
+    apiKey: string,
+    model: string
+): Promise<CardAnalysisResult> {
+    return (await analyzeCards([card], games, elements, apiKey, model))[0];
 }
