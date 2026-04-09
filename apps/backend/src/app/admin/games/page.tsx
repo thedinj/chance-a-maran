@@ -27,6 +27,9 @@ export default function GamesPage() {
     const [editTarget, setEditTarget] = useState<AdminGame | null>(null);
     const [editName, setEditName] = useState("");
     const [saving, setSaving] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<AdminGame | null>(null);
+    const [deleteImpact, setDeleteImpact] = useState<{ cardVersionCount: number; sessionCount: number } | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     function loadGames() {
         setLoading(true);
@@ -67,9 +70,40 @@ export default function GamesPage() {
         const data = await res.json();
         setSaving(false);
         if (data.ok) {
-            setGames((prev) => prev.map((g) => g.id === editTarget.id ? data.data as AdminGame : g));
+            setGames((prev) =>
+                prev
+                    .map((g) => (g.id === editTarget.id ? (data.data as AdminGame) : g))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+            );
             setEditTarget(null);
             notifications.show({ message: "Game updated", color: "green" });
+        } else {
+            notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        }
+    }
+
+    async function confirmDelete(game: AdminGame) {
+        const res = await adminFetch(`/api/admin/games/${game.id}?dryRun=true`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.ok) {
+            setDeleteImpact(data.data);
+            setDeleteTarget(game);
+        } else {
+            notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        }
+    }
+
+    async function executeDelete() {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        const res = await adminFetch(`/api/admin/games/${deleteTarget.id}`, { method: "DELETE" });
+        const data = await res.json();
+        setDeleting(false);
+        if (data.ok) {
+            setGames((prev) => prev.filter((g) => g.id !== deleteTarget.id));
+            setDeleteTarget(null);
+            setDeleteImpact(null);
+            notifications.show({ message: "Game deleted", color: "green" });
         } else {
             notifications.show({ message: data.error?.message ?? "Error", color: "red" });
         }
@@ -85,7 +119,9 @@ export default function GamesPage() {
         const data = await res.json();
         setCreating(false);
         if (data.ok) {
-            setGames((prev) => [...prev, data.data as AdminGame]);
+            setGames((prev) =>
+                [...prev, data.data as AdminGame].sort((a, b) => a.name.localeCompare(b.name))
+            );
             setNewName("");
             setCreateOpen(false);
             notifications.show({ message: "Game created", color: "green" });
@@ -130,15 +166,27 @@ export default function GamesPage() {
                                         <Text size="sm">{game.cardCount}</Text>
                                     </Table.Td>
                                     <Table.Td>
-                                        <Tooltip label="Edit">
-                                            <ActionIcon
-                                                variant="subtle"
-                                                size="sm"
-                                                onClick={() => openEdit(game)}
-                                            >
-                                                ✏
-                                            </ActionIcon>
-                                        </Tooltip>
+                                        <Group gap={4}>
+                                            <Tooltip label="Edit">
+                                                <ActionIcon
+                                                    variant="subtle"
+                                                    size="sm"
+                                                    onClick={() => openEdit(game)}
+                                                >
+                                                    ✏
+                                                </ActionIcon>
+                                            </Tooltip>
+                                            <Tooltip label="Delete permanently">
+                                                <ActionIcon
+                                                    variant="subtle"
+                                                    size="sm"
+                                                    color="red"
+                                                    onClick={() => void confirmDelete(game)}
+                                                >
+                                                    🗑
+                                                </ActionIcon>
+                                            </Tooltip>
+                                        </Group>
                                     </Table.Td>
                                 </Table.Tr>
                             ))}
@@ -182,6 +230,36 @@ export default function GamesPage() {
                     >
                         Save
                     </Button>
+                </Stack>
+            </Modal>
+            <Modal
+                opened={!!deleteTarget}
+                onClose={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                title="Delete Game"
+            >
+                <Stack gap="md">
+                    <Text size="sm">
+                        Permanently delete &ldquo;{deleteTarget?.name}&rdquo;?
+                        {deleteImpact && (
+                            <> This will untag {deleteImpact.cardVersionCount} card version(s) and
+                            remove it from {deleteImpact.sessionCount} session filter(s).</>
+                        )}
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button
+                            variant="default"
+                            onClick={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            color="red"
+                            onClick={() => void executeDelete()}
+                            loading={deleting}
+                        >
+                            Delete
+                        </Button>
+                    </Group>
                 </Stack>
             </Modal>
         </>

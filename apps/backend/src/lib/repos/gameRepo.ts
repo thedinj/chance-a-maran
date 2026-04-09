@@ -59,3 +59,34 @@ export function create(data: { id: string; name: string }): Game {
 export function setActive(id: string, active: boolean): void {
     stmts.setActive.run(active ? 1 : 0, id);
 }
+
+export function countSessionReferences(gameId: string): number {
+    const row = db
+        .prepare(
+            `SELECT COUNT(DISTINCT s.id) AS c
+             FROM sessions s, json_each(s.filter_settings, '$.gameTags') AS jt
+             WHERE jt.value = ?`
+        )
+        .get(gameId) as { c: number };
+    return row.c;
+}
+
+export const hardDelete = db.transaction((gameId: string): void => {
+    // Scrub game ID from sessions.filter_settings.gameTags
+    db.prepare(
+        `UPDATE sessions
+         SET filter_settings = json_set(
+             filter_settings, '$.gameTags',
+             (SELECT json_group_array(jt.value)
+              FROM json_each(sessions.filter_settings, '$.gameTags') AS jt
+              WHERE jt.value != ?1)
+         )
+         WHERE sessions.id IN (
+             SELECT s.id FROM sessions s, json_each(s.filter_settings, '$.gameTags') AS je
+             WHERE je.value = ?1
+         )`
+    ).run(gameId);
+
+    // Delete the game row (CASCADE handles card_game_tags)
+    db.prepare("DELETE FROM games WHERE id = ?").run(gameId);
+});

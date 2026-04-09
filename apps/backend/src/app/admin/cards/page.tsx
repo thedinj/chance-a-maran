@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
     Title,
     Table,
@@ -22,12 +22,14 @@ import {
     SegmentedControl,
     MultiSelect,
     Tooltip,
+    Slider,
+    Box,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion } from "@chance/core";
-import { DRINKING_LEVEL_TOOLTIPS, SPICE_LEVEL_TOOLTIPS } from "@chance/core";
+import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -136,8 +138,12 @@ function CardDrawer({
     const [editGameTags, setEditGameTags] = useState<string[]>([]);
     const [editRequirements, setEditRequirements] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const imgDragStartY = useRef(0);
+    const imgDragStartOffset = useRef(0.5);
 
     const cv = card.currentVersion;
+
+    const [editImageYOffset, setEditImageYOffset] = useState(cv.imageYOffset ?? 0.5);
 
     useEffect(() => {
         adminFetch(`/api/cards/${card.id}/versions`)
@@ -166,6 +172,7 @@ function CardDrawer({
         setEditCardType(card.cardType);
         setEditGameTags(cv.gameTags.map((g) => g.id));
         setEditRequirements(cv.requirements.map((r) => r.id));
+        setEditImageYOffset(cv.imageYOffset ?? 0.5);
         void loadEditData();
         setEditing(true);
     }
@@ -244,6 +251,7 @@ function CardDrawer({
                     description: editDescription,
                     hiddenInstructions: editHidden || null,
                     imageId: cv.imageId ?? "",
+                    imageYOffset: editImageYOffset,
                     drinkingLevel: Number(editDrinking),
                     spiceLevel: Number(editSpice),
                     isGameChanger: editCardType === "reparations" ? false : editGameChanger,
@@ -345,12 +353,10 @@ function CardDrawer({
                     <SegmentedControl
                         value={editDrinking}
                         onChange={setEditDrinking}
-                        data={[
-                            { value: "0", label: "None" },
-                            { value: "1", label: "🍺" },
-                            { value: "2", label: "🍺🍺" },
-                            { value: "3", label: "🍺🍺🍺" },
-                        ]}
+                        data={DRINKING_LEVELS.levels.map((l) => ({
+                            value: String(l.value),
+                            label: l.emoji || l.label,
+                        }))}
                     />
                 </Stack>
                 <Stack gap={4}>
@@ -360,12 +366,10 @@ function CardDrawer({
                     <SegmentedControl
                         value={editSpice}
                         onChange={setEditSpice}
-                        data={[
-                            { value: "0", label: "Clean" },
-                            { value: "1", label: "Mild" },
-                            { value: "2", label: "Edgy" },
-                            { value: "3", label: "Spicy" },
-                        ]}
+                        data={SPICE_LEVELS.levels.map((l) => ({
+                            value: String(l.value),
+                            label: l.emoji || l.label,
+                        }))}
                     />
                 </Stack>
                 {editCardType !== "reparations" && (
@@ -391,6 +395,69 @@ function CardDrawer({
                     searchable
                     clearable
                 />
+                {cv.imageId && (
+                    <Stack gap={4}>
+                        <Text size="sm" fw={500}>
+                            Image position
+                        </Text>
+                        <Box
+                            style={{
+                                width: "100%",
+                                aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
+                                overflow: "hidden",
+                                borderRadius: 4,
+                                cursor: "ns-resize",
+                                touchAction: "none",
+                                userSelect: "none",
+                            }}
+                            onPointerDown={(e) => {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                                imgDragStartY.current = e.clientY;
+                                imgDragStartOffset.current = editImageYOffset;
+                            }}
+                            onPointerMove={(e) => {
+                                if (e.buttons === 0) return;
+                                const containerH = e.currentTarget.getBoundingClientRect().height;
+                                const dy = e.clientY - imgDragStartY.current;
+                                const delta = dy / containerH;
+                                const next = Math.min(
+                                    1,
+                                    Math.max(0, imgDragStartOffset.current + delta)
+                                );
+                                setEditImageYOffset(next);
+                            }}
+                        >
+                            <img
+                                src={`${apiBaseUrl}/api/media/${cv.imageId}`}
+                                alt={cv.title}
+                                style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    objectPosition: `center ${editImageYOffset * 100}%`,
+                                    display: "block",
+                                    pointerEvents: "none",
+                                    draggable: false,
+                                } as React.CSSProperties}
+                            />
+                        </Box>
+                        <Slider
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={editImageYOffset}
+                            onChange={setEditImageYOffset}
+                            marks={[
+                                { value: 0, label: "Top" },
+                                { value: 0.5, label: "Center" },
+                                { value: 1, label: "Bottom" },
+                            ]}
+                        />
+                        <Text size="xs" c="dimmed" mt={4}>
+                            Drag image or use slider to set crop position.
+                        </Text>
+                    </Stack>
+                )}
                 <Group>
                     <Button
                         onClick={() => void saveEdit()}
@@ -410,12 +477,26 @@ function CardDrawer({
     return (
         <Stack gap="md">
             {cv.imageId && (
-                <Image
-                    src={`${apiBaseUrl}/api/media/${cv.imageId}`}
-                    alt={cv.title}
-                    fit="contain"
-                    mah={200}
-                />
+                <Box
+                    style={{
+                        width: "100%",
+                        aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
+                        overflow: "hidden",
+                        borderRadius: 4,
+                    }}
+                >
+                    <img
+                        src={`${apiBaseUrl}/api/media/${cv.imageId}`}
+                        alt={cv.title}
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            objectPosition: `center ${(cv.imageYOffset ?? 0.5) * 100}%`,
+                            display: "block",
+                        }}
+                    />
+                </Box>
             )}
 
             <Stack gap={4}>
@@ -466,12 +547,12 @@ function CardDrawer({
                     <LevelBadge
                         label="🍺"
                         value={cv.drinkingLevel}
-                        tooltip={DRINKING_LEVEL_TOOLTIPS[cv.drinkingLevel]}
+                        tooltip={DRINKING_LEVELS.levels[cv.drinkingLevel].tooltip}
                     />
                     <LevelBadge
                         label="🌶️"
                         value={cv.spiceLevel}
-                        tooltip={SPICE_LEVEL_TOOLTIPS[cv.spiceLevel]}
+                        tooltip={SPICE_LEVELS.levels[cv.spiceLevel].tooltip}
                     />
                 </Group>
             </Stack>
@@ -839,12 +920,10 @@ export default function CardsPage() {
                     />
                     <Select
                         placeholder="Drinking"
-                        data={[
-                            { value: "0", label: "None" },
-                            { value: "1", label: "🍺 Light" },
-                            { value: "2", label: "🍺🍺 Moderate" },
-                            { value: "3", label: "🍺🍺🍺 Heavy" },
-                        ]}
+                        data={DRINKING_LEVELS.levels.map((l) => ({
+                            value: String(l.value),
+                            label: l.emoji ? `${l.emoji} ${l.label}` : l.label,
+                        }))}
                         value={filters.drinkingLevel || null}
                         onChange={(v) => setFilters((f) => ({ ...f, drinkingLevel: v ?? "" }))}
                         clearable
@@ -852,12 +931,10 @@ export default function CardsPage() {
                     />
                     <Select
                         placeholder="Spice"
-                        data={[
-                            { value: "0", label: "Clean" },
-                            { value: "1", label: "Mild" },
-                            { value: "2", label: "Edgy" },
-                            { value: "3", label: "Spicy" },
-                        ]}
+                        data={SPICE_LEVELS.levels.map((l) => ({
+                            value: String(l.value),
+                            label: l.emoji ? `${l.emoji} ${l.label}` : l.label,
+                        }))}
                         value={filters.spiceLevel || null}
                         onChange={(v) => setFilters((f) => ({ ...f, spiceLevel: v ?? "" }))}
                         clearable

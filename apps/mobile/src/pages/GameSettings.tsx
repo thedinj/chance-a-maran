@@ -2,9 +2,8 @@ import {
     CreateSessionRequestSchema,
     FilterSettingsSchema,
     MAX_SESSION_NAME_LENGTH,
-    DRINKING_LEVEL_OPTIONS,
-    DRINKING_FILTER_DESCRIPTIONS,
-    SPICE_LEVEL_LABELS,
+    DRINKING_LEVELS,
+    SPICE_LEVELS,
 } from "@chance/core";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
@@ -235,15 +234,10 @@ export default function GameSettings() {
                             name="filterSettings.maxDrinkingLevel"
                             control={control}
                             render={({ field }) => (
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Drinking limit</span>
-                                        <span style={styles.toggleSub}>
-                                            {DRINKING_FILTER_DESCRIPTIONS[field.value]}
-                                        </span>
-                                    </div>
+                                <div style={styles.filterBlock}>
+                                    <span style={styles.toggleTitle}>Drinking limit</span>
                                     <div style={styles.selectorGroup}>
-                                        {DRINKING_LEVEL_OPTIONS.map(({ value, label }) => (
+                                        {DRINKING_LEVELS.levels.map(({ value, label }) => (
                                             <button
                                                 key={value}
                                                 style={
@@ -258,6 +252,9 @@ export default function GameSettings() {
                                             </button>
                                         ))}
                                     </div>
+                                    <span style={styles.toggleSub}>
+                                        {DRINKING_LEVELS.levels[field.value].filterDescription}
+                                    </span>
                                 </div>
                             )}
                         />
@@ -266,26 +263,27 @@ export default function GameSettings() {
                             name="filterSettings.maxSpiceLevel"
                             control={control}
                             render={({ field }) => (
-                                <div style={styles.toggleRow}>
-                                    <div style={styles.toggleText}>
-                                        <span style={styles.toggleTitle}>Themes</span>
-                                    </div>
+                                <div style={styles.filterBlock}>
+                                    <span style={styles.toggleTitle}>Themes</span>
                                     <div style={styles.selectorGroup}>
-                                        {([0, 1, 2, 3] as const).map((level) => (
+                                        {SPICE_LEVELS.levels.map(({ value, label }) => (
                                             <button
-                                                key={level}
+                                                key={value}
                                                 style={
-                                                    field.value === level
+                                                    field.value === value
                                                         ? styles.toggleOn
                                                         : styles.toggleOff
                                                 }
-                                                onClick={() => field.onChange(level)}
+                                                onClick={() => field.onChange(value)}
                                                 disabled={isPending}
                                             >
-                                                {SPICE_LEVEL_LABELS[level]}
+                                                {label}
                                             </button>
                                         ))}
                                     </div>
+                                    <span style={styles.toggleSub}>
+                                        {SPICE_LEVELS.levels[field.value].filterDescription}
+                                    </span>
                                 </div>
                             )}
                         />
@@ -705,6 +703,11 @@ const styles: Record<string, React.CSSProperties> = {
     },
 
     // Toggles
+    filterBlock: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+    },
     toggleRow: {
         display: "flex",
         alignItems: "center",

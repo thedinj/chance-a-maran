@@ -27,6 +27,9 @@ export default function RequirementElementsPage() {
     const [editTarget, setEditTarget] = useState<AdminElement | null>(null);
     const [editTitle, setEditTitle] = useState("");
     const [saving, setSaving] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<AdminElement | null>(null);
+    const [deleteImpact, setDeleteImpact] = useState<{ cardVersionCount: number; sessionCount: number; userCount: number } | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     function loadElements() {
         setLoading(true);
@@ -82,9 +85,40 @@ export default function RequirementElementsPage() {
         const data = await res.json();
         setSaving(false);
         if (data.ok) {
-            setElements((prev) => prev.map((e) => e.id === editTarget.id ? data.data as AdminElement : e));
+            setElements((prev) =>
+                prev
+                    .map((e) => (e.id === editTarget.id ? (data.data as AdminElement) : e))
+                    .sort((a, b) => a.title.localeCompare(b.title))
+            );
             setEditTarget(null);
             notifications.show({ message: "Element updated", color: "green" });
+        } else {
+            notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        }
+    }
+
+    async function confirmDelete(el: AdminElement) {
+        const res = await adminFetch(`/api/admin/requirement-elements/${el.id}?dryRun=true`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.ok) {
+            setDeleteImpact(data.data);
+            setDeleteTarget(el);
+        } else {
+            notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        }
+    }
+
+    async function executeDelete() {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        const res = await adminFetch(`/api/admin/requirement-elements/${deleteTarget.id}`, { method: "DELETE" });
+        const data = await res.json();
+        setDeleting(false);
+        if (data.ok) {
+            setElements((prev) => prev.filter((e) => e.id !== deleteTarget.id));
+            setDeleteTarget(null);
+            setDeleteImpact(null);
+            notifications.show({ message: "Element deleted", color: "green" });
         } else {
             notifications.show({ message: data.error?.message ?? "Error", color: "red" });
         }
@@ -100,7 +134,11 @@ export default function RequirementElementsPage() {
         const data = await res.json();
         setCreating(false);
         if (data.ok) {
-            setElements((prev) => [...prev, { ...(data.data as AdminElement), cardCount: 0 }]);
+            setElements((prev) =>
+                [...prev, { ...(data.data as AdminElement), cardCount: 0 }].sort((a, b) =>
+                    a.title.localeCompare(b.title)
+                )
+            );
             setNewTitle("");
             setCreateOpen(false);
             notifications.show({ message: "Element created", color: "green" });
@@ -154,15 +192,27 @@ export default function RequirementElementsPage() {
                                         <Text size="sm">{el.cardCount}</Text>
                                     </Table.Td>
                                     <Table.Td>
-                                        <Tooltip label="Edit">
-                                            <ActionIcon
-                                                variant="subtle"
-                                                size="sm"
-                                                onClick={() => openEdit(el)}
-                                            >
-                                                ✏
-                                            </ActionIcon>
-                                        </Tooltip>
+                                        <Group gap={4}>
+                                            <Tooltip label="Edit">
+                                                <ActionIcon
+                                                    variant="subtle"
+                                                    size="sm"
+                                                    onClick={() => openEdit(el)}
+                                                >
+                                                    ✏
+                                                </ActionIcon>
+                                            </Tooltip>
+                                            <Tooltip label="Delete permanently">
+                                                <ActionIcon
+                                                    variant="subtle"
+                                                    size="sm"
+                                                    color="red"
+                                                    onClick={() => void confirmDelete(el)}
+                                                >
+                                                    🗑
+                                                </ActionIcon>
+                                            </Tooltip>
+                                        </Group>
                                     </Table.Td>
                                 </Table.Tr>
                             ))}
@@ -206,6 +256,37 @@ export default function RequirementElementsPage() {
                     >
                         Save
                     </Button>
+                </Stack>
+            </Modal>
+            <Modal
+                opened={!!deleteTarget}
+                onClose={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                title="Delete Requirement Element"
+            >
+                <Stack gap="md">
+                    <Text size="sm">
+                        Permanently delete &ldquo;{deleteTarget?.title}&rdquo;?
+                        {deleteImpact && (
+                            <> This will remove it from {deleteImpact.cardVersionCount} card version(s),
+                            {deleteImpact.sessionCount} session filter(s),
+                            and {deleteImpact.userCount} user element selection(s).</>
+                        )}
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button
+                            variant="default"
+                            onClick={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            color="red"
+                            onClick={() => void executeDelete()}
+                            loading={deleting}
+                        >
+                            Delete
+                        </Button>
+                    </Group>
                 </Stack>
             </Modal>
         </>

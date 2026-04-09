@@ -1014,7 +1014,10 @@ function CardRevealOverlay({ event, onDismiss, drama, playerDisplayName }: CardR
 
     const handleFlipComplete = useCallback(() => {
         setPhase("revealed");
-        if (drama) getAudio(drama.hitSound).play().catch(() => {});
+        if (drama)
+            getAudio(drama.hitSound)
+                .play()
+                .catch(() => {});
     }, [drama]);
 
     const handleReparationsIntroDone = useCallback(() => {
@@ -1734,14 +1737,7 @@ export default function Game() {
                         </div>
                     )}
 
-                    {error && (
-                        <p style={styles.error}>
-                            {error}{" "}
-                            <button style={styles.retryLink} onClick={handleDraw}>
-                                Try again
-                            </button>
-                        </p>
-                    )}
+                    {error && <p style={styles.error}>{error}</p>}
                 </div>
             </IonContent>
 

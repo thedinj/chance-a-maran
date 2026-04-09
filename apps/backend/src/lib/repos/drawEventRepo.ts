@@ -81,7 +81,7 @@ export function findById(id: string): DrawEvent | null {
 export function findBySessionId(sessionId: string): DrawEvent[] {
     const rows = db
         .prepare(
-            "SELECT * FROM draw_events WHERE session_id = ? ORDER BY drawn_at DESC"
+            "SELECT * FROM draw_events WHERE session_id = ? ORDER BY drawn_at ASC"
         )
         .all(sessionId) as DbDrawEvent[];
     return rows.map(mapDrawEvent);

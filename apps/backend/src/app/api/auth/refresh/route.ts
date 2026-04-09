@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
         const { accessToken, rawRefreshToken } = authService.refresh(rawToken);
 
         const response = ok({ accessToken, refreshToken: rawRefreshToken });
-        setRefreshCookie(response, rawRefreshToken);
+        // Skip cookie when caller manages tokens itself (e.g. admin portal)
+        if (req.headers.get("X-Token-Transport") !== "body") {
+            setRefreshCookie(response, rawRefreshToken);
+        }
         return response;
     } catch (err) {
         return handleError(err);

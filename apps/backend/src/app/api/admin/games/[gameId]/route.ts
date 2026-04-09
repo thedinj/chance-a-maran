@@ -5,6 +5,27 @@ import * as gameRepo from "@/lib/repos/gameRepo";
 
 export const dynamic = "force-dynamic";
 
+export const DELETE = withAdmin(async (req, { params }) => {
+    try {
+        const { gameId } = await params;
+        const game = gameRepo.findById(gameId);
+        if (!game) return fail(new NotFoundError("Game not found"));
+
+        const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
+        if (dryRun) {
+            return ok({
+                cardVersionCount: gameRepo.countCards(gameId),
+                sessionCount: gameRepo.countSessionReferences(gameId),
+            });
+        }
+
+        gameRepo.hardDelete(gameId);
+        return ok(undefined);
+    } catch (err) {
+        return handleError(err);
+    }
+});
+
 export const PATCH = withAdmin(async (req, { params }) => {
     try {
         const { gameId } = await params;

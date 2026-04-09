@@ -28,6 +28,7 @@ export interface DbCardVersion {
     description: string;
     hidden_instructions: string | null;
     image_id: string | null;
+    image_y_offset: number;
     drinking_level: number;
     spice_level: number;
     is_game_changer: number;
@@ -86,6 +87,7 @@ export function mapCardVersion(row: DbCardVersion): CardVersion {
         description: row.description,
         hiddenInstructions: row.hidden_instructions,
         imageId: row.image_id,
+        imageYOffset: row.image_y_offset,
         drinkingLevel: row.drinking_level,
         spiceLevel: row.spice_level,
         isGameChanger: intToBool(row.is_game_changer),
@@ -258,6 +260,7 @@ export function create(data: {
     description: string;
     hiddenInstructions: string | null;
     imageId: string | null;
+    imageYOffset: number;
     drinkingLevel: number;
     spiceLevel: number;
     isGameChanger: boolean;
@@ -275,8 +278,8 @@ export function create(data: {
         ).run(cardId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
 
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, image_y_offset, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -284,6 +287,7 @@ export function create(data: {
             data.description,
             data.hiddenInstructions,
             data.imageId,
+            data.imageYOffset,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),
@@ -315,6 +319,7 @@ export function createVersion(
         description: string;
         hiddenInstructions: string | null;
         imageId: string | null;
+        imageYOffset: number;
         drinkingLevel: number;
         spiceLevel: number;
         isGameChanger: boolean;
@@ -334,8 +339,8 @@ export function createVersion(
 
     db.transaction(() => {
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, image_y_offset, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -344,6 +349,7 @@ export function createVersion(
             data.description,
             data.hiddenInstructions,
             data.imageId,
+            data.imageYOffset,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),

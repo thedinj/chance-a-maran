@@ -117,6 +117,7 @@ export function initializeDatabase() {
             description          TEXT NOT NULL,
             hidden_instructions  TEXT,
             image_id             TEXT REFERENCES media(id),
+            image_y_offset       REAL NOT NULL DEFAULT 0.5,
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,

@@ -22,6 +22,11 @@ export const CardVersionSchema = z.object({
     hiddenInstructions: z.string().nullable(),
     imageId: z.string().nullable(),
     /**
+     * Vertical crop offset for the card image. 0 = top, 0.5 = center, 1 = bottom.
+     * Applied as CSS object-position: center {imageYOffset * 100}%.
+     */
+    imageYOffset: z.number().min(0).max(1).default(0.5),
+    /**
      * How much drinking this card involves for the drawing player.
      * 0 = none, 1 = light (sip), 2 = moderate (full drink), 3 = heavy (multiple drinks).
      * Displayed as 🍺 count in the UI.

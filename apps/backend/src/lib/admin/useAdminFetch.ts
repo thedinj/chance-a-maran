@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { ApiResult } from "@chance/core";
 import { useAdminSession } from "./useAdminSession";
 
@@ -15,16 +15,34 @@ export async function parseApiResult<T>(response: Response): Promise<T> {
 }
 
 export function useAdminFetch() {
-    const { accessToken } = useAdminSession();
+    const { accessToken, tryRefreshToken } = useAdminSession();
+
+    // Keep a ref so the retry closure always reads the latest token after refresh
+    const tokenRef = useRef(accessToken);
+    tokenRef.current = accessToken;
 
     const adminFetch = useCallback(
-        (url: string, options: RequestInit = {}): Promise<Response> => {
-            const headers = new Headers(options.headers);
-            headers.set("Content-Type", "application/json");
-            if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-            return fetch(url, { ...options, headers });
+        async (url: string, options: RequestInit = {}): Promise<Response> => {
+            const doFetch = (token: string | null) => {
+                const headers = new Headers(options.headers);
+                headers.set("Content-Type", "application/json");
+                if (token) headers.set("Authorization", `Bearer ${token}`);
+                return fetch(url, { ...options, headers });
+            };
+
+            const response = await doFetch(tokenRef.current);
+
+            // On 401, try to refresh and replay once
+            if (response.status === 401) {
+                const refreshed = await tryRefreshToken();
+                if (refreshed) {
+                    return doFetch(tokenRef.current);
+                }
+            }
+
+            return response;
         },
-        [accessToken]
+        [tryRefreshToken]
     );
 
     return adminFetch;

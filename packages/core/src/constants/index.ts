@@ -8,6 +8,11 @@ export const DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 // Scopes
 export const ADMIN_SCOPE = "admin";
 
+// ─── Card display ────────────────────────────────────────────────────────────
+
+/** Canonical aspect ratio for the card image slot. */
+export const CARD_IMAGE_ASPECT_RATIO = { width: 16, height: 9 } as const;
+
 // ─── Card draw weight multipliers ────────────────────────────────────────────
 
 export const BASE_WEIGHT = 1.0;
@@ -20,88 +25,102 @@ export const UPVOTE_BONUS_CAP = 2.0;
 /** Net-downvoted cards have their weight multiplied by 0.5. */
 export const DOWNVOTE_MULTIPLIER = 0.5;
 
+// ─── Level scale types ───────────────────────────────────────────────────────
+
+export interface LevelEntry {
+    readonly value: 0 | 1 | 2 | 3;
+    readonly label: string;
+    readonly emoji: string;
+    readonly tooltip: string;
+    readonly cardDescription: string;
+    readonly filterDescription: string;
+}
+
+export interface LevelScale {
+    readonly levels: readonly [LevelEntry, LevelEntry, LevelEntry, LevelEntry];
+    readonly baseEmoji: string;
+}
+
 // ─── Drinking levels ─────────────────────────────────────────────────────────
 
-export const DRINKING_LEVEL_OPTIONS = [
-    { value: 0, label: "None" },
-    { value: 1, label: "Sip" },
-    { value: 2, label: "A drink" },
-    { value: 3, label: "Multiple" },
-] as const;
-
-export const DRINKING_LEVEL_DESCRIPTIONS = [
-    "No alcohol — a dare, challenge, or rule.",
-    "A sip or small taste. Not a full serving.",
-    "One drink — a shot, a full can, or finish your glass.",
-    "Multiple drinks — several shots, a waterfall, or sustained drinking. A few of these set the pace for the whole night.",
-] as const;
-
-export const DRINKING_FILTER_DESCRIPTIONS = [
-    "No drinking cards at all",
-    "Sips only — nothing stronger than a taste",
-    "Up to a shot or full drink per card",
-    "No limit — multiple-drink cards included",
-] as const;
+export const DRINKING_LEVELS: LevelScale = {
+    baseEmoji: "🍺",
+    levels: [
+        {
+            value: 0,
+            label: "None",
+            emoji: "",
+            tooltip: "",
+            cardDescription: "No alcohol — a dare, challenge, or rule.",
+            filterDescription: "No drinking cards at all",
+        },
+        {
+            value: 1,
+            label: "Sip",
+            emoji: "🍺",
+            tooltip: "Sip — a sip or taste",
+            cardDescription: "A sip or small taste. Not a full serving.",
+            filterDescription: "Sips only — nothing stronger than a taste",
+        },
+        {
+            value: 2,
+            label: "A drink",
+            emoji: "🍺🍺",
+            tooltip: "A drink — a shot or full glass",
+            cardDescription: "One drink — a shot, a full can, or finish your glass.",
+            filterDescription: "Up to a shot or full drink per card",
+        },
+        {
+            value: 3,
+            label: "Multiple",
+            emoji: "🍺🍺🍺",
+            tooltip: "Multiple — several drinks",
+            cardDescription:
+                "Multiple drinks — several shots, a waterfall, or sustained drinking.",
+            filterDescription: "No limit — multiple-drink cards included",
+        },
+    ],
+};
 
 // ─── Spice levels ────────────────────────────────────────────────────────────
 
-/** Short display label for each spice level (index = level 0–3). */
-export const SPICE_LEVEL_LABELS = ["Clean", "Mild", "Edgy", "Spicy"] as const;
-
-/**
- * Short display label for each spice level, combining emoji and name (index = level 0–3).
- * Level 0 has no emoji. Suitable for tables, badges, and compact UI.
- */
-export const SPICE_LEVEL_DISPLAY_LABELS = [
-    "Clean",
-    "🌶️ Mild",
-    "🌶️🌶️ Edgy",
-    "🌶️🌶️🌶️ Spicy",
-] as const;
-
-/**
- * Emoji string for each spice level (index = level 0–3).
- * Level 0 is an empty string (no spice).
- */
-export const SPICE_LEVEL_EMOJI = ["", "🌶️", "🌶️🌶️", "🌶️🌶️🌶️"] as const;
-
-/** Tooltip description for each spice level (index = level 0–3). Empty string for level 0. */
-export const SPICE_LEVEL_TOOLTIPS = [
-    "",
-    "Mild — light innuendo, mild language",
-    "Edgy — strong language, more mature themes",
-    "Spicy — very adult, nothing held back",
-] as const;
-
-// ─── Drinking level display ───────────────────────────────────────────────────
-
-/** Short display label for each drinking level (index = level 0–3). */
-export const DRINKING_LEVEL_LABELS = ["None", "Light", "Moderate", "Heavy"] as const;
-
-/**
- * Short display label for each drinking level, combining emoji and name (index = level 0–3).
- * Level 0 has no emoji. Suitable for tables, badges, and compact UI.
- */
-export const DRINKING_LEVEL_DISPLAY_LABELS = [
-    "None",
-    "🍺 Light",
-    "🍺🍺 Moderate",
-    "🍺🍺🍺 Heavy",
-] as const;
-
-/**
- * Emoji string for each drinking level (index = level 0–3).
- * Level 0 is an empty string (no drinking).
- */
-export const DRINKING_LEVEL_EMOJI = ["", "🍺", "🍺🍺", "🍺🍺🍺"] as const;
-
-/** Tooltip description for each drinking level (index = level 0–3). Empty string for level 0. */
-export const DRINKING_LEVEL_TOOLTIPS = [
-    "",
-    "Light — a sip or taste",
-    "Moderate — a drink",
-    "Heavy — multiple drinks",
-] as const;
+export const SPICE_LEVELS: LevelScale = {
+    baseEmoji: "🌶️",
+    levels: [
+        {
+            value: 0,
+            label: "Clean",
+            emoji: "",
+            tooltip: "",
+            cardDescription: "No adult content — safe for all audiences.",
+            filterDescription: "Clean cards only — no mature content",
+        },
+        {
+            value: 1,
+            label: "Mild",
+            emoji: "🌶️",
+            tooltip: "Mild — light innuendo, mild language",
+            cardDescription: "Light innuendo or mild language. Nothing explicit.",
+            filterDescription: "Up to mild innuendo and light language",
+        },
+        {
+            value: 2,
+            label: "Edgy",
+            emoji: "🌶️🌶️",
+            tooltip: "Edgy — strong language, more mature themes",
+            cardDescription: "Strong language and more mature themes.",
+            filterDescription: "Up to strong language and mature themes",
+        },
+        {
+            value: 3,
+            label: "Spicy",
+            emoji: "🌶️🌶️🌶️",
+            tooltip: "Spicy — very adult, nothing held back",
+            cardDescription: "Very adult content — nothing held back.",
+            filterDescription: "No limit — all content levels included",
+        },
+    ],
+};
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiResult, AuthResponse, User } from "@chance/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminSessionContext } from "./AdminSessionContext";
 import { parseApiResult } from "./useAdminFetch";
 
@@ -18,6 +18,9 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
     const [accessToken, setAccessToken] = useState<string | null>(null);
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Guard against concurrent refresh calls (e.g. multiple 401s in parallel)
+    const refreshInFlight = useRef<Promise<boolean> | null>(null);
 
     // Persist tokens to localStorage (shared across tabs)
     const persistSession = useCallback((accessToken: string, refreshToken: string, user: User) => {
@@ -39,31 +42,48 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
         setUser(null);
     }, []);
 
-    // Refresh access token using refresh token
+    // Refresh access token using refresh token (deduplicated)
     const refreshAccessToken = useCallback(
         async (currentRefreshToken: string): Promise<boolean> => {
-            try {
-                const response = await fetch("/api/auth/refresh", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ refreshToken: currentRefreshToken }),
-                });
+            // If a refresh is already in progress, wait for it instead of firing another
+            if (refreshInFlight.current) return refreshInFlight.current;
 
-                const envelope = await response.json() as ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>;
-                if (!envelope.ok) return false; // stale or invalid token — expected, not an error
+            const attempt = (async () => {
+                try {
+                    const response = await fetch("/api/auth/refresh", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Token-Transport": "body",
+                        },
+                        body: JSON.stringify({ refreshToken: currentRefreshToken }),
+                    });
 
-                // Restore user from storage — refresh endpoint doesn't return user
-                const storedUserRaw = localStorage.getItem(STORAGE_USER_KEY);
-                if (!storedUserRaw) return false;
-                const storedUser: User = JSON.parse(storedUserRaw) as User;
-                if (!storedUser.isAdmin) return false;
+                    const envelope = (await response.json()) as ApiResult<
+                        Pick<AuthResponse, "accessToken" | "refreshToken">
+                    >;
+                    if (!envelope.ok) return false;
 
-                persistSession(envelope.data.accessToken, envelope.data.refreshToken, storedUser);
-                return true;
-            } catch (error) {
-                console.error("Token refresh failed:", error);
-                return false;
-            }
+                    const storedUserRaw = localStorage.getItem(STORAGE_USER_KEY);
+                    if (!storedUserRaw) return false;
+                    const storedUser: User = JSON.parse(storedUserRaw) as User;
+                    if (!storedUser.isAdmin) return false;
+
+                    persistSession(
+                        envelope.data.accessToken,
+                        envelope.data.refreshToken,
+                        storedUser
+                    );
+                    return true;
+                } catch {
+                    return false;
+                } finally {
+                    refreshInFlight.current = null;
+                }
+            })();
+
+            refreshInFlight.current = attempt;
+            return attempt;
         },
         [persistSession]
     );
@@ -72,11 +92,9 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
     useEffect(() => {
         const checkSession = async () => {
             try {
-                // Try to restore from localStorage
                 const storedRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
 
                 if (storedRefreshToken) {
-                    // Always try to refresh on mount to get a fresh access token
                     const success = await refreshAccessToken(storedRefreshToken);
                     if (success) {
                         setIsLoading(false);
@@ -84,10 +102,8 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                     }
                 }
 
-                // No valid session
                 clearSession();
-            } catch (error) {
-                console.error("Session check failed:", error);
+            } catch {
                 clearSession();
             } finally {
                 setIsLoading(false);
@@ -101,7 +117,10 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
         async (email: string, password: string) => {
             const response = await fetch("/api/auth/login", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Token-Transport": "body",
+                },
                 body: JSON.stringify({ email, password }),
             });
 
@@ -118,20 +137,29 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
 
     const logout = useCallback(async () => {
         try {
-            // Note: logout endpoint expects refresh token in body, but we're not using server-side token revocation for now
-            // Just clear local session
-        } catch (error) {
-            console.error("Logout failed:", error);
+            const token = refreshToken ?? localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+            if (token) {
+                await fetch("/api/auth/logout", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Token-Transport": "body",
+                        "Authorization": `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({ refreshToken: token }),
+                });
+            }
+        } catch {
+            // Best-effort server revocation; clear locally regardless
         } finally {
             clearSession();
         }
-    }, [clearSession]);
+    }, [accessToken, refreshToken, clearSession]);
 
     const tryRefreshToken = useCallback(async (): Promise<boolean> => {
-        if (!refreshToken) {
-            return false;
-        }
-        return await refreshAccessToken(refreshToken);
+        const token = refreshToken ?? localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+        if (!token) return false;
+        return await refreshAccessToken(token);
     }, [refreshToken, refreshAccessToken]);
 
     const value = useMemo(

@@ -4,6 +4,7 @@ import type { DrawEvent } from "../lib/api";
 import { useCards } from "../cards/useCards";
 import { useSession } from "../session/useSession";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
+import { CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ── CardBack ──────────────────────────────────────────────────────────────────
 // Static card back face. Size the container; this fills it at 412:581 aspect ratio (or 433:609 for reparations cards).
@@ -71,6 +72,7 @@ export function CardFront({
     readOnly = false,
 }: CardFrontProps): React.JSX.Element {
     const cv = event.cardVersion;
+    const isReparations = event.card.cardType === "reparations";
     const { activePlayerId } = useSession();
     const { updateDrawEvent } = useCards();
 
@@ -107,9 +109,24 @@ export function CardFront({
     return (
         <>
             <style>{SCROLLBAR_CSS}</style>
-            <div style={styles.revealCard}>
-                <div style={styles.revealFrontFrame} />
-                <div style={styles.revealFrontTopRule} />
+            <div
+                style={{
+                    ...styles.revealCard,
+                    ...(isReparations ? styles.revealCardReparations : undefined),
+                }}
+            >
+                <div
+                    style={{
+                        ...styles.revealFrontFrame,
+                        ...(isReparations ? styles.revealFrontFrameReparations : undefined),
+                    }}
+                />
+                <div
+                    style={{
+                        ...styles.revealFrontTopRule,
+                        ...(isReparations ? styles.revealFrontTopRuleReparations : undefined),
+                    }}
+                />
                 <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>◆</span>
                 <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>◆</span>
                 <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>
@@ -129,7 +146,14 @@ export function CardFront({
                         }}
                     />
                     <div style={styles.revealCardContentBody}>
-                        <div style={styles.revealImageSlot}>
+                        <div
+                            style={{
+                                ...styles.revealImageSlot,
+                                ...(isReparations
+                                    ? styles.revealImageSlotReparations
+                                    : undefined),
+                            }}
+                        >
                             {cv.imageId ? (
                                 <img
                                     src={apiClient.resolveMediaUrl(cv.imageId) ?? ""}
@@ -138,6 +162,7 @@ export function CardFront({
                                         width: "100%",
                                         height: "100%",
                                         objectFit: "cover",
+                                        objectPosition: `center ${(cv.imageYOffset ?? 0.5) * 100}%`,
                                     }}
                                 />
                             ) : (
@@ -342,7 +367,7 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundImage: "url(/img/reparations.png)",
         aspectRatio: "433 / 609",
         boxShadow:
-            "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-amber) 68%, var(--color-border) 32%), 0 28px 64px -28px color-mix(in srgb, var(--color-accent-amber) 58%, transparent)",
+            "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-reparations) 68%, var(--color-border) 32%), 0 28px 64px -28px color-mix(in srgb, var(--color-accent-reparations) 58%, transparent)",
     },
     revealBackFrame: {
         position: "absolute",
@@ -354,7 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     revealBackFrameReparations: {
         inset: "16px",
-        border: "1px solid color-mix(in srgb, var(--color-accent-amber) 74%, var(--color-border) 26%)",
+        border: "1px solid color-mix(in srgb, var(--color-accent-reparations) 74%, var(--color-border) 26%)",
     },
     revealBackLogo: {
         display: "none",
@@ -395,6 +420,22 @@ const styles: Record<string, React.CSSProperties> = {
             "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-amber) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-amber) 45%, transparent) 100%)",
         zIndex: 1,
     },
+    revealCardReparations: {
+        boxShadow:
+            "inset 0 0 0 1px var(--color-border), 0 24px 58px -24px color-mix(in srgb, var(--color-accent-reparations) 52%, transparent)",
+    },
+    revealFrontFrameReparations: {
+        border: "1px solid color-mix(in srgb, var(--color-accent-reparations) 44%, transparent)",
+    },
+    revealFrontTopRuleReparations: {
+        background:
+            "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-reparations) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-reparations) 45%, transparent) 100%)",
+    },
+    revealImageSlotReparations: {
+        border: "1px solid color-mix(in srgb, var(--color-accent-reparations) 38%, transparent)",
+        background:
+            "linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 90%, var(--color-accent-reparations) 10%) 0%, color-mix(in srgb, var(--color-surface) 94%, var(--color-accent-primary) 6%) 100%)",
+    },
     revealCardContent: {
         padding: "calc(var(--space-6) + var(--space-1))",
         display: "flex",
@@ -428,7 +469,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     revealImageSlot: {
         width: "100%",
-        aspectRatio: "16 / 9",
+        aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
         border: "1px solid color-mix(in srgb, var(--color-accent-amber) 38%, transparent)",
         background:
             "linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 90%, var(--color-accent-amber) 10%) 0%, color-mix(in srgb, var(--color-surface) 94%, var(--color-accent-primary) 6%) 100%)",

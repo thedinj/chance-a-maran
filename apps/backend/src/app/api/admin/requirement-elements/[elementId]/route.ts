@@ -5,6 +5,29 @@ import * as reqRepo from "@/lib/repos/requirementElementRepo";
 
 export const dynamic = "force-dynamic";
 
+export const DELETE = withAdmin(async (req, { params }) => {
+    try {
+        const { elementId } = await params;
+        const elements = reqRepo.listAll();
+        const existing = elements.find((e) => e.id === elementId);
+        if (!existing) return fail(new NotFoundError("Requirement element not found"));
+
+        const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
+        if (dryRun) {
+            return ok({
+                cardVersionCount: reqRepo.countUsage(elementId),
+                sessionCount: reqRepo.countSessionReferences(elementId),
+                userCount: reqRepo.countUserReferences(elementId),
+            });
+        }
+
+        reqRepo.hardDelete(elementId);
+        return ok(undefined);
+    } catch (err) {
+        return handleError(err);
+    }
+});
+
 export const PATCH = withAdmin(async (req, { params }) => {
     try {
         const { elementId } = await params;

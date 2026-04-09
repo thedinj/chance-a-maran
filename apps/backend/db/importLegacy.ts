@@ -13,10 +13,11 @@
  *   5. All cards are set to pending_global = 1 (nominated for global promotion) and attributed to the admin user
  */
 
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { config } from "dotenv";
+import * as bcrypt from "bcryptjs";
 import { applyContentFloors, mediaRelativePath } from "@chance/core";
 import { initializeDatabase } from "../src/db/init";
 import { db } from "../src/lib/db/db";
@@ -218,9 +219,10 @@ async function main() {
     const elementRows = parseInsertRows(sql, "ChanceCardElements");
     const cardRows = parseInsertRows(sql, "ChanceCards");
     const requirementRows = parseInsertRows(sql, "ChanceCardRequirements");
+    const userRows = parseInsertRows(sql, "Users");
 
     console.log(
-        `Parsed: ${elementRows.length} elements, ${cardRows.length} cards, ${requirementRows.length} requirements`
+        `Parsed: ${elementRows.length} elements, ${cardRows.length} cards, ${requirementRows.length} requirements, ${userRows.length} legacy users`
     );
 
     // ChanceCards columns (0-indexed):
@@ -230,6 +232,7 @@ async function main() {
 
     // ChanceCardElements columns: 0:ID, 1:Title, 2:Description
     // ChanceCardRequirements columns: 0:ID, 1:CardID, 2:ElementID
+    // Users columns: 0:ID, 1:Handle, 2:Password, 3:RealName, 4:Email, 5:UserLevelID, 6:CreatorUserID, 7:CreatedDateTime
 
     // Check if data already imported (idempotency)
     const existingCount = (
@@ -241,12 +244,72 @@ async function main() {
         process.exit(0);
     }
 
+    // ── Resolve legacy users ──────────────────────────────────────────────────
+    // Build a map of legacy user ID → { handle, email, createdAt }
+    const legacyUserData = new Map<number, { handle: string; email: string; createdAt: string }>();
+    for (const row of userRows) {
+        const id = row[0] as number;
+        const handle = (row[1] as string) || "";
+        const email = (row[4] as string) || "";
+        const createdAt = (row[7] as string) || new Date().toISOString();
+        legacyUserData.set(id, { handle, email, createdAt });
+    }
+
+    // Collect distinct CreatorUserIDs from active cards only
+    const activeCreatorIds = new Set<number>();
+    for (const row of cardRows) {
+        const inactive = row[14] as number | null;
+        if (inactive !== 1) {
+            const creatorId = row[5] as number | null;
+            if (creatorId != null) activeCreatorIds.add(creatorId);
+        }
+    }
+
+    // For each creator, resolve to a new or existing user ID.
+    // bcrypt.hashSync is used here (sync) since this runs before the transaction.
+    const legacyUserIdMap = new Map<number, string>(); // legacyId → new system userId
+    type UserToCreate = { id: string; email: string; handle: string; passwordHash: string; createdAt: string };
+    const usersToCreate: UserToCreate[] = [];
+
+    console.log(`\nResolving ${activeCreatorIds.size} legacy card authors...`);
+    for (const oldId of activeCreatorIds) {
+        const legacy = legacyUserData.get(oldId);
+        if (!legacy) {
+            console.warn(`  [WARN] Legacy user ID ${oldId} not found in dump — cards will fall back to admin`);
+            legacyUserIdMap.set(oldId, adminId);
+            continue;
+        }
+        const existing = db
+            .prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE")
+            .get(legacy.email) as { id: string } | undefined;
+        if (existing) {
+            console.log(`  ${legacy.handle} (${legacy.email}) → existing user ${existing.id}`);
+            legacyUserIdMap.set(oldId, existing.id);
+        } else {
+            const newId = randomUUID();
+            const passwordHash = bcrypt.hashSync(randomBytes(32).toString("hex"), 10);
+            usersToCreate.push({ id: newId, email: legacy.email, handle: legacy.handle, passwordHash, createdAt: legacy.createdAt });
+            legacyUserIdMap.set(oldId, newId);
+            console.log(`  ${legacy.handle} (${legacy.email}) → new user ${newId}`);
+        }
+    }
+
     let cardsImported = 0;
     let cardsSkipped = 0;
     let imagesImported = 0;
 
     db.transaction(() => {
-        // 1. Insert requirement_elements, build oldId → newId map
+        // 1. Insert resolved legacy users (those not already in the DB)
+        const insertUser = db.prepare(
+            `INSERT INTO users (id, email, display_name, password_hash, is_admin, invitation_code_id, created_at)
+             VALUES (?, ?, ?, ?, 0, NULL, ?)`
+        );
+        for (const u of usersToCreate) {
+            insertUser.run(u.id, u.email, u.handle, u.passwordHash, u.createdAt);
+        }
+        console.log(`\nInserted ${usersToCreate.length} legacy users (${activeCreatorIds.size - usersToCreate.length} matched existing).`);
+
+        // 2. Insert requirement_elements, build oldId → newId map
         const elementIdMap = new Map<number, string>();
         const insertElement = db.prepare(
             "INSERT INTO requirement_elements (id, title, active) VALUES (?, ?, 1)"
@@ -260,7 +323,7 @@ async function main() {
         }
         console.log(`Inserted ${elementIdMap.size} requirement elements.`);
 
-        // 2. Build a map of oldCardId → { cardId, versionId } for requirement linking
+        // 3. Build a map of oldCardId → { cardId, versionId } for requirement linking
         const cardIdMap = new Map<number, { cardId: string; versionId: string }>();
 
         const insertCard = db.prepare(
@@ -282,6 +345,7 @@ async function main() {
             const title = (row[2] as string) || "";
             const instructions = (row[3] as string) || "";
             const hiddenInstructions = (row[4] as string | null) || null;
+            const legacyCreatorId = row[5] as number | null;
             const createdAt = (row[6] as string) || new Date().toISOString();
             const ratingId = (row[8] as number) || 1;
             const imageName = typeof row[9] === "string" ? row[9] : null;
@@ -295,6 +359,11 @@ async function main() {
                 continue;
             }
 
+            const authorId =
+                legacyCreatorId != null
+                    ? (legacyUserIdMap.get(legacyCreatorId) ?? adminId)
+                    : adminId;
+
             const cardType = cardTypeId === 2 ? "reparations" : "standard";
             const baseLevels = RATING_MAP[ratingId] ?? RATING_MAP[1];
             const { drinkingLevel, spiceLevel } = applyContentFloors(
@@ -307,7 +376,7 @@ async function main() {
             if (imageBlob && imageBlob.length > 0) {
                 const mimeType = mimeTypeFromNameOrBlob(imageName, imageBlob);
                 imageId = randomUUID();
-                insertImage.run(imageId, mimeType, imageBlob.length, adminId, createdAt);
+                insertImage.run(imageId, mimeType, imageBlob.length, authorId, createdAt);
                 writeMediaFile(imageId, mimeType, imageBlob);
                 imagesImported++;
             }
@@ -315,7 +384,7 @@ async function main() {
             const cardId = randomUUID();
             const versionId = randomUUID();
 
-            insertCard.run(cardId, adminId, cardType, versionId, createdAt);
+            insertCard.run(cardId, authorId, cardType, versionId, createdAt);
             insertVersion.run(
                 versionId,
                 cardId,
@@ -328,7 +397,7 @@ async function main() {
                 drinkingLevel,
                 spiceLevel,
                 isGameChanger === 1 ? 1 : 0,
-                adminId,
+                authorId,
                 createdAt
             );
 
@@ -336,7 +405,7 @@ async function main() {
             cardsImported++;
         }
 
-        // 3. Insert card_version_requirements
+        // 4. Insert card_version_requirements
         const insertReq = db.prepare(
             "INSERT OR IGNORE INTO card_version_requirements (card_version_id, element_id) VALUES (?, ?)"
         );
@@ -353,6 +422,7 @@ async function main() {
         }
 
         console.log(`\n✓ Import complete:`);
+        console.log(`  Legacy users created: ${usersToCreate.length}`);
         console.log(`  Cards imported:  ${cardsImported}`);
         console.log(`  Cards skipped (inactive): ${cardsSkipped}`);
         console.log(`  Images imported: ${imagesImported}`);

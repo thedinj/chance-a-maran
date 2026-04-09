@@ -6,7 +6,7 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
-import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent, DRINKING_LEVEL_OPTIONS, DRINKING_LEVEL_DESCRIPTIONS } from "@chance/core";
+import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent, DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             description: "",
             hiddenInstructions: null,
             imageId: "",
+            imageYOffset: 0.5,
             drinkingLevel: 0,
             spiceLevel: 0,
             cardType: "standard",
@@ -69,6 +70,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     });
 
     const cardType = watch("cardType");
+    const imageYOffset = watch("imageYOffset") ?? 0.5;
 
     // ── Image state ───────────────────────────────────────────────────────────
     // imagePreview: local URL for display only (not persisted)
@@ -83,6 +85,8 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const [pendingImageId, setPendingImageId] = useState<string | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const dragStartY = useRef(0);
+    const dragStartOffset = useRef(0.5);
 
     // ── Content warning state ────────────────────────────────────────────────
     const [contentWarning, setContentWarning] = useState<{
@@ -296,45 +300,64 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             {/* ── Image ─────────────────────────────────────────────────────── */}
             <div style={styles.section}>
                 <input type="hidden" {...register("imageId")} />
+                <input type="hidden" {...register("imageYOffset", { valueAsNumber: true })} />
                 <p style={styles.sectionLabel}>IMAGE</p>
 
                 {imagePreview ? (
-                    <div style={styles.imagePreviewRow}>
-                        <img
-                            src={imagePreview}
-                            alt="Card image preview"
-                            style={styles.imageThumb}
-                        />
-                        <div style={styles.imagePreviewMeta}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                        <div
+                            style={styles.imageEditor}
+                            onPointerDown={(e) => {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                                dragStartY.current = e.clientY;
+                                dragStartOffset.current = imageYOffset;
+                            }}
+                            onPointerMove={(e) => {
+                                if (e.buttons === 0) return;
+                                const containerH = e.currentTarget.getBoundingClientRect().height;
+                                const dy = e.clientY - dragStartY.current;
+                                const delta = dy / containerH;
+                                const next = Math.min(1, Math.max(0, dragStartOffset.current + delta));
+                                setValue("imageYOffset", next, { shouldDirty: true });
+                            }}
+                        >
+                            <img
+                                src={imagePreview}
+                                alt="Card image preview"
+                                style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    objectPosition: `center ${imageYOffset * 100}%`,
+                                    userSelect: "none",
+                                    pointerEvents: "none",
+                                    display: "block",
+                                }}
+                                draggable={false}
+                            />
+                            <div style={styles.imageEditorOverlay} />
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={styles.imageEditorHint}>Drag to reposition</span>
                             {imageUploading ? (
                                 <span style={styles.imageStatus}>Uploading…</span>
                             ) : pendingImageId ? (
-                                <span
-                                    style={{
-                                        ...styles.imageStatus,
-                                        color: "var(--color-accent-primary)",
-                                    }}
-                                >
+                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
                                     ✓ Ready
                                 </span>
                             ) : (
-                                <span
-                                    style={{
-                                        ...styles.imageStatus,
-                                        color: "var(--color-accent-primary)",
-                                    }}
-                                >
+                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
                                     ✓ Saved
                                 </span>
                             )}
-                            <button
-                                style={styles.imageClearBtn}
-                                onClick={handleRemoveImage}
-                                disabled={isDisabled}
-                            >
-                                Remove
-                            </button>
                         </div>
+                        <button
+                            style={styles.imageClearBtn}
+                            onClick={handleRemoveImage}
+                            disabled={isDisabled}
+                        >
+                            Remove image
+                        </button>
                     </div>
                 ) : (
                     <button
@@ -361,7 +384,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     render={({ field }) => (
                         <>
                             <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                {DRINKING_LEVEL_OPTIONS.map(({ value, label }) => (
+                                {DRINKING_LEVELS.levels.map(({ value, label }) => (
                                     <button
                                         key={value}
                                         style={
@@ -377,7 +400,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                                 ))}
                             </div>
                             <p style={styles.hint}>
-                                {DRINKING_LEVEL_DESCRIPTIONS[field.value]}
+                                {DRINKING_LEVELS.levels[field.value].cardDescription}
                             </p>
                         </>
                     )}
@@ -393,25 +416,27 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     name="spiceLevel"
                     control={control}
                     render={({ field }) => (
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                            {(
-                                [
-                                    ["Clean", 0],
-                                    ["Mild", 1],
-                                    ["Edgy", 2],
-                                    ["Spicy", 3],
-                                ] as const
-                            ).map(([label, val]) => (
-                                <button
-                                    key={val}
-                                    style={field.value === val ? styles.toggleOn : styles.toggleOff}
-                                    onClick={() => field.onChange(val)}
-                                    disabled={isDisabled}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                {SPICE_LEVELS.levels.map(({ value, label }) => (
+                                    <button
+                                        key={value}
+                                        style={
+                                            field.value === value
+                                                ? styles.toggleOn
+                                                : styles.toggleOff
+                                        }
+                                        onClick={() => field.onChange(value)}
+                                        disabled={isDisabled}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p style={styles.hint}>
+                                {SPICE_LEVELS.levels[field.value].cardDescription}
+                            </p>
+                        </>
                     )}
                 />
             </div>
@@ -864,23 +889,27 @@ export const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
     },
 
-    // Image picker
-    imagePreviewRow: {
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-4)",
-    },
-    imageThumb: {
-        width: "100px",
-        height: "100px",
-        objectFit: "cover" as const,
+    // Image editor
+    imageEditor: {
+        width: "100%",
+        aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
+        overflow: "hidden",
         border: "1px solid var(--color-border)",
-        flexShrink: 0,
+        position: "relative" as const,
+        cursor: "ns-resize",
+        touchAction: "none",
     },
-    imagePreviewMeta: {
-        display: "flex",
-        flexDirection: "column" as const,
-        gap: "var(--space-2)",
+    imageEditorOverlay: {
+        position: "absolute" as const,
+        inset: 0,
+        background:
+            "linear-gradient(to bottom, color-mix(in srgb, #000 12%, transparent) 0%, transparent 30%, transparent 70%, color-mix(in srgb, #000 12%, transparent) 100%)",
+        pointerEvents: "none" as const,
+    },
+    imageEditorHint: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
     },
     imageStatus: {
         fontFamily: "var(--font-ui)",

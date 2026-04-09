@@ -16,7 +16,7 @@ import {
 } from "@mantine/core";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { FilterSettings, Player, Session } from "@chance/core";
-import { DRINKING_LEVEL_DISPLAY_LABELS, SPICE_LEVEL_DISPLAY_LABELS } from "@chance/core";
+import { DRINKING_LEVELS, SPICE_LEVELS } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,10 +43,18 @@ function FilterDetail({ fs }: { fs: FilterSettings }) {
     return (
         <Stack gap={4}>
             <Text size="xs" c="dimmed">
-                Drinking max: {DRINKING_LEVEL_DISPLAY_LABELS[fs.maxDrinkingLevel]}
+                Drinking max:{" "}
+                {(() => {
+                    const l = DRINKING_LEVELS.levels[fs.maxDrinkingLevel];
+                    return l.emoji ? `${l.emoji} ${l.label}` : l.label;
+                })()}
             </Text>
             <Text size="xs" c="dimmed">
-                Spice max: {SPICE_LEVEL_DISPLAY_LABELS[fs.maxSpiceLevel]}
+                Spice max:{" "}
+                {(() => {
+                    const l = SPICE_LEVELS.levels[fs.maxSpiceLevel];
+                    return l.emoji ? `${l.emoji} ${l.label}` : l.label;
+                })()}
             </Text>
             <Text size="xs" c="dimmed">
                 Global cards: {fs.includeGlobalCards ? "included" : "excluded"}

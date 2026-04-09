@@ -1,4 +1,4 @@
-import { DRINKING_LEVEL_EMOJI, SPICE_LEVEL_EMOJI } from "@chance/core";
+import { DRINKING_LEVELS, SPICE_LEVELS } from "@chance/core";
 import { IonContent, IonPage } from "@ionic/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useHistory, useParams } from "react-router-dom";
@@ -43,8 +43,8 @@ function DrawEntry({
     onToggle: () => void;
 }) {
     const cv = event.cardVersion;
-    const drinkEmoji = cv.drinkingLevel > 0 ? DRINKING_LEVEL_EMOJI[cv.drinkingLevel] : null;
-    const spiceEmoji = cv.spiceLevel > 0 ? SPICE_LEVEL_EMOJI[cv.spiceLevel] : null;
+    const drinkEmoji = cv.drinkingLevel > 0 ? DRINKING_LEVELS.levels[cv.drinkingLevel].emoji : null;
+    const spiceEmoji = cv.spiceLevel > 0 ? SPICE_LEVELS.levels[cv.spiceLevel].emoji : null;
     const showLock = cv.hiddenInstructions !== null && !event.descriptionShared;
 
     return (

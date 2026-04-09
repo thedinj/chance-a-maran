@@ -362,6 +362,7 @@ export default function MyCards() {
                                         (r) => r.id
                                     ),
                                     imageId: selectedCard.currentVersion.imageId ?? undefined,
+                                    imageYOffset: selectedCard.currentVersion.imageYOffset ?? 0.5,
                                 }}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}

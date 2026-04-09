@@ -1,8 +1,42 @@
-Game Sessions table in Admin portal (read only, only high-level stats incl join codes)
+TEST: Display of default-on venue elements on game setup?
 Favicons/icons for frontend and backend
 Test hidden instructions
 Test setup/update scripts
 Test multiple players
-DDNS
+
+Set up DDNS
+
+====
+more menacing Game Changer graphic
+
+====
 
 Mobile/Android version
+
+====
+
+
+sort of admin tables
+
+AI tool for backend calculation of drinking score, spiciness, associated games, and associated elements. Bulk review/keep time-stamp or prompt version.
+
+=====
+
+Haptics, esp. game changers
+
+Full screen for card reveal, using capacitor
+
+Tools: 
+Maybe app-specific? *Not website.)
+Sound board
+Timer with obnoxious sound effects (loud buzzer, "you have 30s" both as a utility and card-attached
+Random player picker, utility and card-attached
+Send poll/question to other players, can be secret (or players can opt out of secret)
+Random consequences
+
+Attach a sound effect to a card
+Mulligan
+
+Running game effects tracker
+
+Lie detector
