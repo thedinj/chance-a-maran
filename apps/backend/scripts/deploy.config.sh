@@ -15,7 +15,7 @@ DB_INIT_SCRIPT="db:seed"       # pnpm script that initialises/seeds the database
 HAS_MOBILE_APP=true            # Builds apps/mobile/ SPA and serves it via Caddy
 MOBILE_BUILD_DIR="apps/mobile/www"    # Relative to PROJECT_ROOT; Vite output directory
 
-DEFAULT_DOMAIN="chancegame.ddns.net"      # Default used if user presses Enter at the HTTPS prompt
+DEFAULT_DOMAIN="chanceamaran.ddns.net"      # Default used if user presses Enter at the HTTPS prompt
 CADDY_LOG_NAME="chance-a-maran"
 
 GIT_REPO="https://github.com/thedinj/chance-a-maran.git"

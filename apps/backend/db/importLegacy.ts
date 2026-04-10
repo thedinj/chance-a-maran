@@ -151,6 +151,29 @@ function parseValueRows(block: string): SqlValue[][] {
     return rows;
 }
 
+// ─── Legacy email remapping ───────────────────────────────────────────────────
+// Maps an email address from the old database to the corresponding modern email.
+// Used to link legacy card authors to existing registered accounts instead of
+// creating a new stub user with the outdated address.
+//
+// Example:
+//   "thedinj@yahoo.com": "thedinj@gmail.com",
+const LEGACY_EMAIL_MAP: Record<string, string> = {
+    "thedinj@yahoo.com": "thedinj@gmail.com",
+};
+
+// ─── Default-available requirement elements ───────────────────────────────────
+// ChanceCardElements whose Title (legacy name) exactly matches an entry here
+// will be imported with default_available = 1, making them pre-checked in the
+// session setup UI without the host having to enable them manually.
+const DEFAULT_AVAILABLE_ELEMENTS = new Set<string>([
+    "Beer",
+    "Shots",
+    "Mixed Drinks",
+    "Wine",
+    "Playing cards",
+]);
+
 // ─── Rating mapping ───────────────────────────────────────────────────────────
 
 const RATING_MAP: Record<number, { drinkingLevel: number; spiceLevel: number }> = {
@@ -268,27 +291,46 @@ async function main() {
     // For each creator, resolve to a new or existing user ID.
     // bcrypt.hashSync is used here (sync) since this runs before the transaction.
     const legacyUserIdMap = new Map<number, string>(); // legacyId → new system userId
-    type UserToCreate = { id: string; email: string; handle: string; passwordHash: string; createdAt: string };
+    type UserToCreate = {
+        id: string;
+        email: string;
+        handle: string;
+        passwordHash: string;
+        createdAt: string;
+    };
     const usersToCreate: UserToCreate[] = [];
 
     console.log(`\nResolving ${activeCreatorIds.size} legacy card authors...`);
     for (const oldId of activeCreatorIds) {
         const legacy = legacyUserData.get(oldId);
         if (!legacy) {
-            console.warn(`  [WARN] Legacy user ID ${oldId} not found in dump — cards will fall back to admin`);
+            console.warn(
+                `  [WARN] Legacy user ID ${oldId} not found in dump — cards will fall back to admin`
+            );
             legacyUserIdMap.set(oldId, adminId);
             continue;
         }
+        const resolvedEmail = LEGACY_EMAIL_MAP[legacy.email.toLowerCase()] ?? legacy.email;
         const existing = db
             .prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE")
-            .get(legacy.email) as { id: string } | undefined;
+            .get(resolvedEmail) as { id: string } | undefined;
         if (existing) {
-            console.log(`  ${legacy.handle} (${legacy.email}) → existing user ${existing.id}`);
+            const remapped =
+                resolvedEmail !== legacy.email ? ` (remapped from ${legacy.email})` : "";
+            console.log(
+                `  ${legacy.handle} (${resolvedEmail})${remapped} → existing user ${existing.id}`
+            );
             legacyUserIdMap.set(oldId, existing.id);
         } else {
             const newId = randomUUID();
             const passwordHash = bcrypt.hashSync(randomBytes(32).toString("hex"), 10);
-            usersToCreate.push({ id: newId, email: legacy.email, handle: legacy.handle, passwordHash, createdAt: legacy.createdAt });
+            usersToCreate.push({
+                id: newId,
+                email: resolvedEmail,
+                handle: legacy.handle,
+                passwordHash,
+                createdAt: legacy.createdAt,
+            });
             legacyUserIdMap.set(oldId, newId);
             console.log(`  ${legacy.handle} (${legacy.email}) → new user ${newId}`);
         }
@@ -307,18 +349,21 @@ async function main() {
         for (const u of usersToCreate) {
             insertUser.run(u.id, u.email, u.handle, u.passwordHash, u.createdAt);
         }
-        console.log(`\nInserted ${usersToCreate.length} legacy users (${activeCreatorIds.size - usersToCreate.length} matched existing).`);
+        console.log(
+            `\nInserted ${usersToCreate.length} legacy users (${activeCreatorIds.size - usersToCreate.length} matched existing).`
+        );
 
         // 2. Insert requirement_elements, build oldId → newId map
         const elementIdMap = new Map<number, string>();
         const insertElement = db.prepare(
-            "INSERT INTO requirement_elements (id, title, active) VALUES (?, ?, 1)"
+            "INSERT INTO requirement_elements (id, title, active, default_available) VALUES (?, ?, 1, ?)"
         );
         for (const row of elementRows) {
             const oldId = row[0] as number;
             const title = (row[1] as string) || "";
             const newId = randomUUID();
-            insertElement.run(newId, title);
+            const defaultAvailable = DEFAULT_AVAILABLE_ELEMENTS.has(title) ? 1 : 0;
+            insertElement.run(newId, title, defaultAvailable);
             elementIdMap.set(oldId, newId);
         }
         console.log(`Inserted ${elementIdMap.size} requirement elements.`);
@@ -368,7 +413,7 @@ async function main() {
             const baseLevels = RATING_MAP[ratingId] ?? RATING_MAP[1];
             const { drinkingLevel, spiceLevel } = applyContentFloors(
                 { title, description: instructions, hiddenInstructions },
-                baseLevels,
+                baseLevels
             );
 
             // Insert image if present

@@ -38,7 +38,12 @@ export const POST = withAuth(async (req, { params }) => {
             throw new AuthorizationError("You can only remove yourself or a player you host");
         }
 
-        playerRepo.update(playerId, { active: false });
+        const allPlayers = playerRepo.findBySessionId(sessionId);
+        if (allPlayers.length < 2) {
+            sessionRepo.deleteById(sessionId);
+        } else {
+            playerRepo.update(playerId, { active: false });
+        }
         return ok(undefined);
     } catch (err) {
         return handleError(err);

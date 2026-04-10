@@ -34,6 +34,8 @@ export interface LevelEntry {
     readonly tooltip: string;
     readonly cardDescription: string;
     readonly filterDescription: string;
+    /** Unambiguous description written specifically for LLM categorization. */
+    readonly llmDescription: string;
 }
 
 export interface LevelScale {
@@ -53,6 +55,8 @@ export const DRINKING_LEVELS: LevelScale = {
             tooltip: "",
             cardDescription: "No alcohol — a dare, challenge, or rule.",
             filterDescription: "No drinking cards at all",
+            llmDescription:
+                "No drinking at all. Nobody consumes any alcohol. Pure dare, challenge, or rule. Choose this only when alcohol is entirely absent.",
         },
         {
             value: 1,
@@ -61,6 +65,8 @@ export const DRINKING_LEVELS: LevelScale = {
             tooltip: "Sip — a sip or taste",
             cardDescription: "A sip or small taste. Not a full serving.",
             filterDescription: "Sips only — nothing stronger than a taste",
+            llmDescription:
+                "A small sip or taste — strictly a tiny amount, NOT a full drink and NOT a shot. If any card involves taking a full shot, finishing a drink, or drinking a full glass, do NOT use this value.",
         },
         {
             value: 2,
@@ -69,6 +75,8 @@ export const DRINKING_LEVELS: LevelScale = {
             tooltip: "A drink — a shot or full glass",
             cardDescription: "One drink — a shot, a full can, or finish your glass.",
             filterDescription: "Up to a shot or full drink per card",
+            llmDescription:
+                "One full drink — a single shot, a full can, or finishing a glass. IMPORTANT: any card that puts a full shot or full drink on the line must be at least this value (2). Do not underrate a card with a shot as level 1.",
         },
         {
             value: 3,
@@ -78,6 +86,8 @@ export const DRINKING_LEVELS: LevelScale = {
             cardDescription:
                 "Multiple drinks — several shots, a waterfall, or sustained drinking.",
             filterDescription: "No limit — multiple-drink cards included",
+            llmDescription:
+                "Multiple full drinks — two or more shots, a waterfall, or any mechanic that causes several people to take full drinks. Choose this when the cumulative alcohol is clearly more than one drink.",
         },
     ],
 };
@@ -94,6 +104,8 @@ export const SPICE_LEVELS: LevelScale = {
             tooltip: "",
             cardDescription: "No adult content — safe for all audiences.",
             filterDescription: "Clean cards only — no mature content",
+            llmDescription:
+                "Completely clean — no adult themes, no sexual references, no crude language. Safe for any audience.",
         },
         {
             value: 1,
@@ -102,6 +114,8 @@ export const SPICE_LEVELS: LevelScale = {
             tooltip: "Mild — light innuendo, mild language",
             cardDescription: "Light innuendo or mild language. Nothing explicit.",
             filterDescription: "Up to mild innuendo and light language",
+            llmDescription:
+                "Light innuendo, euphemisms, or mildly suggestive language. Nothing explicit, graphic, or overtly sexual.",
         },
         {
             value: 2,
@@ -110,6 +124,8 @@ export const SPICE_LEVELS: LevelScale = {
             tooltip: "Edgy — strong language, more mature themes",
             cardDescription: "Strong language and more mature themes.",
             filterDescription: "Up to strong language and mature themes",
+            llmDescription:
+                "Strong or crude language, clearly sexual themes, or mature humor — but not graphically explicit. Think R-rated rather than X-rated.",
         },
         {
             value: 3,
@@ -118,6 +134,8 @@ export const SPICE_LEVELS: LevelScale = {
             tooltip: "Spicy — very adult, nothing held back",
             cardDescription: "Very adult content — nothing held back.",
             filterDescription: "No limit — all content levels included",
+            llmDescription:
+                "Explicitly sexual or extremely graphic adult content. Nothing held back. Reserve for cards that are unambiguously X-rated.",
         },
     ],
 };
@@ -125,7 +143,7 @@ export const SPICE_LEVELS: LevelScale = {
 // ─── Timing ───────────────────────────────────────────────────────────────────
 
 /** Milliseconds after a draw before the card is revealed to all other players. */
-export const REVEAL_DELAY_MS = 3_000;
+export const REVEAL_DELAY_MS = 12_000;
 
 /** Session poll interval while the app is foregrounded (ms). */
 export const POLL_INTERVAL_FOREGROUND_MS = 5_000;

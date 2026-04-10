@@ -130,6 +130,10 @@ export function findAllAdmin(): DbAdminSessionRow[] {
         .all() as DbAdminSessionRow[];
 }
 
+export function deleteById(id: string): void {
+    db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+}
+
 export function findActiveByUserId(userId: string): DbSessionSummary[] {
     return db
         .prepare(

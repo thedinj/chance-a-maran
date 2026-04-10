@@ -21,6 +21,19 @@ import * as userRepo from "../repos/userRepo";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Strip hiddenInstructions from a DrawEvent for clients that aren't the drawer.
+ * The drawer always receives the text. Everyone receives it once descriptionShared=true.
+ */
+export function filterDrawEvent(event: DrawEvent, requestingPlayerId: string | null): DrawEvent {
+    if (event.descriptionShared) return event;
+    if (requestingPlayerId && event.playerId === requestingPlayerId) return event;
+    return {
+        ...event,
+        cardVersion: { ...event.cardVersion, hiddenInstructions: null },
+    };
+}
+
 function validateRequirementIds(ids: string[]): void {
     if (ids.length === 0) return;
     const found = requirementElementRepo.findByIds(ids);
@@ -220,7 +233,7 @@ function drawFromPool(
     const now = new Date();
     const revealedAt = new Date(now.getTime() + REVEAL_DELAY_MS).toISOString();
 
-    return drawEventRepo.create({
+    const event = drawEventRepo.create({
         id: randomUUID(),
         sessionId,
         playerId,
@@ -229,6 +242,8 @@ function drawFromPool(
         drawnAt: now.toISOString(),
         revealedToAllAt: revealedAt,
     });
+    // Drawer receives their own event unfiltered; everyone else (pollers) will be filtered in getSessionState.
+    return filterDrawEvent(event, playerId);
 }
 
 export function drawCard(sessionId: string, playerId: string): DrawEvent {
@@ -241,10 +256,13 @@ export function drawReparationsCard(sessionId: string, playerId: string): DrawEv
 
 // ─── Draw event mutations ─────────────────────────────────────────────────────
 
-export function shareDescription(drawEventId: string): DrawEvent {
+export function shareDescription(drawEventId: string, requestingPlayerId: string): DrawEvent {
     const event = drawEventRepo.findById(drawEventId);
     if (!event) throw new NotFoundError("Draw event not found");
-    if (event.cardVersion.hiddenInstructions === null) {
+    if (event.playerId !== requestingPlayerId) {
+        throw new AuthorizationError("Only the drawer can share hidden instructions");
+    }
+    if (!event.cardVersion.hasHiddenInstructions) {
         throw new ConflictError("Card has no hidden instructions");
     }
     return drawEventRepo.update(drawEventId, { descriptionShared: true });

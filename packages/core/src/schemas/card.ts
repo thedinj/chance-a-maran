@@ -18,8 +18,10 @@ export const CardVersionSchema = z.object({
     versionNumber: z.number().int().nonnegative(),
     title: z.string(),
     description: z.string(),
-    /** Text revealed only to the drawing player initially. Null if no hidden instructions. */
+    /** Text revealed only to the drawing player. Null if no hidden instructions, or stripped by server for non-drawers. */
     hiddenInstructions: z.string().nullable(),
+    /** True if this card version has hidden instructions. Always present regardless of auth context. */
+    hasHiddenInstructions: z.boolean(),
     imageId: z.string().nullable(),
     /**
      * Vertical crop offset for the card image. 0 = top, 0.5 = center, 1 = bottom.

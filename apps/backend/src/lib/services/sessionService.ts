@@ -17,6 +17,7 @@ import * as requirementElementRepo from "../repos/requirementElementRepo";
 import { normalizeJoinCode } from "../utils/stringUtils";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
+import { filterDrawEvent } from "./cardService";
 import { db } from "../db/db";
 
 const JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // excludes confusable chars (0/O/1/I)
@@ -218,7 +219,7 @@ export function getActiveSessions(userId: string): SessionSummary[] {
     }));
 }
 
-export function getSessionState(sessionId: string): SessionState {
+export function getSessionState(sessionId: string, requestingPlayerId: string | null): SessionState {
     const session = sessionRepo.findById(sessionId);
     if (!session) throw new NotFoundError("Session not found");
 
@@ -226,7 +227,9 @@ export function getSessionState(sessionId: string): SessionState {
         .findBySessionId(sessionId)
         .map((p) => playerRepo.mapPlayer(p));
 
-    const drawEvents = drawEventRepo.findBySessionId(sessionId);
+    const drawEvents = drawEventRepo
+        .findRevealedBySessionId(sessionId, requestingPlayerId)
+        .map((e) => filterDrawEvent(e, requestingPlayerId));
     const pendingTransfers = cardTransferRepo.findBySessionId(sessionId);
 
     return {

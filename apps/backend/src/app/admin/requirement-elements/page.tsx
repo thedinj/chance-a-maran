@@ -2,8 +2,19 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-    Title, Table, Switch, Button, TextInput, Stack, Group,
-    Modal, Text, Loader, Center, ActionIcon, Tooltip,
+    Title,
+    Table,
+    Switch,
+    Button,
+    TextInput,
+    Stack,
+    Group,
+    Modal,
+    Text,
+    Loader,
+    Center,
+    ActionIcon,
+    Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
@@ -28,17 +39,26 @@ export default function RequirementElementsPage() {
     const [editTitle, setEditTitle] = useState("");
     const [saving, setSaving] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<AdminElement | null>(null);
-    const [deleteImpact, setDeleteImpact] = useState<{ cardVersionCount: number; sessionCount: number; userCount: number } | null>(null);
+    const [deleteImpact, setDeleteImpact] = useState<{
+        cardVersionCount: number;
+        sessionCount: number;
+        userCount: number;
+    } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     function loadElements() {
         setLoading(true);
         adminFetch("/api/admin/requirement-elements")
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setElements(d.data as AdminElement[]); setLoading(false); });
+            .then((d) => {
+                if (d.ok) setElements(d.data as AdminElement[]);
+                setLoading(false);
+            });
     }
 
-    useEffect(() => { loadElements(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        loadElements();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     function toggleActive(el: AdminElement) {
         startTransition(async () => {
@@ -48,7 +68,9 @@ export default function RequirementElementsPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                setElements((prev) => prev.map((e) => e.id === el.id ? data.data as AdminElement : e));
+                setElements((prev) =>
+                    prev.map((e) => (e.id === el.id ? (data.data as AdminElement) : e))
+                );
             } else {
                 notifications.show({ message: data.error?.message ?? "Error", color: "red" });
             }
@@ -63,7 +85,9 @@ export default function RequirementElementsPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                setElements((prev) => prev.map((e) => e.id === el.id ? data.data as AdminElement : e));
+                setElements((prev) =>
+                    prev.map((e) => (e.id === el.id ? (data.data as AdminElement) : e))
+                );
             } else {
                 notifications.show({ message: data.error?.message ?? "Error", color: "red" });
             }
@@ -98,7 +122,9 @@ export default function RequirementElementsPage() {
     }
 
     async function confirmDelete(el: AdminElement) {
-        const res = await adminFetch(`/api/admin/requirement-elements/${el.id}?dryRun=true`, { method: "DELETE" });
+        const res = await adminFetch(`/api/admin/requirement-elements/${el.id}?dryRun=true`, {
+            method: "DELETE",
+        });
         const data = await res.json();
         if (data.ok) {
             setDeleteImpact(data.data);
@@ -111,7 +137,9 @@ export default function RequirementElementsPage() {
     async function executeDelete() {
         if (!deleteTarget) return;
         setDeleting(true);
-        const res = await adminFetch(`/api/admin/requirement-elements/${deleteTarget.id}`, { method: "DELETE" });
+        const res = await adminFetch(`/api/admin/requirement-elements/${deleteTarget.id}`, {
+            method: "DELETE",
+        });
         const data = await res.json();
         setDeleting(false);
         if (data.ok) {
@@ -152,11 +180,15 @@ export default function RequirementElementsPage() {
             <Stack gap="md">
                 <Group justify="space-between">
                     <Title order={3}>Requirement Elements</Title>
-                    <Button size="sm" onClick={() => setCreateOpen(true)}>New Element</Button>
+                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                        New Element
+                    </Button>
                 </Group>
 
                 {loading ? (
-                    <Center py="xl"><Loader /></Center>
+                    <Center py="xl">
+                        <Loader />
+                    </Center>
                 ) : (
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
@@ -221,7 +253,11 @@ export default function RequirementElementsPage() {
                 )}
             </Stack>
 
-            <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Requirement Element">
+            <Modal
+                opened={createOpen}
+                onClose={() => setCreateOpen(false)}
+                title="New Requirement Element"
+            >
                 <Stack gap="md">
                     <TextInput
                         label="Title"
@@ -260,30 +296,35 @@ export default function RequirementElementsPage() {
             </Modal>
             <Modal
                 opened={!!deleteTarget}
-                onClose={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                onClose={() => {
+                    setDeleteTarget(null);
+                    setDeleteImpact(null);
+                }}
                 title="Delete Requirement Element"
             >
                 <Stack gap="md">
                     <Text size="sm">
                         Permanently delete &ldquo;{deleteTarget?.title}&rdquo;?
                         {deleteImpact && (
-                            <> This will remove it from {deleteImpact.cardVersionCount} card version(s),
-                            {deleteImpact.sessionCount} session filter(s),
-                            and {deleteImpact.userCount} user element selection(s).</>
+                            <>
+                                {" "}
+                                This will remove it from {deleteImpact.cardVersionCount} card
+                                version(s), {deleteImpact.sessionCount} session filter(s), and{" "}
+                                {deleteImpact.userCount} user element selection(s).
+                            </>
                         )}
                     </Text>
                     <Group justify="flex-end">
                         <Button
                             variant="default"
-                            onClick={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                            onClick={() => {
+                                setDeleteTarget(null);
+                                setDeleteImpact(null);
+                            }}
                         >
                             Cancel
                         </Button>
-                        <Button
-                            color="red"
-                            onClick={() => void executeDelete()}
-                            loading={deleting}
-                        >
+                        <Button color="red" onClick={() => void executeDelete()} loading={deleting}>
                             Delete
                         </Button>
                     </Group>

@@ -31,6 +31,7 @@ import {
     LoadingOverlay,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
+import { useSessionStorage } from "@mantine/hooks";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion, CardAnalysisResult } from "@chance/core";
@@ -1021,7 +1022,11 @@ export default function CardsPage() {
     const [selected, setSelected] = useState<Card | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
-    const [analyzedVersionIds, setAnalyzedVersionIds] = useState<Set<string>>(new Set());
+    const [analyzedVersionIdsArr, setAnalyzedVersionIdsArr] = useSessionStorage<string[]>({
+        key: "admin-analyzed-version-ids",
+        defaultValue: [],
+    });
+    const analyzedVersionIds = new Set(analyzedVersionIdsArr);
     const [isPending, startTransition] = useTransition();
 
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -1377,7 +1382,7 @@ export default function CardsPage() {
                         card={selected}
                         onClose={() => setSelected(null)}
                         onChanged={handleCardChanged}
-                        onAnalyzed={(ids) => setAnalyzedVersionIds((prev) => new Set([...prev, ...ids]))}
+                        onAnalyzed={(ids) => setAnalyzedVersionIdsArr((prev) => [...new Set([...prev, ...ids])])}
                         apiBaseUrl={apiBaseUrl}
                     />
                 )}
@@ -1394,7 +1399,7 @@ export default function CardsPage() {
                     setSelectedIds(new Set());
                     setBulkAnalysisOpen(false);
                 }}
-                onAnalyzed={(ids) => setAnalyzedVersionIds((prev) => new Set([...prev, ...ids]))}
+                onAnalyzed={(ids) => setAnalyzedVersionIdsArr((prev) => [...new Set([...prev, ...ids])])}
             />
         </>
     );

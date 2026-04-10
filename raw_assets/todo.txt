@@ -1,8 +1,4 @@
-Favicons/icons for frontend and backend
-Test: Display of default-on venue elements on game setup?
-Test hidden instructions
 Test setup/update scripts
-Test multiple players
 
 Set up DDNS
 

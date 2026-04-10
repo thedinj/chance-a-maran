@@ -130,13 +130,13 @@ export const hardDelete = db.transaction((elementId: string): void => {
              filter_settings, '$.availableElementIds',
              (SELECT json_group_array(jt.value)
               FROM json_each(sessions.filter_settings, '$.availableElementIds') AS jt
-              WHERE jt.value != ?1)
+              WHERE jt.value != @elementId)
          )
          WHERE sessions.id IN (
              SELECT s.id FROM sessions s, json_each(s.filter_settings, '$.availableElementIds') AS je
-             WHERE je.value = ?1
+             WHERE je.value = @elementId
          )`
-    ).run(elementId);
+    ).run({ elementId });
 
     // Scrub element ID from users.last_element_selection
     db.prepare(
@@ -144,13 +144,13 @@ export const hardDelete = db.transaction((elementId: string): void => {
          SET last_element_selection = (
              SELECT json_group_array(jt.value)
              FROM json_each(users.last_element_selection) AS jt
-             WHERE jt.value != ?1
+             WHERE jt.value != @elementId
          )
          WHERE users.id IN (
              SELECT u.id FROM users u, json_each(u.last_element_selection) AS je
-             WHERE je.value = ?1
+             WHERE je.value = @elementId
          )`
-    ).run(elementId);
+    ).run({ elementId });
 
     // Delete the element row
     db.prepare("DELETE FROM requirement_elements WHERE id = ?").run(elementId);

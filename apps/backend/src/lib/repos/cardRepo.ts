@@ -62,7 +62,6 @@ function getGameTagsForVersion(cardVersionId: string): Game[] {
         .all(cardVersionId) as Game[];
 }
 
-
 export function mapCardVersion(row: DbCardVersion): CardVersion {
     const rawRequirements = db
         .prepare(
@@ -86,6 +85,7 @@ export function mapCardVersion(row: DbCardVersion): CardVersion {
         title: row.title,
         description: row.description,
         hiddenInstructions: row.hidden_instructions,
+        hasHiddenInstructions: row.hidden_instructions !== null,
         imageId: row.image_id,
         imageYOffset: row.image_y_offset,
         drinkingLevel: row.drinking_level,
@@ -125,15 +125,15 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
 
 function findRawById(id: string): DbCard | null {
     return (
-        db
+        (db
             .prepare(
                 `SELECT c.*, u.display_name AS owner_display_name
                  FROM cards c
                  JOIN users u ON u.id = c.author_user_id
                  WHERE c.id = ?`
             )
-            .get(id) as DbCard | undefined
-    ) ?? null;
+            .get(id) as DbCard | undefined) ?? null
+    );
 }
 
 function findRawVersionById(id: string): DbCardVersion | null {
@@ -223,7 +223,9 @@ export function findAll(filters?: {
         params.push(`%${filters.search}%`);
     }
     if (filters?.gameId) {
-        conditions.push("EXISTS (SELECT 1 FROM card_game_tags cgt WHERE cgt.card_version_id = cv.id AND cgt.game_id = ?)");
+        conditions.push(
+            "EXISTS (SELECT 1 FROM card_game_tags cgt WHERE cgt.card_version_id = cv.id AND cgt.game_id = ?)"
+        );
         params.push(filters.gameId);
     }
     if (filters?.drinkingLevel !== undefined) {
@@ -383,9 +385,7 @@ export function createVersion(
  * Also cleans up orphaned media files from deleted versions.
  */
 export function pruneOldVersions(cardId: string, currentVersionId?: string): void {
-    const cvId =
-        currentVersionId ??
-        (findRawById(cardId)?.current_version_id ?? null);
+    const cvId = currentVersionId ?? findRawById(cardId)?.current_version_id ?? null;
     if (!cvId) return;
 
     const orphaned = db
@@ -403,9 +403,9 @@ export function pruneOldVersions(cardId: string, currentVersionId?: string): voi
 
         // Remove media if no remaining version references it
         if (v.image_id) {
-            const stillUsed = db.prepare(
-                "SELECT 1 FROM card_versions WHERE image_id = ? LIMIT 1"
-            ).get(v.image_id);
+            const stillUsed = db
+                .prepare("SELECT 1 FROM card_versions WHERE image_id = ? LIMIT 1")
+                .get(v.image_id);
             if (!stillUsed) {
                 mediaRepo.deleteById(v.image_id);
             }
@@ -418,7 +418,10 @@ export function setActive(id: string, active: boolean): void {
 }
 
 export function setGlobal(id: string, isGlobal: boolean): void {
-    db.prepare("UPDATE cards SET is_global = ?, pending_global = 0 WHERE id = ?").run(boolToInt(isGlobal), id);
+    db.prepare("UPDATE cards SET is_global = ?, pending_global = 0 WHERE id = ?").run(
+        boolToInt(isGlobal),
+        id
+    );
 }
 
 export function setGlobalNomination(id: string, pending: boolean): void {

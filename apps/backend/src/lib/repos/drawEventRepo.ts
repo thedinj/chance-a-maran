@@ -30,7 +30,6 @@ export function mapDrawEvent(row: DbDrawEvent): DrawEvent {
         cardVersion,
         card,
         drawnAt: row.drawn_at,
-        revealedToAllAt: row.revealed_to_all_at,
         descriptionShared: intToBool(row.description_shared),
         resolved: intToBool(row.resolved),
     };
@@ -78,12 +77,34 @@ export function findById(id: string): DrawEvent | null {
     return mapDrawEvent(row);
 }
 
-export function findBySessionId(sessionId: string): DrawEvent[] {
-    const rows = db
-        .prepare(
-            "SELECT * FROM draw_events WHERE session_id = ? ORDER BY drawn_at ASC"
-        )
-        .all(sessionId) as DbDrawEvent[];
+/** Returns only events that should be visible to the requesting player:
+ *  - their own events always, and
+ *  - everyone else's events once `revealed_to_all_at` has passed on the server clock.
+ */
+export function findRevealedBySessionId(
+    sessionId: string,
+    requestingPlayerId: string | null
+): DrawEvent[] {
+    const now = new Date().toISOString();
+    const rows = (
+        requestingPlayerId
+            ? db
+                  .prepare(
+                      `SELECT * FROM draw_events
+                       WHERE session_id = ?
+                         AND (player_id = ? OR (revealed_to_all_at IS NOT NULL AND revealed_to_all_at <= ?))
+                       ORDER BY drawn_at ASC`
+                  )
+                  .all(sessionId, requestingPlayerId, now)
+            : db
+                  .prepare(
+                      `SELECT * FROM draw_events
+                       WHERE session_id = ?
+                         AND revealed_to_all_at IS NOT NULL AND revealed_to_all_at <= ?
+                       ORDER BY drawn_at ASC`
+                  )
+                  .all(sessionId, now)
+    ) as DbDrawEvent[];
     return rows.map(mapDrawEvent);
 }
 

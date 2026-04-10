@@ -33,10 +33,10 @@ import { useTransfers } from "../transfers/useTransfers";
 interface DrawDrama {
     /** One-shot intro sound. Flip is held until it finishes (via onended). */
     introSound?: string;
-    /** Sound looped during the flip (and reparations intro). */
-    loopSound: string;
-    /** One-shot sound fired when flip completes */
-    hitSound: string;
+    /** Sound looped during the flip (and reparations intro). Omit for single-sound dramas. */
+    loopSound?: string;
+    /** One-shot sound fired when flip completes. Omit when no hit sound is wanted. */
+    hitSound?: string;
     /** ms to show card back (static) before the flip begins — ignored when introSound is set */
     backMs: number;
     /** flip animation duration ms (passed as overrideDuration to FlippingCard) */
@@ -45,6 +45,8 @@ interface DrawDrama {
     flipEasing?: string;
     /** Optional label badge shown during the back phase (e.g. "GAME CHANGER") */
     preFlipLabel?: string;
+    /** If set, hitSound fires this many ms after "flipping" begins instead of at flip complete. */
+    hitSoundOffsetMs?: number;
 }
 
 // Preload all drama sounds at module load so they play without delay.
@@ -55,7 +57,12 @@ function preloadSound(src: string): void {
     el.preload = "auto";
     preloadedAudio[src] = el;
 }
-["/sound/drumrollloop.mp3", "/sound/drama.mp3", "/sound/cymbal.mp3"].forEach(preloadSound);
+[
+    "/sound/drumrollloop.mp3",
+    "/sound/drama.mp3",
+    "/sound/cymbal.mp3",
+    "/sound/reparations.mp3",
+].forEach(preloadSound);
 
 function getAudio(src: string): HTMLAudioElement {
     // Return a clone so the same sound can overlap / restart cleanly.
@@ -72,6 +79,7 @@ const STANDARD_DRAW_DRAMA: DrawDrama = {
     hitSound: "/sound/cymbal.mp3",
     backMs: 750,
     flipMs: 1000,
+    hitSoundOffsetMs: 750, // fires when flip starts (1s before flip completes)
 };
 
 const GAME_CHANGER_DRAMA: DrawDrama = {
@@ -82,14 +90,14 @@ const GAME_CHANGER_DRAMA: DrawDrama = {
     flipMs: 3000,
     flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 3s
     preFlipLabel: "GAME CHANGER",
+    hitSoundOffsetMs: 2000, // fires 1s before flip completes
 };
 
 const REPARATIONS_DRAMA: DrawDrama = {
-    loopSound: "/sound/drumrollloop.mp3",
-    hitSound: "/sound/cymbal.mp3",
-    backMs: 1400, // long hold on the back — let dread build
-    flipMs: 2600, // slow, inevitable flip
-    flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 2.6s
+    introSound: "/sound/reparations.mp3",
+    backMs: 5000, // hold card-back for 5s — flip lands at the 5s mark of the track
+    flipMs: 2000, // dramatic but not sluggish
+    flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 2s
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -1001,7 +1009,7 @@ function CardRevealOverlay({ event, onDismiss, drama, playerDisplayName }: CardR
     // through the intro into the flip. Cleanup pauses when phase → "revealed".
     const loopActive = phase === "flipping" || phase === "reparations-intro";
     useEffect(() => {
-        if (!loopActive || !drama) return;
+        if (!loopActive || !drama?.loopSound) return;
         const audio = getAudio(drama.loopSound);
         loopRef.current = audio;
         audio.loop = true;
@@ -1012,17 +1020,50 @@ function CardRevealOverlay({ event, onDismiss, drama, playerDisplayName }: CardR
         };
     }, [loopActive, drama]);
 
+    // ── Single intro sound during reparations intro + flip ───────────────────
+    // For dramas with introSound but no loopSound, play the track once when
+    // loopActive becomes true (reparations-intro phase). Continues uninterrupted
+    // through the flip. backMs controls when the flip fires after phase → "flipping".
+    useEffect(() => {
+        if (!loopActive || !drama?.introSound || drama.loopSound) return;
+        const audio = getAudio(drama.introSound);
+        audio.loop = false;
+        audio.play().catch(() => {});
+        return () => {
+            audio.pause();
+            audio.currentTime = 0;
+        };
+    }, [loopActive, drama]);
+
+    // ── Early hit sound (standard draw) ─────────────────────────────────────
+    // When hitSoundOffsetMs is set, fire the cymbal at that offset from "flipping"
+    // phase start rather than waiting for the flip animation to complete.
+    useEffect(() => {
+        if (phase !== "flipping" || !drama?.hitSound || drama.hitSoundOffsetMs === undefined)
+            return;
+        const t = setTimeout(() => {
+            loopRef.current?.pause();
+            loopRef.current = null;
+            getAudio(drama.hitSound!)
+                .play()
+                .catch(() => {});
+        }, drama.hitSoundOffsetMs);
+        return () => clearTimeout(t);
+    }, [phase, drama]);
+
     const handleFlipComplete = useCallback(() => {
         setPhase("revealed");
-        if (drama)
+        // Skip hitSound here if it was already scheduled via hitSoundOffsetMs.
+        if (drama?.hitSound && drama.hitSoundOffsetMs === undefined)
             getAudio(drama.hitSound)
                 .play()
                 .catch(() => {});
     }, [drama]);
 
+    // Reparations always goes to "flipping" — audio plays concurrently with backMs hold.
     const handleReparationsIntroDone = useCallback(() => {
-        setPhase(drama?.introSound ? "audio-intro" : "flipping");
-    }, [drama]);
+        setPhase("flipping");
+    }, []);
 
     if (phase === "reparations-intro") {
         return (
@@ -1061,7 +1102,7 @@ function CardRevealOverlay({ event, onDismiss, drama, playerDisplayName }: CardR
                 )}
                 <FlippingCard
                     event={event}
-                    dramaDelayMs={drama?.introSound ? 0 : drama?.backMs}
+                    dramaDelayMs={phase === "audio-intro" ? 0 : drama?.backMs}
                     overrideDuration={drama?.flipMs}
                     overrideEasing={drama?.flipEasing}
                     flipHeld={phase === "audio-intro"}
@@ -1123,8 +1164,13 @@ function CardDetailOverlay({
     const [resolved, setResolved] = useState(event.resolved);
     const [sharing, setSharing] = useState(false);
     const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
+    // Set to true when the drawer taps "Tap to reveal" inside CardFront.
+    const [hasRevealed, setHasRevealed] = useState(
+        !cv.hasHiddenInstructions || event.descriptionShared
+    );
 
-    const showActionBarShareBtn = cv.hiddenInstructions !== null && !sharedViaActionBar && isDrawer;
+    const showActionBarShareBtn =
+        cv.hasHiddenInstructions && !sharedViaActionBar && isDrawer && hasRevealed;
 
     // Current transfer target name (for retract confirmation)
     const pendingTargetName =
@@ -1187,7 +1233,11 @@ function CardDetailOverlay({
                     style={{ maxWidth: "430px", width: "100%" }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <FlippingCard event={event} overrideDuration={480} />
+                    <FlippingCard
+                        event={event}
+                        overrideDuration={480}
+                        onReveal={() => setHasRevealed(true)}
+                    />
                 </div>
             </div>
 
@@ -1493,8 +1543,7 @@ export default function Game() {
             if (!result.ok) return;
             setSession(result.data);
             for (const event of result.data.drawEvents ?? []) {
-                if (event.revealedToAllAt !== null) addDrawEvent(event);
-                else updateDrawEvent(event);
+                addDrawEvent(event);
             }
             // Sync pending transfers — filter to transfers involving this device's players
             const relevant = (result.data.pendingTransfers ?? []).filter(

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiClient } from "../lib/api";
 import type { DrawEvent } from "../lib/api";
-import { useCards } from "../cards/useCards";
 import { useSession } from "../session/useSession";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
 import { CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
@@ -52,6 +51,16 @@ export function CardBack({ event }: CardBackProps): React.JSX.Element {
 }
 
 // ── CardFront ─────────────────────────────────────────────────────────────────
+function HiddenInstrDivider() {
+    return (
+        <div style={styles.hiddenInstrDivider}>
+            <div style={styles.hiddenInstrDividerLine} />
+            <span style={styles.hiddenInstrDividerLabel}>private</span>
+            <div style={styles.hiddenInstrDividerLine} />
+        </div>
+    );
+}
+
 // Static card front face. Reads activePlayerId from SessionContext.
 // Manages its own description reveal and share state.
 
@@ -63,6 +72,8 @@ interface CardFrontProps {
     flipDurationMs?: number;
     /** When true: disables interactive description reveal/share. Used in carousel slots. */
     readOnly?: boolean;
+    /** Called when the drawer taps "Tap to reveal" — lets the parent know reveal happened. */
+    onReveal?: () => void;
 }
 
 export function CardFront({
@@ -70,40 +81,30 @@ export function CardFront({
     flipInFlight = false,
     flipDurationMs = 1180,
     readOnly = false,
+    onReveal,
 }: CardFrontProps): React.JSX.Element {
     const cv = event.cardVersion;
     const isReparations = event.card.cardType === "reparations";
     const { activePlayerId } = useSession();
-    const { updateDrawEvent } = useCards();
 
     const isDrawer = event.playerId === activePlayerId;
-    const [descriptionShared, setDescriptionShared] = useState(event.descriptionShared);
+    const descriptionShared = event.descriptionShared;
     const [descrRevealed, setDescrRevealed] = useState(
-        cv.hiddenInstructions === null || event.descriptionShared
+        !cv.hasHiddenInstructions || event.descriptionShared
     );
-    const [sharing, setSharing] = useState(false);
 
+    // Server sends hiddenInstructions only to the drawer — use as an extra confirmation gate.
     const showHiddenToggle =
         !readOnly &&
+        cv.hasHiddenInstructions &&
         cv.hiddenInstructions !== null &&
         !descriptionShared &&
         isDrawer &&
         !descrRevealed;
-    const showShareBtn =
-        !readOnly &&
-        cv.hiddenInstructions !== null &&
-        !descriptionShared &&
-        isDrawer &&
-        descrRevealed;
 
-    async function handleShare() {
-        setSharing(true);
-        const result = await apiClient.shareDescription(event.id);
-        if (result.ok) {
-            updateDrawEvent(result.data);
-            setDescriptionShared(true);
-        }
-        setSharing(false);
+    function handleReveal() {
+        setDescrRevealed(true);
+        onReveal?.();
     }
 
     return (
@@ -178,39 +179,71 @@ export function CardFront({
                         <p style={styles.revealHeroTitle}>{cv.title}</p>
                         <p style={styles.revealHeroMeta}>{cv.authorDisplayName}</p>
 
-                        {descrRevealed ? (
-                            <p
-                                style={{
-                                    ...styles.revealDescription,
-                                    ...(readOnly ? styles.revealDescriptionReadOnly : undefined),
-                                }}
-                                className={readOnly ? undefined : SCROLLBAR_CLASS}
+                        {readOnly ? (
+                            // ── Carousel: both sections visible, each line-clamped ──
+                            <>
+                                <p
+                                    style={{
+                                        ...styles.revealDescription,
+                                        ...styles.revealDescriptionReadOnly,
+                                    }}
+                                >
+                                    {cv.description}
+                                </p>
+                                {cv.hasHiddenInstructions && (
+                                    descriptionShared ? (
+                                        // Shared — everyone sees the text
+                                        <div style={styles.hiddenInstrSection}>
+                                            <HiddenInstrDivider />
+                                            <p
+                                                style={{
+                                                    ...styles.hiddenInstrText,
+                                                    ...styles.hiddenInstrTextReadOnly,
+                                                }}
+                                            >
+                                                {cv.hiddenInstructions}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        // Not shared yet — always hidden in carousel
+                                        <div style={styles.hiddenDescArea}>
+                                            <span style={styles.hiddenDescLabel}>HIDDEN</span>
+                                        </div>
+                                    )
+                                )}
+                            </>
+                        ) : (
+                            // ── Detail view: single scrollable container ──
+                            <div
+                                style={styles.revealScrollArea}
+                                className={SCROLLBAR_CLASS}
                             >
-                                {cv.description}
-                            </p>
-                        ) : showHiddenToggle ? (
-                            <button
-                                style={styles.hiddenDescArea}
-                                onClick={() => setDescrRevealed(true)}
-                            >
-                                <span style={styles.hiddenDescLabel}>
-                                    Tap to reveal description
-                                </span>
-                            </button>
-                        ) : readOnly && cv.hiddenInstructions !== null && !descriptionShared ? (
-                            <div style={styles.hiddenDescArea}>
-                                <span style={styles.hiddenDescLabel}>HIDDEN</span>
-                            </div>
-                        ) : null}
+                                <p style={styles.revealDescription}>{cv.description}</p>
 
-                        {showShareBtn && (
-                            <button
-                                style={styles.shareDescBtn}
-                                onClick={handleShare}
-                                disabled={sharing}
-                            >
-                                {sharing ? "Sharing..." : "Share with everyone"}
-                            </button>
+                                {cv.hasHiddenInstructions && (
+                                    <div style={styles.hiddenInstrSection}>
+                                        <HiddenInstrDivider />
+                                        {descrRevealed ? (
+                                            <p style={styles.hiddenInstrText}>
+                                                {cv.hiddenInstructions}
+                                            </p>
+                                        ) : showHiddenToggle ? (
+                                            <button
+                                                style={styles.hiddenDescArea}
+                                                onClick={handleReveal}
+                                            >
+                                                <span style={styles.hiddenDescLabel}>
+                                                    Tap to reveal
+                                                </span>
+                                            </button>
+                                        ) : (
+                                            <div style={styles.hiddenDescArea}>
+                                                <span style={styles.hiddenDescLabel}>HIDDEN</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -234,6 +267,8 @@ interface FlippingCardProps {
     dramaDelayMs?: number;
     /** When true, suppress flip timers entirely. Flip starts when this transitions to false. */
     flipHeld?: boolean;
+    /** Forwarded to CardFront — called when the drawer taps reveal. */
+    onReveal?: () => void;
 }
 
 export function FlippingCard({
@@ -243,6 +278,7 @@ export function FlippingCard({
     overrideEasing,
     dramaDelayMs,
     flipHeld,
+    onReveal,
 }: FlippingCardProps): React.JSX.Element {
     const isGameChanger = Boolean(event.cardVersion.isGameChanger);
     const prefersReducedMotion =
@@ -325,6 +361,7 @@ export function FlippingCard({
                         event={event}
                         flipInFlight={flipInFlight}
                         flipDurationMs={flipDurationMs}
+                        onReveal={onReveal}
                     />
                 </div>
             </div>
@@ -522,26 +559,67 @@ const styles: Record<string, React.CSSProperties> = {
         margin: 0,
         letterSpacing: "0.16em",
     },
-    revealDescription: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        color: "var(--color-text-primary)",
-        lineHeight: 1.5,
-        margin: 0,
+    // Scroll wrapper: takes up remaining flex space, scrolls both description + hidden section
+    revealScrollArea: {
         flex: 1,
         minHeight: 0,
         overflow: "auto",
         paddingRight: "8px",
         scrollBehavior: "smooth",
         WebkitOverflowScrolling: "touch",
-        display: "block",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-4)",
     } as React.CSSProperties & { scrollbarWidth?: string; scrollbarColor?: string },
+    revealDescription: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-primary)",
+        lineHeight: 1.5,
+        margin: 0,
+    },
     revealDescriptionReadOnly: {
         overflow: "hidden",
         display: "-webkit-box",
         WebkitBoxOrient: "vertical" as const,
-        WebkitLineClamp: 4,
-        paddingRight: 0,
+        WebkitLineClamp: 3,
+    } as React.CSSProperties,
+    hiddenInstrSection: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+    },
+    hiddenInstrDivider: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+    },
+    hiddenInstrDividerLine: {
+        flex: 1,
+        height: "1px",
+        background: "color-mix(in srgb, var(--color-border) 60%, transparent)",
+    },
+    hiddenInstrDividerLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        letterSpacing: "0.12em",
+        textTransform: "uppercase" as const,
+        opacity: 0.7,
+    },
+    hiddenInstrText: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-secondary)",
+        lineHeight: 1.5,
+        margin: 0,
+        fontStyle: "italic",
+    },
+    hiddenInstrTextReadOnly: {
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical" as const,
+        WebkitLineClamp: 3,
     } as React.CSSProperties,
     hiddenDescArea: {
         background:

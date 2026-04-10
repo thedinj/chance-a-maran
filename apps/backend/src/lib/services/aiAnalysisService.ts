@@ -19,10 +19,10 @@ export interface CardAnalysisInput {
 
 function buildLevelDescriptions(): string {
     const drinking = DRINKING_LEVELS.levels
-        .map((l) => `  ${l.value} = ${l.label}: ${l.cardDescription}`)
+        .map((l) => `  ${l.value} = ${l.label}: ${l.llmDescription}`)
         .join("\n");
     const spice = SPICE_LEVELS.levels
-        .map((l) => `  ${l.value} = ${l.label}: ${l.cardDescription}`)
+        .map((l) => `  ${l.value} = ${l.label}: ${l.llmDescription}`)
         .join("\n");
     return `Drinking level (0–3):\n${drinking}\n\nSpice level (0–3):\n${spice}`;
 }
