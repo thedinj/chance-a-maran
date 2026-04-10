@@ -50,7 +50,10 @@
       "Bash(\"/c/Program Files/PowerShell/7/pwsh.exe\" -NoProfile -NonInteractive -File \"C:\\\\Users\\\\thedinj\\\\.claude\\\\statusline-command.ps1\")",
       "Bash(find:*)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(head -n 1904 \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/mobile/src/pages/Game/index.tsx\")",
+      "Bash(mv /tmp/game_index_trimmed.tsx \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/mobile/src/pages/Game/index.tsx\")",
+      "Bash(npx vite:*)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"
