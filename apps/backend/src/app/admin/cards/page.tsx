@@ -36,6 +36,7 @@ import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion, CardAnalysisResult } from "@chance/core";
 import { BulkAnalysisModal } from "./BulkAnalysisModal";
+import { LevelPicker } from "./LevelPicker";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -117,12 +118,18 @@ function CardDrawer({
     onClose,
     onChanged,
     onAnalyzed,
+    onAccepted,
+    onDismissed,
+    onNoChange,
     apiBaseUrl,
 }: {
     card: Card;
     onClose: () => void;
     onChanged: (updated: Card) => void;
     onAnalyzed: (versionIds: string[]) => void;
+    onAccepted: (versionId: string) => void;
+    onDismissed: (versionId: string) => void;
+    onNoChange: (versionId: string) => void;
     apiBaseUrl: string;
 }) {
     const adminFetch = useAdminFetch();
@@ -157,6 +164,7 @@ function CardDrawer({
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [analysisApplying, setAnalysisApplying] = useState(false);
     const [checkedFields, setCheckedFields] = useState<Set<string>>(new Set());
+    const [overrideFields, setOverrideFields] = useState<Map<string, number>>(new Map());
 
     const cv = card.currentVersion;
 
@@ -267,7 +275,7 @@ function CardDrawer({
                     title: editTitle,
                     description: editDescription,
                     hiddenInstructions: editHidden || null,
-                    imageId: cv.imageId ?? "",
+                    imageId: cv.imageId ?? null,
                     imageYOffset: editImageYOffset,
                     drinkingLevel: Number(editDrinking),
                     spiceLevel: Number(editSpice),
@@ -297,6 +305,7 @@ function CardDrawer({
         setAnalysisResult(null);
         setAnalysisError(null);
         setCheckedFields(new Set());
+        setOverrideFields(new Map());
         setAnalysisOpen(true);
         setAnalysisLoading(true);
         try {
@@ -309,12 +318,17 @@ function CardDrawer({
                 const response = data.data as { results: CardAnalysisResult[] };
                 const result = response.results[0] ?? null;
                 setAnalysisResult(result);
-                onAnalyzed([card.currentVersionId]);
+                onAnalyzed([card.id]);
+                if (!result.changed) {
+                    onNoChange(card.id);
+                }
                 // Pre-check all changed fields
                 if (result.changed) {
                     const changed = new Set<string>();
-                    if (result.current.spiceLevel !== result.suggested.spiceLevel) changed.add("spiceLevel");
-                    if (result.current.drinkingLevel !== result.suggested.drinkingLevel) changed.add("drinkingLevel");
+                    if (result.current.spiceLevel !== result.suggested.spiceLevel)
+                        changed.add("spiceLevel");
+                    if (result.current.drinkingLevel !== result.suggested.drinkingLevel)
+                        changed.add("drinkingLevel");
                     const sortedCG = [...result.current.gameTagIds].sort().join(",");
                     const sortedSG = [...result.suggested.gameTagIds].sort().join(",");
                     if (sortedCG !== sortedSG) changed.add("gameTagIds");
@@ -338,17 +352,24 @@ function CardDrawer({
         setAnalysisApplying(true);
         try {
             const suggested = analysisResult.suggested;
+            const effectiveSpice = overrideFields.get("spiceLevel") ?? suggested.spiceLevel;
+            const effectiveDrinking =
+                overrideFields.get("drinkingLevel") ?? suggested.drinkingLevel;
             const payload = {
                 title: cv.title,
                 description: cv.description,
                 hiddenInstructions: cv.hiddenInstructions ?? null,
-                imageId: cv.imageId ?? "",
+                imageId: cv.imageId ?? null,
                 imageYOffset: cv.imageYOffset ?? 0.5,
-                drinkingLevel: checkedFields.has("drinkingLevel") ? suggested.drinkingLevel : cv.drinkingLevel,
-                spiceLevel: checkedFields.has("spiceLevel") ? suggested.spiceLevel : cv.spiceLevel,
+                drinkingLevel: checkedFields.has("drinkingLevel")
+                    ? effectiveDrinking
+                    : cv.drinkingLevel,
+                spiceLevel: checkedFields.has("spiceLevel") ? effectiveSpice : cv.spiceLevel,
                 isGameChanger: cv.isGameChanger,
                 cardType: card.cardType,
-                gameTags: checkedFields.has("gameTagIds") ? suggested.gameTagIds : cv.gameTags.map((g) => g.id),
+                gameTags: checkedFields.has("gameTagIds")
+                    ? suggested.gameTagIds
+                    : cv.gameTags.map((g) => g.id),
                 requirementIds: checkedFields.has("requirementElementIds")
                     ? suggested.requirementElementIds
                     : cv.requirements.map((r) => r.id),
@@ -360,10 +381,14 @@ function CardDrawer({
             const data = await res.json();
             if (data.ok) {
                 onChanged(data.data as Card);
+                onAccepted(card.id);
                 setAnalysisOpen(false);
                 notifications.show({ message: "AI recommendations applied", color: "teal" });
             } else {
-                notifications.show({ message: data.error?.message ?? "Apply failed", color: "red" });
+                notifications.show({
+                    message: data.error?.message ?? "Apply failed",
+                    color: "red",
+                });
             }
         } finally {
             setAnalysisApplying(false);
@@ -524,15 +549,17 @@ function CardDrawer({
                             <img
                                 src={`${apiBaseUrl}/api/media/${cv.imageId}`}
                                 alt={cv.title}
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                    objectPosition: `center ${editImageYOffset * 100}%`,
-                                    display: "block",
-                                    pointerEvents: "none",
-                                    draggable: false,
-                                } as React.CSSProperties}
+                                style={
+                                    {
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                        objectPosition: `center ${editImageYOffset * 100}%`,
+                                        display: "block",
+                                        pointerEvents: "none",
+                                        draggable: false,
+                                    } as React.CSSProperties
+                                }
                             />
                         </Box>
                         <Slider
@@ -576,26 +603,24 @@ function CardDrawer({
             {/* ── Analysis Modal ─────────────────────────────────────── */}
             <Modal
                 opened={analysisOpen}
-                onClose={() => !analysisLoading && !analysisApplying && setAnalysisOpen(false)}
+                onClose={() => {
+                    if (analysisLoading || analysisApplying) return;
+                    if (analysisResult?.changed) onDismissed(card.id);
+                    setAnalysisOpen(false);
+                }}
                 title={analysisResult?.changed ? `AI Recommendations` : "AI Analysis"}
                 size="md"
             >
                 <Box pos="relative">
-                    <LoadingOverlay visible={analysisLoading || analysisApplying} overlayProps={{ blur: 2 }} />
+                    <LoadingOverlay
+                        visible={analysisLoading || analysisApplying}
+                        overlayProps={{ blur: 2 }}
+                    />
 
                     {analysisError && (
                         <Alert color="red" mb="md">
                             {analysisError}
                         </Alert>
-                    )}
-
-                    {analysisResult && !analysisResult.changed && !analysisResult.error && (
-                        <Stack gap="xs" align="center" py="md">
-                            <Text size="xl">✓</Text>
-                            <Text size="sm" ta="center" c="dimmed">
-                                No changes recommended — current categorization looks good.
-                            </Text>
-                        </Stack>
                     )}
 
                     {analysisResult?.error && (
@@ -604,156 +629,402 @@ function CardDrawer({
                         </Alert>
                     )}
 
-                    {analysisResult?.changed && (
-                        <Stack gap="md">
-                            <Text size="xs" c="dimmed">
-                                Select the recommendations you want to apply to &ldquo;{analysisResult.title}&rdquo;.
-                            </Text>
+                    {analysisResult && !analysisResult.error && (
+                        <>
+                            <Paper withBorder p="sm" mb="md">
+                                <Text size="xs" c="dimmed" mb={4}>
+                                    AI justification
+                                </Text>
+                                <Text size="sm">{analysisResult.justification}</Text>
+                            </Paper>
 
-                            {analysisResult.current.spiceLevel !== analysisResult.suggested.spiceLevel && (
-                                <Paper withBorder p="sm">
-                                    <Checkbox
-                                        checked={checkedFields.has("spiceLevel")}
-                                        onChange={(e) => {
-                                            const next = new Set(checkedFields);
-                                            if (e.currentTarget.checked) next.add("spiceLevel");
-                                            else next.delete("spiceLevel");
-                                            setCheckedFields(next);
-                                        }}
-                                        label={
-                                            <Group gap="xs">
-                                                <Text size="sm" fw={500}>Spice level</Text>
-                                                <Badge size="xs" color="gray" variant="outline">
-                                                    {SPICE_LEVELS.levels[analysisResult.current.spiceLevel].emoji || SPICE_LEVELS.levels[analysisResult.current.spiceLevel].label}
-                                                </Badge>
-                                                <Text size="xs" c="dimmed">→</Text>
-                                                <Badge size="xs" color="orange" variant="light">
-                                                    {SPICE_LEVELS.levels[analysisResult.suggested.spiceLevel].emoji || SPICE_LEVELS.levels[analysisResult.suggested.spiceLevel].label}
-                                                </Badge>
-                                            </Group>
-                                        }
-                                    />
-                                </Paper>
+                            {analysisResult.changed && (
+                                <Text size="xs" c="dimmed" mb="sm">
+                                    Select the recommendations you want to apply to &ldquo;
+                                    {analysisResult.title}&rdquo;.
+                                </Text>
                             )}
 
-                            {analysisResult.current.drinkingLevel !== analysisResult.suggested.drinkingLevel && (
-                                <Paper withBorder p="sm">
-                                    <Checkbox
-                                        checked={checkedFields.has("drinkingLevel")}
-                                        onChange={(e) => {
-                                            const next = new Set(checkedFields);
-                                            if (e.currentTarget.checked) next.add("drinkingLevel");
-                                            else next.delete("drinkingLevel");
-                                            setCheckedFields(next);
-                                        }}
-                                        label={
-                                            <Group gap="xs">
-                                                <Text size="sm" fw={500}>Drinking level</Text>
-                                                <Badge size="xs" color="gray" variant="outline">
-                                                    {DRINKING_LEVELS.levels[analysisResult.current.drinkingLevel].emoji || DRINKING_LEVELS.levels[analysisResult.current.drinkingLevel].label}
-                                                </Badge>
-                                                <Text size="xs" c="dimmed">→</Text>
-                                                <Badge size="xs" color="blue" variant="light">
-                                                    {DRINKING_LEVELS.levels[analysisResult.suggested.drinkingLevel].emoji || DRINKING_LEVELS.levels[analysisResult.suggested.drinkingLevel].label}
-                                                </Badge>
-                                            </Group>
-                                        }
-                                    />
-                                </Paper>
+                            {!analysisResult.changed && (
+                                <Text size="xs" c="dimmed" mb="sm">
+                                    No changes recommended — all fields look correct. Current values
+                                    shown below.
+                                </Text>
                             )}
 
-                            {[...analysisResult.current.gameTagIds].sort().join(",") !==
-                                [...analysisResult.suggested.gameTagIds].sort().join(",") && (
-                                <Paper withBorder p="sm">
-                                    <Checkbox
-                                        checked={checkedFields.has("gameTagIds")}
-                                        onChange={(e) => {
-                                            const next = new Set(checkedFields);
-                                            if (e.currentTarget.checked) next.add("gameTagIds");
-                                            else next.delete("gameTagIds");
-                                            setCheckedFields(next);
-                                        }}
-                                        label={
+                            <Stack gap="xs">
+                                {/* Spice level */}
+                                {(() => {
+                                    const spiceChanged =
+                                        analysisResult.current.spiceLevel !==
+                                        analysisResult.suggested.spiceLevel;
+                                    const spiceSelected =
+                                        overrideFields.get("spiceLevel") ??
+                                        (spiceChanged
+                                            ? analysisResult.suggested.spiceLevel
+                                            : analysisResult.current.spiceLevel);
+                                    return (
+                                        <Paper
+                                            withBorder
+                                            p="sm"
+                                            style={{
+                                                opacity:
+                                                    spiceChanged || checkedFields.has("spiceLevel")
+                                                        ? 1
+                                                        : 0.45,
+                                            }}
+                                        >
+                                            <Stack gap={6}>
+                                                <Checkbox
+                                                    checked={checkedFields.has("spiceLevel")}
+                                                    onChange={(e) => {
+                                                        const next = new Set(checkedFields);
+                                                        if (e.currentTarget.checked)
+                                                            next.add("spiceLevel");
+                                                        else next.delete("spiceLevel");
+                                                        setCheckedFields(next);
+                                                    }}
+                                                    label={
+                                                        <Text size="sm" fw={500}>
+                                                            Spice level
+                                                        </Text>
+                                                    }
+                                                />
+                                                <LevelPicker
+                                                    levels={SPICE_LEVELS.levels}
+                                                    selected={spiceSelected}
+                                                    suggested={analysisResult.suggested.spiceLevel}
+                                                    current={analysisResult.current.spiceLevel}
+                                                    color="orange"
+                                                    onChange={(v) => {
+                                                        const next = new Map(overrideFields);
+                                                        next.set("spiceLevel", v);
+                                                        setOverrideFields(next);
+                                                        if (!spiceChanged) {
+                                                            const cf = new Set(checkedFields);
+                                                            if (
+                                                                v !==
+                                                                analysisResult.current.spiceLevel
+                                                            )
+                                                                cf.add("spiceLevel");
+                                                            else cf.delete("spiceLevel");
+                                                            setCheckedFields(cf);
+                                                        }
+                                                    }}
+                                                />
+                                            </Stack>
+                                        </Paper>
+                                    );
+                                })()}
+
+                                {/* Drinking level */}
+                                {(() => {
+                                    const drinkingChanged =
+                                        analysisResult.current.drinkingLevel !==
+                                        analysisResult.suggested.drinkingLevel;
+                                    const drinkingSelected =
+                                        overrideFields.get("drinkingLevel") ??
+                                        (drinkingChanged
+                                            ? analysisResult.suggested.drinkingLevel
+                                            : analysisResult.current.drinkingLevel);
+                                    return (
+                                        <Paper
+                                            withBorder
+                                            p="sm"
+                                            style={{
+                                                opacity:
+                                                    drinkingChanged ||
+                                                    checkedFields.has("drinkingLevel")
+                                                        ? 1
+                                                        : 0.45,
+                                            }}
+                                        >
+                                            <Stack gap={6}>
+                                                <Checkbox
+                                                    checked={checkedFields.has("drinkingLevel")}
+                                                    onChange={(e) => {
+                                                        const next = new Set(checkedFields);
+                                                        if (e.currentTarget.checked)
+                                                            next.add("drinkingLevel");
+                                                        else next.delete("drinkingLevel");
+                                                        setCheckedFields(next);
+                                                    }}
+                                                    label={
+                                                        <Text size="sm" fw={500}>
+                                                            Drinking level
+                                                        </Text>
+                                                    }
+                                                />
+                                                <LevelPicker
+                                                    levels={DRINKING_LEVELS.levels}
+                                                    selected={drinkingSelected}
+                                                    suggested={
+                                                        analysisResult.suggested.drinkingLevel
+                                                    }
+                                                    current={analysisResult.current.drinkingLevel}
+                                                    color="blue"
+                                                    onChange={(v) => {
+                                                        const next = new Map(overrideFields);
+                                                        next.set("drinkingLevel", v);
+                                                        setOverrideFields(next);
+                                                        if (!drinkingChanged) {
+                                                            const cf = new Set(checkedFields);
+                                                            if (
+                                                                v !==
+                                                                analysisResult.current.drinkingLevel
+                                                            )
+                                                                cf.add("drinkingLevel");
+                                                            else cf.delete("drinkingLevel");
+                                                            setCheckedFields(cf);
+                                                        }
+                                                    }}
+                                                />
+                                            </Stack>
+                                        </Paper>
+                                    );
+                                })()}
+
+                                {/* Game tags */}
+                                {[...analysisResult.current.gameTagIds].sort().join(",") !==
+                                [...analysisResult.suggested.gameTagIds].sort().join(",") ? (
+                                    <Paper withBorder p="sm">
+                                        <Checkbox
+                                            checked={checkedFields.has("gameTagIds")}
+                                            onChange={(e) => {
+                                                const next = new Set(checkedFields);
+                                                if (e.currentTarget.checked) next.add("gameTagIds");
+                                                else next.delete("gameTagIds");
+                                                setCheckedFields(next);
+                                            }}
+                                            label={
+                                                <Stack gap={4}>
+                                                    <Text size="sm" fw={500}>
+                                                        Game tags
+                                                    </Text>
+                                                    <Group gap={4}>
+                                                        {analysisResult.current.gameTagIds
+                                                            .length === 0 ? (
+                                                            <Text size="xs" c="dimmed">
+                                                                none
+                                                            </Text>
+                                                        ) : (
+                                                            analysisResult.current.gameTagIds.map(
+                                                                (id) => (
+                                                                    <Badge
+                                                                        key={id}
+                                                                        size="xs"
+                                                                        color="gray"
+                                                                        variant="outline"
+                                                                    >
+                                                                        {analysisResult.gameLookup[
+                                                                            id
+                                                                        ] ?? id}
+                                                                    </Badge>
+                                                                )
+                                                            )
+                                                        )}
+                                                        <Text size="xs" c="dimmed">
+                                                            →
+                                                        </Text>
+                                                        {analysisResult.suggested.gameTagIds
+                                                            .length === 0 ? (
+                                                            <Text size="xs" c="dimmed">
+                                                                none
+                                                            </Text>
+                                                        ) : (
+                                                            analysisResult.suggested.gameTagIds.map(
+                                                                (id) => (
+                                                                    <Badge
+                                                                        key={id}
+                                                                        size="xs"
+                                                                        color="violet"
+                                                                        variant="light"
+                                                                    >
+                                                                        {analysisResult.gameLookup[
+                                                                            id
+                                                                        ] ?? id}
+                                                                    </Badge>
+                                                                )
+                                                            )
+                                                        )}
+                                                    </Group>
+                                                </Stack>
+                                            }
+                                        />
+                                    </Paper>
+                                ) : (
+                                    <Paper withBorder p="sm" style={{ opacity: 0.45 }}>
+                                        <Group gap="xs" align="flex-start">
+                                            <Text size="sm" c="dimmed" w={20} mt={2}>
+                                                —
+                                            </Text>
                                             <Stack gap={4}>
-                                                <Text size="sm" fw={500}>Game tags</Text>
+                                                <Text size="sm" fw={500} c="dimmed">
+                                                    Game tags
+                                                </Text>
                                                 <Group gap={4}>
-                                                    {analysisResult.current.gameTagIds.length === 0
-                                                        ? <Text size="xs" c="dimmed">none</Text>
-                                                        : analysisResult.current.gameTagIds.map((id) => (
-                                                            <Badge key={id} size="xs" color="gray" variant="outline">
-                                                                {analysisResult.gameLookup[id] ?? id}
-                                                            </Badge>
-                                                        ))
-                                                    }
-                                                    <Text size="xs" c="dimmed">→</Text>
-                                                    {analysisResult.suggested.gameTagIds.length === 0
-                                                        ? <Text size="xs" c="dimmed">none</Text>
-                                                        : analysisResult.suggested.gameTagIds.map((id) => (
-                                                            <Badge key={id} size="xs" color="violet" variant="light">
-                                                                {analysisResult.gameLookup[id] ?? id}
-                                                            </Badge>
-                                                        ))
-                                                    }
+                                                    {analysisResult.current.gameTagIds.length ===
+                                                    0 ? (
+                                                        <Text size="xs" c="dimmed">
+                                                            none
+                                                        </Text>
+                                                    ) : (
+                                                        analysisResult.current.gameTagIds.map(
+                                                            (id) => (
+                                                                <Badge
+                                                                    key={id}
+                                                                    size="xs"
+                                                                    color="gray"
+                                                                    variant="outline"
+                                                                >
+                                                                    {analysisResult.gameLookup[
+                                                                        id
+                                                                    ] ?? id}
+                                                                </Badge>
+                                                            )
+                                                        )
+                                                    )}
                                                 </Group>
                                             </Stack>
-                                        }
-                                    />
-                                </Paper>
-                            )}
+                                        </Group>
+                                    </Paper>
+                                )}
 
-                            {[...analysisResult.current.requirementElementIds].sort().join(",") !==
-                                [...analysisResult.suggested.requirementElementIds].sort().join(",") && (
-                                <Paper withBorder p="sm">
-                                    <Checkbox
-                                        checked={checkedFields.has("requirementElementIds")}
-                                        onChange={(e) => {
-                                            const next = new Set(checkedFields);
-                                            if (e.currentTarget.checked) next.add("requirementElementIds");
-                                            else next.delete("requirementElementIds");
-                                            setCheckedFields(next);
-                                        }}
-                                        label={
+                                {/* Requirements */}
+                                {[...analysisResult.current.requirementElementIds]
+                                    .sort()
+                                    .join(",") !==
+                                [...analysisResult.suggested.requirementElementIds]
+                                    .sort()
+                                    .join(",") ? (
+                                    <Paper withBorder p="sm">
+                                        <Checkbox
+                                            checked={checkedFields.has("requirementElementIds")}
+                                            onChange={(e) => {
+                                                const next = new Set(checkedFields);
+                                                if (e.currentTarget.checked)
+                                                    next.add("requirementElementIds");
+                                                else next.delete("requirementElementIds");
+                                                setCheckedFields(next);
+                                            }}
+                                            label={
+                                                <Stack gap={4}>
+                                                    <Text size="sm" fw={500}>
+                                                        Requirements
+                                                    </Text>
+                                                    <Group gap={4}>
+                                                        {analysisResult.current
+                                                            .requirementElementIds.length === 0 ? (
+                                                            <Text size="xs" c="dimmed">
+                                                                none
+                                                            </Text>
+                                                        ) : (
+                                                            analysisResult.current.requirementElementIds.map(
+                                                                (id) => (
+                                                                    <Badge
+                                                                        key={id}
+                                                                        size="xs"
+                                                                        color="gray"
+                                                                        variant="outline"
+                                                                    >
+                                                                        {analysisResult
+                                                                            .elementLookup[id] ??
+                                                                            id}
+                                                                    </Badge>
+                                                                )
+                                                            )
+                                                        )}
+                                                        <Text size="xs" c="dimmed">
+                                                            →
+                                                        </Text>
+                                                        {analysisResult.suggested
+                                                            .requirementElementIds.length === 0 ? (
+                                                            <Text size="xs" c="dimmed">
+                                                                none
+                                                            </Text>
+                                                        ) : (
+                                                            analysisResult.suggested.requirementElementIds.map(
+                                                                (id) => (
+                                                                    <Badge
+                                                                        key={id}
+                                                                        size="xs"
+                                                                        color="green"
+                                                                        variant="light"
+                                                                    >
+                                                                        {analysisResult
+                                                                            .elementLookup[id] ??
+                                                                            id}
+                                                                    </Badge>
+                                                                )
+                                                            )
+                                                        )}
+                                                    </Group>
+                                                </Stack>
+                                            }
+                                        />
+                                    </Paper>
+                                ) : (
+                                    <Paper withBorder p="sm" style={{ opacity: 0.45 }}>
+                                        <Group gap="xs" align="flex-start">
+                                            <Text size="sm" c="dimmed" w={20} mt={2}>
+                                                —
+                                            </Text>
                                             <Stack gap={4}>
-                                                <Text size="sm" fw={500}>Requirements</Text>
+                                                <Text size="sm" fw={500} c="dimmed">
+                                                    Requirements
+                                                </Text>
                                                 <Group gap={4}>
-                                                    {analysisResult.current.requirementElementIds.length === 0
-                                                        ? <Text size="xs" c="dimmed">none</Text>
-                                                        : analysisResult.current.requirementElementIds.map((id) => (
-                                                            <Badge key={id} size="xs" color="gray" variant="outline">
-                                                                {analysisResult.elementLookup[id] ?? id}
-                                                            </Badge>
-                                                        ))
-                                                    }
-                                                    <Text size="xs" c="dimmed">→</Text>
-                                                    {analysisResult.suggested.requirementElementIds.length === 0
-                                                        ? <Text size="xs" c="dimmed">none</Text>
-                                                        : analysisResult.suggested.requirementElementIds.map((id) => (
-                                                            <Badge key={id} size="xs" color="green" variant="light">
-                                                                {analysisResult.elementLookup[id] ?? id}
-                                                            </Badge>
-                                                        ))
-                                                    }
+                                                    {analysisResult.current.requirementElementIds
+                                                        .length === 0 ? (
+                                                        <Text size="xs" c="dimmed">
+                                                            none
+                                                        </Text>
+                                                    ) : (
+                                                        analysisResult.current.requirementElementIds.map(
+                                                            (id) => (
+                                                                <Badge
+                                                                    key={id}
+                                                                    size="xs"
+                                                                    color="gray"
+                                                                    variant="outline"
+                                                                >
+                                                                    {analysisResult.elementLookup[
+                                                                        id
+                                                                    ] ?? id}
+                                                                </Badge>
+                                                            )
+                                                        )
+                                                    )}
                                                 </Group>
                                             </Stack>
-                                        }
-                                    />
-                                </Paper>
-                            )}
+                                        </Group>
+                                    </Paper>
+                                )}
+                            </Stack>
 
-                            <Group justify="flex-end" mt="xs">
-                                <Button variant="subtle" color="gray" onClick={() => setAnalysisOpen(false)}>
-                                    Cancel
-                                </Button>
+                            <Group justify="flex-end" mt="md">
                                 <Button
-                                    color="teal"
-                                    onClick={() => void applyAnalysis()}
-                                    loading={analysisApplying}
-                                    disabled={checkedFields.size === 0}
+                                    variant="subtle"
+                                    color="gray"
+                                    onClick={() => {
+                                        if (analysisResult?.changed) onDismissed(card.id);
+                                        setAnalysisOpen(false);
+                                    }}
                                 >
-                                    Apply selected
+                                    {analysisResult.changed ? "Cancel" : "Close"}
                                 </Button>
+                                {analysisResult.changed && (
+                                    <Button
+                                        color="teal"
+                                        onClick={() => void applyAnalysis()}
+                                        loading={analysisApplying}
+                                        disabled={checkedFields.size === 0}
+                                    >
+                                        Apply selected
+                                    </Button>
+                                )}
                             </Group>
-                        </Stack>
+                        </>
                     )}
 
                     {!analysisLoading && !analysisResult && !analysisError && (
@@ -762,13 +1033,17 @@ function CardDrawer({
                         </Center>
                     )}
 
-                    {(analysisResult && !analysisResult.changed) || analysisError ? (
+                    {analysisError && (
                         <Group justify="flex-end" mt="md">
-                            <Button variant="subtle" color="gray" onClick={() => setAnalysisOpen(false)}>
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                onClick={() => setAnalysisOpen(false)}
+                            >
                                 Close
                             </Button>
                         </Group>
-                    ) : null}
+                    )}
                 </Box>
             </Modal>
 
@@ -815,19 +1090,28 @@ function CardDrawer({
                             }
                             withArrow
                         >
-                            <Badge color={card.cardType === "reparations" ? "red" : "blue"} size="sm">
+                            <Badge
+                                color={card.cardType === "reparations" ? "red" : "blue"}
+                                size="sm"
+                            >
                                 {card.cardType}
                             </Badge>
                         </Tooltip>
                         {card.isGlobal && (
-                            <Tooltip label="In the global pool — eligible for all sessions" withArrow>
+                            <Tooltip
+                                label="In the global pool — eligible for all sessions"
+                                withArrow
+                            >
                                 <Badge size="sm" color="violet">
                                     global
                                 </Badge>
                             </Tooltip>
                         )}
                         {card.pendingGlobal && (
-                            <Tooltip label="Nominated for global pool — pending admin review" withArrow>
+                            <Tooltip
+                                label="Nominated for global pool — pending admin review"
+                                withArrow
+                            >
                                 <Badge size="sm" color="orange">
                                     nominated
                                 </Badge>
@@ -841,7 +1125,10 @@ function CardDrawer({
                             </Tooltip>
                         )}
                         {cv.isGameChanger && (
-                            <Tooltip label="Game changer — alters gameplay rules mid-session" withArrow>
+                            <Tooltip
+                                label="Game changer — alters gameplay rules mid-session"
+                                withArrow
+                            >
                                 <Badge size="sm" color="yellow">
                                     game changer
                                 </Badge>
@@ -852,15 +1139,25 @@ function CardDrawer({
 
                 {/* Levels row — always shown */}
                 <Group gap="md">
-                    <Tooltip label={drinkingLevelInfo.tooltip || `Drinking: ${drinkingLevelInfo.label}`} withArrow>
+                    <Tooltip
+                        label={drinkingLevelInfo.tooltip || `Drinking: ${drinkingLevelInfo.label}`}
+                        withArrow
+                    >
                         <Group gap={4}>
-                            <Text size="xs" c="dimmed">🍺</Text>
+                            <Text size="xs" c="dimmed">
+                                🍺
+                            </Text>
                             <Text size="xs">{drinkingLevelInfo.label}</Text>
                         </Group>
                     </Tooltip>
-                    <Tooltip label={spiceLevelInfo.tooltip || `Spice: ${spiceLevelInfo.label}`} withArrow>
+                    <Tooltip
+                        label={spiceLevelInfo.tooltip || `Spice: ${spiceLevelInfo.label}`}
+                        withArrow
+                    >
                         <Group gap={4}>
-                            <Text size="xs" c="dimmed">🌶️</Text>
+                            <Text size="xs" c="dimmed">
+                                🌶️
+                            </Text>
                             <Text size="xs">{spiceLevelInfo.label}</Text>
                         </Group>
                     </Tooltip>
@@ -878,40 +1175,63 @@ function CardDrawer({
                         </Text>
                     </Stack>
                 ) : (
-                    <Text size="xs" c="dimmed" fs="italic">No hidden instructions</Text>
+                    <Text size="xs" c="dimmed" fs="italic">
+                        No hidden instructions
+                    </Text>
                 )}
 
                 <Group gap="xs" wrap="wrap">
-                    <Text size="xs" c="dimmed">Games:</Text>
-                    {cv.gameTags.length > 0
-                        ? cv.gameTags.map((g) => (
+                    <Text size="xs" c="dimmed">
+                        Games:
+                    </Text>
+                    {cv.gameTags.length > 0 ? (
+                        cv.gameTags.map((g) => (
                             <Badge key={g.id} size="xs" variant="outline">
                                 {g.name}
                             </Badge>
                         ))
-                        : <Text size="xs" c="dimmed">none</Text>
-                    }
+                    ) : (
+                        <Text size="xs" c="dimmed">
+                            none
+                        </Text>
+                    )}
                 </Group>
 
                 <Group gap="xs" wrap="wrap">
-                    <Text size="xs" c="dimmed">Requires:</Text>
-                    {cv.requirements.length > 0
-                        ? cv.requirements.map((r) => (
+                    <Text size="xs" c="dimmed">
+                        Requires:
+                    </Text>
+                    {cv.requirements.length > 0 ? (
+                        cv.requirements.map((r) => (
                             <Badge key={r.id} size="xs" variant="dot">
                                 {r.title}
                             </Badge>
                         ))
-                        : <Text size="xs" c="dimmed">nothing</Text>
-                    }
+                    ) : (
+                        <Text size="xs" c="dimmed">
+                            nothing
+                        </Text>
+                    )}
                 </Group>
 
                 <Text size="xs" c="dimmed">
                     Owner: {card.ownerDisplayName} · Author: {cv.authorDisplayName} ·{" "}
                     {formatDate(card.createdAt)}
                     {card.netVotes !== 0 && (
-                        <> · <span style={{ color: card.netVotes > 0 ? "var(--mantine-color-teal-6)" : "var(--mantine-color-red-6)" }}>
-                            {card.netVotes > 0 ? `+${card.netVotes}` : card.netVotes} votes
-                        </span></>
+                        <>
+                            {" "}
+                            ·{" "}
+                            <span
+                                style={{
+                                    color:
+                                        card.netVotes > 0
+                                            ? "var(--mantine-color-teal-6)"
+                                            : "var(--mantine-color-red-6)",
+                                }}
+                            >
+                                {card.netVotes > 0 ? `+${card.netVotes}` : card.netVotes} votes
+                            </span>
+                        </>
                     )}
                 </Text>
 
@@ -922,7 +1242,12 @@ function CardDrawer({
                     <Button size="xs" variant="outline" onClick={startEdit}>
                         Edit
                     </Button>
-                    <Button size="xs" variant="outline" color="teal" onClick={() => void openAnalysis()}>
+                    <Button
+                        size="xs"
+                        variant="outline"
+                        color="teal"
+                        onClick={() => void openAnalysis()}
+                    >
                         Analyze with AI
                     </Button>
                 </Group>
@@ -1022,11 +1347,26 @@ export default function CardsPage() {
     const [selected, setSelected] = useState<Card | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
-    const [analyzedVersionIdsArr, setAnalyzedVersionIdsArr] = useSessionStorage<string[]>({
-        key: "admin-analyzed-version-ids",
+    const [analyzedCardIdsArr, setAnalyzedCardIdsArr] = useSessionStorage<string[]>({
+        key: "admin-analyzed-card-ids",
         defaultValue: [],
     });
-    const analyzedVersionIds = new Set(analyzedVersionIdsArr);
+    const [acceptedCardIdsArr, setAcceptedCardIdsArr] = useSessionStorage<string[]>({
+        key: "admin-accepted-card-ids",
+        defaultValue: [],
+    });
+    const [dismissedCardIdsArr, setDismissedCardIdsArr] = useSessionStorage<string[]>({
+        key: "admin-dismissed-card-ids",
+        defaultValue: [],
+    });
+    const [noChangeCardIdsArr, setNoChangeCardIdsArr] = useSessionStorage<string[]>({
+        key: "admin-nochange-card-ids",
+        defaultValue: [],
+    });
+    const analyzedCardIds = new Set(analyzedCardIdsArr);
+    const acceptedCardIds = new Set(acceptedCardIdsArr);
+    const dismissedCardIds = new Set(dismissedCardIdsArr);
+    const noChangeCardIds = new Set(noChangeCardIdsArr);
     const [isPending, startTransition] = useTransition();
 
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -1147,13 +1487,32 @@ export default function CardsPage() {
                             nominated
                         </Badge>
                     )}
-                    {analyzedVersionIds.has(card.currentVersionId) && (
-                        <Tooltip label="AI analysis run this session" withArrow>
-                            <Badge size="xs" color="teal" variant="light">
-                                AI
-                            </Badge>
-                        </Tooltip>
-                    )}
+                    {analyzedCardIds.has(card.id) &&
+                        (acceptedCardIds.has(card.id) ? (
+                            <Tooltip label="AI changes applied" withArrow>
+                                <Badge size="xs" color="green">
+                                    AI ✓
+                                </Badge>
+                            </Tooltip>
+                        ) : dismissedCardIds.has(card.id) ? (
+                            <Tooltip label="AI changes not applied" withArrow>
+                                <Badge size="xs" color="gray" variant="outline">
+                                    AI ✗
+                                </Badge>
+                            </Tooltip>
+                        ) : noChangeCardIds.has(card.id) ? (
+                            <Tooltip label="AI found no changes needed" withArrow>
+                                <Badge size="xs" color="teal" variant="light">
+                                    AI ✓
+                                </Badge>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip label="AI analysis run — decision pending" withArrow>
+                                <Badge size="xs" color="yellow" variant="light">
+                                    AI
+                                </Badge>
+                            </Tooltip>
+                        ))}
                 </Group>
             </Table.Td>
             <Table.Td>
@@ -1382,7 +1741,18 @@ export default function CardsPage() {
                         card={selected}
                         onClose={() => setSelected(null)}
                         onChanged={handleCardChanged}
-                        onAnalyzed={(ids) => setAnalyzedVersionIdsArr((prev) => [...new Set([...prev, ...ids])])}
+                        onAnalyzed={(ids) =>
+                            setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                        }
+                        onAccepted={(id) =>
+                            setAcceptedCardIdsArr((prev) => [...new Set([...prev, id])])
+                        }
+                        onDismissed={(id) =>
+                            setDismissedCardIdsArr((prev) => [...new Set([...prev, id])])
+                        }
+                        onNoChange={(id) =>
+                            setNoChangeCardIdsArr((prev) => [...new Set([...prev, id])])
+                        }
                         apiBaseUrl={apiBaseUrl}
                     />
                 )}
@@ -1393,13 +1763,22 @@ export default function CardsPage() {
                 onClose={() => setBulkAnalysisOpen(false)}
                 cards={cards.filter((c) => selectedIds.has(c.id))}
                 onCardsChanged={(updated) => {
-                    setCards((prev) =>
-                        prev.map((c) => updated.find((u) => u.id === c.id) ?? c)
-                    );
+                    setCards((prev) => prev.map((c) => updated.find((u) => u.id === c.id) ?? c));
                     setSelectedIds(new Set());
                     setBulkAnalysisOpen(false);
                 }}
-                onAnalyzed={(ids) => setAnalyzedVersionIdsArr((prev) => [...new Set([...prev, ...ids])])}
+                onAnalyzed={(ids) =>
+                    setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                }
+                onNoChange={(ids) =>
+                    setNoChangeCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                }
+                onAccepted={(ids) =>
+                    setAcceptedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                }
+                onDismissed={(ids) =>
+                    setDismissedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                }
             />
         </>
     );

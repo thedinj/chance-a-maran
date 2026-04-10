@@ -95,6 +95,8 @@ export const CardAnalysisResultSchema = z.object({
     title: z.string(),
     current: CardAnalysisSuggestionSchema,
     suggested: CardAnalysisSuggestionSchema,
+    /** Free-text explanation from AI for why it made these recommendations. */
+    justification: z.string(),
     /** true if any field differs between current and suggested */
     changed: z.boolean(),
     /** set if the OpenAI call failed for this card */

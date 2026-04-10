@@ -57,7 +57,7 @@ export const DRINKING_LEVELS: LevelScale = {
         {
             value: 1,
             label: "Sip",
-            emoji: "🍺",
+            emoji: "🥂",
             tooltip: "Sip — a sip or taste",
             cardDescription: "A sip or small taste. Not a full serving.",
             filterDescription: "Sips only — nothing stronger than a taste",
@@ -67,7 +67,7 @@ export const DRINKING_LEVELS: LevelScale = {
         {
             value: 2,
             label: "A drink",
-            emoji: "🍺🍺",
+            emoji: "🍺",
             tooltip: "A drink — a shot or full glass",
             cardDescription: "One drink — a shot, a full can, or finish your glass.",
             filterDescription: "Up to a shot or full drink per card",
@@ -77,10 +77,9 @@ export const DRINKING_LEVELS: LevelScale = {
         {
             value: 3,
             label: "Multiple",
-            emoji: "🍺🍺🍺",
+            emoji: "🍻",
             tooltip: "Multiple — several drinks",
-            cardDescription:
-                "Multiple drinks — several shots, a waterfall, or sustained drinking.",
+            cardDescription: "Multiple drinks — several shots, a waterfall, or sustained drinking.",
             filterDescription: "No limit — multiple-drink cards included",
             llmDescription:
                 "Multiple full drinks — two or more shots, a waterfall, or any mechanic that causes several people to take full drinks. Choose this when the cumulative alcohol is clearly more than one drink.",
@@ -106,7 +105,7 @@ export const SPICE_LEVELS: LevelScale = {
         {
             value: 1,
             label: "Mild",
-            emoji: "🌶️",
+            emoji: "😉",
             tooltip: "Mild — light innuendo, mild language",
             cardDescription: "Light innuendo or mild language. Nothing explicit.",
             filterDescription: "Up to mild innuendo and light language",
@@ -115,23 +114,23 @@ export const SPICE_LEVELS: LevelScale = {
         },
         {
             value: 2,
-            label: "Edgy",
-            emoji: "🌶️🌶️",
-            tooltip: "Edgy — strong language, more mature themes",
+            label: "Spicy",
+            emoji: "🌶️",
+            tooltip: "Spicy — strong language, more mature themes",
             cardDescription: "Strong language and more mature themes.",
             filterDescription: "Up to strong language and mature themes",
             llmDescription:
-                "Strong or crude language, clearly sexual themes, or mature humor — but not graphically explicit. Think R-rated rather than X-rated.",
+                "Strong or crude language, clearly sexual themes, or mature humor — but still non-explicit. Think PG-13 to mild R, not hard-R or graphic.",
         },
         {
             value: 3,
-            label: "Spicy",
-            emoji: "🌶️🌶️🌶️",
-            tooltip: "Spicy — very adult, nothing held back",
-            cardDescription: "Very adult content — nothing held back.",
-            filterDescription: "No limit — all content levels included",
+            label: "Dark",
+            emoji: "😈",
+            tooltip: "Dark — very racy and explicit",
+            cardDescription: "Very racy, explicit adult content.",
+            filterDescription: "No limit — explicit/racy cards included",
             llmDescription:
-                "Explicitly sexual or extremely graphic adult content. Nothing held back. Reserve for cards that are unambiguously X-rated.",
+                "Very racy and explicitly sexual content, highly graphic adult references, lots of cursing/swearing, or racist jokes/innuendo. Reserve for cards that are clearly hard-R or X-rated, not PG-13 or mild R.",
         },
     ],
 };

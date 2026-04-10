@@ -1,5 +1,10 @@
 import OpenAI from "openai";
-import type { Game, RequirementElement, CardAnalysisSuggestion, CardAnalysisResult } from "@chance/core";
+import type {
+    Game,
+    RequirementElement,
+    CardAnalysisSuggestion,
+    CardAnalysisResult,
+} from "@chance/core";
 import { DRINKING_LEVELS, SPICE_LEVELS } from "@chance/core";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,14 +60,19 @@ Respond ONLY with a valid JSON object in this exact shape:
   "spiceLevel": <integer 0–3>,
   "drinkingLevel": <integer 0–3>,
   "gameTagIds": [<string>, ...],
-  "requirementElementIds": [<string>, ...]
+  "requirementElementIds": [<string>, ...],
+  "justification": <string>
 }
 
 Rules:
 - Use only IDs from the provided lists for gameTagIds and requirementElementIds.
 - If the card doesn't fit any available game, return an empty array for gameTagIds.
 - If the card requires no special props or player conditions, return an empty array for requirementElementIds.
-- Be conservative with spice and drinking levels — only escalate if the content clearly warrants it.
+- Read ALL provided text fields (title, description, hidden instructions) before rating.
+- Profanity/innuendo rule: if any swear word, profanity, or sexually suggestive/innuendo language appears in any field (especially the title), spiceLevel MUST be at LEAST 1 (never 0/Clean). Level 0 is strictly family-friendly content. If your own justification acknowledges innuendo or suggestive language, spiceLevel CANNOT be 0.
+- Strong profanity, slurs, or aggressively vulgar language should usually be spiceLevel 3 or 2.
+- Any racial content, even innuendo, is automatically spiceLevel 3.
+- justification must be short, plain-language, and reference the card content that drove your choices.
 - Do not include any text outside the JSON object.`;
 }
 
@@ -79,19 +89,24 @@ function validateAndClamp(
     const drinkingLevel = Math.max(0, Math.min(3, Math.round(Number(obj.drinkingLevel) || 0)));
 
     const gameTagIds = Array.isArray(obj.gameTagIds)
-        ? (obj.gameTagIds as unknown[])
-              .filter((id): id is string => typeof id === "string" && availableGameIds.has(id))
+        ? (obj.gameTagIds as unknown[]).filter(
+              (id): id is string => typeof id === "string" && availableGameIds.has(id)
+          )
         : [];
 
     const requirementElementIds = Array.isArray(obj.requirementElementIds)
-        ? (obj.requirementElementIds as unknown[])
-              .filter(
-                  (id): id is string =>
-                      typeof id === "string" && availableElementIds.has(id)
-              )
+        ? (obj.requirementElementIds as unknown[]).filter(
+              (id): id is string => typeof id === "string" && availableElementIds.has(id)
+          )
         : [];
 
     return { spiceLevel, drinkingLevel, gameTagIds, requirementElementIds };
+}
+
+function extractJustification(raw: unknown): string {
+    const obj = raw as Record<string, unknown>;
+    const justification = typeof obj.justification === "string" ? obj.justification.trim() : "";
+    return justification || "No justification provided by the model.";
 }
 
 function hasDiff(current: CardAnalysisSuggestion, suggested: CardAnalysisSuggestion): boolean {
@@ -147,12 +162,14 @@ async function _analyzeOne(
         const rawText = response.choices[0]?.message?.content ?? "{}";
         const parsed: unknown = JSON.parse(rawText);
         const suggested = validateAndClamp(parsed, availableGameIds, availableElementIds);
+        const justification = extractJustification(parsed);
 
         return {
             cardId: card.cardId,
             title: card.title,
             current,
             suggested,
+            justification,
             changed: hasDiff(current, suggested),
             gameLookup,
             elementLookup,
@@ -164,6 +181,7 @@ async function _analyzeOne(
             title: card.title,
             current,
             suggested: current,
+            justification: "AI analysis failed before a justification could be generated.",
             changed: false,
             error: message,
             gameLookup,

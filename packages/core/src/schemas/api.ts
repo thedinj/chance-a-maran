@@ -155,7 +155,7 @@ export const SubmitCardRequestSchema = z.object({
     title: z.string().min(1, "Title is required.").max(MAX_CARD_TITLE_LENGTH),
     description: z.string().min(1, "Description is required.").max(MAX_CARD_DESCRIPTION_LENGTH),
     hiddenInstructions: z.string().max(MAX_CARD_DESCRIPTION_LENGTH).nullable(),
-    imageId: z.string().min(1, "A card image is required."),
+    imageId: z.string().min(1).nullable(),
     /** Vertical crop offset for the card image. 0 = top, 0.5 = center, 1 = bottom. Optional — defaults to 0.5 if omitted. */
     imageYOffset: z.number().min(0).max(1).optional(),
     drinkingLevel: z.number().int().min(0).max(3),
