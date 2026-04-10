@@ -411,6 +411,11 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-body)",
         fontWeight: 500,
         color: "var(--color-text-primary)",
+        flex: 1,
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
     },
     drawBadges: {
         display: "flex",

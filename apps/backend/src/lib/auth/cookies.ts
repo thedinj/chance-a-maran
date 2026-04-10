@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { REFRESH_TOKEN_TTL_S } from "@chance/core";
+
+const REFRESH_TOKEN_TTL = parseInt(process.env.REFRESH_TOKEN_TTL_SECONDS || "2592000"); // 30 days
 
 const COOKIE_NAME = "refresh_token";
 
@@ -11,7 +12,7 @@ export function setRefreshCookie(response: NextResponse, rawToken: string): void
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/api/auth",
-        maxAge: REFRESH_TOKEN_TTL_S,
+        maxAge: REFRESH_TOKEN_TTL,
     });
 }
 

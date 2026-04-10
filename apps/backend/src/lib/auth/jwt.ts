@@ -1,19 +1,14 @@
 import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 import { AuthenticationError } from "@chance/core";
-import { ACCESS_TOKEN_TTL_S, REFRESH_TOKEN_TTL_S } from "@chance/core";
 import type { JwtPayload } from "./types";
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
 const JWT_ISSUER = process.env.JWT_ISSUER || "chance";
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || "chance-api";
 
-const ACCESS_TOKEN_TTL = parseInt(
-    process.env.ACCESS_TOKEN_TTL_SECONDS || String(ACCESS_TOKEN_TTL_S)
-);
-const REFRESH_TOKEN_TTL = parseInt(
-    process.env.REFRESH_TOKEN_TTL_SECONDS || String(REFRESH_TOKEN_TTL_S)
-);
+const ACCESS_TOKEN_TTL = parseInt(process.env.ACCESS_TOKEN_TTL_SECONDS || "900");   // 15 minutes
+const REFRESH_TOKEN_TTL = parseInt(process.env.REFRESH_TOKEN_TTL_SECONDS || "2592000"); // 30 days
 
 export function generateAccessToken(payload: {
     userId: string;

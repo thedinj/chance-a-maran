@@ -97,7 +97,6 @@ Single source of truth for:
 - Migrations are timestamp-named files in `lib/db/migrations/`, applied in order by the migration runner.
 - `withAuth` HOF wraps protected routes; `withAdmin` additionally checks `users.is_admin`.
 - Every API response uses the `{ ok, data/error, serverTimestamp }` envelope — no exceptions.
-- All `POST`/`PATCH`/`DELETE` endpoints support `Idempotency-Key` header (24h TTL, stored in `idempotency_cache` table). Return cached response with `X-Idempotent-Replay: true` on duplicate.
 - Mutations return the full updated entity so the client can reconcile in one step.
 - `GET /api/health` — no auth, no DB access; pure liveness probe.
 

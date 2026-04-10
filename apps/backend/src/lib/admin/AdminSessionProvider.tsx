@@ -13,6 +13,19 @@ const STORAGE_ACCESS_TOKEN_KEY = "admin_access_token";
 const STORAGE_REFRESH_TOKEN_KEY = "admin_refresh_token";
 const STORAGE_USER_KEY = "admin_user";
 
+/**
+ * Decodes the JWT exp claim client-side (no signature check — server validates that).
+ * Returns true if the token is missing, malformed, or expires within the buffer window.
+ */
+function isTokenExpired(token: string, bufferMs = 60_000): boolean {
+    try {
+        const payload = JSON.parse(atob(token.split(".")[1])) as { exp?: number };
+        return !payload.exp || Date.now() >= payload.exp * 1000 - bufferMs;
+    } catch {
+        return true;
+    }
+}
+
 const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -92,8 +105,25 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
     useEffect(() => {
         const checkSession = async () => {
             try {
+                const storedAccessToken = localStorage.getItem(STORAGE_ACCESS_TOKEN_KEY);
                 const storedRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
+                const storedUserRaw = localStorage.getItem(STORAGE_USER_KEY);
 
+                // If the access token is still valid, restore state directly without
+                // hitting the refresh endpoint. This avoids rotating the refresh token
+                // on every page load, which breaks with multiple tabs or React Strict Mode.
+                if (storedAccessToken && storedRefreshToken && storedUserRaw && !isTokenExpired(storedAccessToken)) {
+                    const storedUser = JSON.parse(storedUserRaw) as User;
+                    if (storedUser.isAdmin) {
+                        setAccessToken(storedAccessToken);
+                        setRefreshToken(storedRefreshToken);
+                        setUser(storedUser);
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+
+                // Access token missing or expired — exchange the refresh token
                 if (storedRefreshToken) {
                     const success = await refreshAccessToken(storedRefreshToken);
                     if (success) {
@@ -158,9 +188,14 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
 
     const tryRefreshToken = useCallback(async (): Promise<boolean> => {
         const token = refreshToken ?? localStorage.getItem(STORAGE_REFRESH_TOKEN_KEY);
-        if (!token) return false;
-        return await refreshAccessToken(token);
-    }, [refreshToken, refreshAccessToken]);
+        if (!token) {
+            clearSession();
+            return false;
+        }
+        const success = await refreshAccessToken(token);
+        if (!success) clearSession();
+        return success;
+    }, [refreshToken, refreshAccessToken, clearSession]);
 
     const value = useMemo(
         () => ({

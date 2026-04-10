@@ -1154,6 +1154,7 @@ function CardDetailOverlay({
     const cv = event.cardVersion;
     const isDrawer = event.playerId === activePlayerId;
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
+    const [votePending, setVotePending] = useState(false);
     const [resolvePending, setResolvePending] = useState(false);
     const [showTransferPicker, setShowTransferPicker] = useState(false);
     // confirmTransfer: holds the chosen target until user confirms in the dialog
@@ -1177,10 +1178,13 @@ function CardDetailOverlay({
         allPlayers.find((p) => p.id === pendingTransfer?.toPlayerId)?.displayName ?? "player";
 
     async function handleVote(dir: "up" | "down") {
+        if (votePending) return;
         const next = voteDir === dir ? null : dir;
         setVoteDir(next);
+        setVotePending(true);
         hapticLight();
         await onVote(cv.cardId, next);
+        setVotePending(false);
     }
 
     async function handleResolve() {
@@ -1320,7 +1324,7 @@ function CardDetailOverlay({
             {/* Action bar */}
             <div style={styles.actionBar} onClick={(e) => e.stopPropagation()}>
                 {/* Vote up */}
-                <button style={styles.actionBtn} onClick={() => handleVote("up")}>
+                <button style={styles.actionBtn} onClick={() => handleVote("up")} disabled={votePending}>
                     <span
                         style={{
                             ...styles.actionIcon,
@@ -1336,7 +1340,7 @@ function CardDetailOverlay({
                 </button>
 
                 {/* Vote down */}
-                <button style={styles.actionBtn} onClick={() => handleVote("down")}>
+                <button style={styles.actionBtn} onClick={() => handleVote("down")} disabled={votePending}>
                     <span
                         style={{
                             ...styles.actionIcon,

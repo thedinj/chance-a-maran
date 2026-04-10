@@ -74,6 +74,7 @@ export default function GameSettings() {
     const [elementsLoading, setElementsLoading] = useState(true);
     const [venueExpanded, setVenueExpanded] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [resetPendingId, setResetPendingId] = useState<string | null>(null);
 
     const {
         register,
@@ -92,8 +93,10 @@ export default function GameSettings() {
                 includeGlobalCards: session?.filterSettings.includeGlobalCards ?? true,
                 availableElementIds: session?.filterSettings.availableElementIds,
             },
-            // TODO: read from current player record once a getPlayer / updatePlayerSharing endpoint exists
-            cardSharing: "mine",
+            cardSharing:
+                (players.find((p) => p.userId === user?.id)?.cardSharing ?? "mine") as
+                    | "mine"
+                    | "none",
         },
     });
 
@@ -162,6 +165,14 @@ export default function GameSettings() {
                             addDrawEvent(event);
                         }
                     }
+                    // Server defaults cardSharing to "mine"; only update if the host chose "none"
+                    if (values.cardSharing !== "mine") {
+                        await apiClient.updatePlayerSettings(
+                            result.data.id,
+                            result.data.hostPlayerId,
+                            { cardSharing: values.cardSharing }
+                        );
+                    }
                     void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
                     history.replace(`/game/${result.data.id}`, { newSession: true });
                 } else {
@@ -175,6 +186,18 @@ export default function GameSettings() {
                     filterSettings: values.filterSettings,
                 });
                 if (result.ok) {
+                    const myPlayer = players.find((p) => p.userId === user?.id);
+                    if (myPlayer && values.cardSharing !== (myPlayer.cardSharing ?? "mine")) {
+                        const sharingResult = await apiClient.updatePlayerSettings(
+                            sessionId!,
+                            myPlayer.id,
+                            { cardSharing: values.cardSharing }
+                        );
+                        if (!sharingResult.ok) {
+                            setSubmitError(sharingResult.error.message);
+                            return;
+                        }
+                    }
                     updateSession(result.data);
                     void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
                     history.replace(`/game/${sessionId}`);
@@ -183,6 +206,13 @@ export default function GameSettings() {
                 }
             });
         }
+    }
+
+    async function handleResetToken(playerId: string) {
+        setResetPendingId(playerId);
+        const result = await apiClient.resetPlayerToken(sessionId!, playerId);
+        setResetPendingId(null);
+        if (!result.ok) setSubmitError(result.error.message);
     }
 
     function handleCancel() {
@@ -565,11 +595,12 @@ export default function GameSettings() {
                                             {player.userId === null ? (
                                                 <button
                                                     style={styles.dangerLink as React.CSSProperties}
-                                                    disabled={isPending}
-                                                    // TODO: wire to PATCH /api/sessions/:id/players/:playerId { resetToken: true }
-                                                    onClick={() => {}}
+                                                    disabled={isPending || resetPendingId === player.id}
+                                                    onClick={() => void handleResetToken(player.id)}
                                                 >
-                                                    Reset identity
+                                                    {resetPendingId === player.id
+                                                        ? "Resetting…"
+                                                        : "Reset identity"}
                                                 </button>
                                             ) : (
                                                 <span style={styles.registeredBadge}>

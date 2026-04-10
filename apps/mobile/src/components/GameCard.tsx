@@ -427,6 +427,7 @@ const styles: Record<string, React.CSSProperties> = {
 
     // Card front
     revealCard: {
+        containerType: "inline-size",
         background: "var(--color-surface)",
         clipPath:
             "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
@@ -437,7 +438,7 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-    },
+    } as React.CSSProperties,
     revealFrontFrame: {
         position: "absolute",
         inset: "12px",
@@ -474,10 +475,10 @@ const styles: Record<string, React.CSSProperties> = {
             "linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 90%, var(--color-accent-reparations) 10%) 0%, color-mix(in srgb, var(--color-surface) 94%, var(--color-accent-primary) 6%) 100%)",
     },
     revealCardContent: {
-        padding: "calc(var(--space-6) + var(--space-1))",
+        padding: "clamp(14px, 6cqi, 28px)",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-4)",
+        gap: "clamp(8px, 3cqi, 16px)",
         position: "relative",
         zIndex: 2,
         overflow: "hidden",
@@ -489,7 +490,7 @@ const styles: Record<string, React.CSSProperties> = {
     revealCardContentBody: {
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-4)",
+        gap: "clamp(8px, 3cqi, 16px)",
         position: "relative",
         zIndex: 1,
         minHeight: 0,
@@ -522,7 +523,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     revealImageEmblem: {
         fontFamily: "var(--font-display)",
-        fontSize: "clamp(44px, 12vw, 62px)",
+        fontSize: "clamp(36px, 11cqi, 58px)",
         fontWeight: 700,
         lineHeight: 1,
         letterSpacing: "-0.02em",
@@ -539,7 +540,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     revealHeroTitle: {
         fontFamily: "var(--font-display)",
-        fontSize: "clamp(34px, 9vw, 46px)",
+        fontSize: "clamp(26px, 9.5cqi, 44px)",
         fontWeight: 700,
         color: "var(--color-text-primary)",
         letterSpacing: "-0.025em",
@@ -569,11 +570,11 @@ const styles: Record<string, React.CSSProperties> = {
         WebkitOverflowScrolling: "touch",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-4)",
+        gap: "clamp(8px, 3cqi, 16px)",
     } as React.CSSProperties & { scrollbarWidth?: string; scrollbarColor?: string },
     revealDescription: {
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
+        fontSize: "clamp(13px, 3.5cqi, 15px)",
         color: "var(--color-text-primary)",
         lineHeight: 1.5,
         margin: 0,
@@ -609,7 +610,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     hiddenInstrText: {
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
+        fontSize: "clamp(13px, 3.5cqi, 15px)",
         color: "var(--color-text-secondary)",
         lineHeight: 1.5,
         margin: 0,

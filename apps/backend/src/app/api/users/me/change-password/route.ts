@@ -1,4 +1,4 @@
-import { AuthenticationError, AuthorizationError, NotFoundError } from "@chance/core";
+import { AuthenticationError, AuthorizationError, NotFoundError, ValidationError } from "@chance/core";
 import type { ChangePasswordRequest } from "@chance/core";
 import { compare, hash } from "bcryptjs";
 import { handleError, ok } from "@/lib/auth/response";
@@ -18,7 +18,7 @@ export const POST = withAuth(async (req) => {
 
         const body = (await req.json()) as Partial<ChangePasswordRequest>;
         if (!body.currentPassword || !body.newPassword) {
-            throw new AuthorizationError("currentPassword and newPassword are required");
+            throw new ValidationError("currentPassword and newPassword are required");
         }
 
         const user = userRepo.findById(req.auth.sub);

@@ -26,6 +26,7 @@ export default function MyCards() {
     // ── All Cards tab (admin) ─────────────────────────────────────────────────
     const [allCards, setAllCards] = useState<Card[]>([]);
     const [allLoading, setAllLoading] = useState(false);
+    const [allLoadError, setAllLoadError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("active");
 
@@ -52,12 +53,14 @@ export default function MyCards() {
     useEffect(() => {
         if (!user?.isAdmin || activeTab !== "all") return;
         setAllLoading(true);
+        setAllLoadError(null);
         const filters: GetAllCardsFilters = {};
         if (filterActive === "active") filters.active = true;
         else if (filterActive === "inactive") filters.active = false;
         if (search.trim()) filters.search = search.trim();
         apiClient.getAllCards(filters).then((result) => {
             if (result.ok) setAllCards(result.data);
+            else setAllLoadError(result.error.message);
             setAllLoading(false);
         });
     }, [activeTab, search, filterActive, user?.isAdmin]);
@@ -269,7 +272,8 @@ export default function MyCards() {
                             </div>
 
                             {allLoading && <p style={styles.statusText}>Loading…</p>}
-                            {!allLoading && allCards.length === 0 && (
+                            {allLoadError && <p style={styles.errorInline}>{allLoadError}</p>}
+                            {!allLoading && !allLoadError && allCards.length === 0 && (
                                 <div style={styles.emptyState}>
                                     <p style={styles.emptyTitle}>No cards match.</p>
                                 </div>

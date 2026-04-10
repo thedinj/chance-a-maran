@@ -1,10 +1,6 @@
 // Text field length limits
 export * from "./textLimits";
 
-// Auth constants
-export const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
-export const DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
-
 // Scopes
 export const ADMIN_SCOPE = "admin";
 
@@ -152,12 +148,6 @@ export const POLL_INTERVAL_FOREGROUND_MS = 5_000;
 export const POLL_INTERVAL_BACKGROUND_MS = 30_000;
 
 // ─── Token TTLs ───────────────────────────────────────────────────────────────
-
-/** Access token TTL in seconds. */
-export const ACCESS_TOKEN_TTL_S = 15 * 60; // 15 minutes
-
-/** Refresh token TTL in seconds. */
-export const REFRESH_TOKEN_TTL_S = 7 * 24 * 60 * 60; // 7 days
 
 /** Idempotency key TTL in seconds. */
 export const IDEMPOTENCY_KEY_TTL_S = 24 * 60 * 60; // 24 hours

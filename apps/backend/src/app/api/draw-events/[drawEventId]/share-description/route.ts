@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/auth/withAuth";
 import * as cardService from "@/lib/services/cardService";
 import * as drawEventRepo from "@/lib/repos/drawEventRepo";
 import * as playerRepo from "@/lib/repos/playerRepo";
-import { AuthorizationError } from "@chance/core";
+import { AuthorizationError, NotFoundError } from "@chance/core";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export const POST = withAuth(async (req, { params }) => {
         } else {
             // For registered users, look up their player via the draw event's session.
             const event = drawEventRepo.findById(drawEventId);
-            if (!event) throw new Error("Draw event not found"); // service will handle 404
+            if (!event) throw new NotFoundError("Draw event not found");
             const player = playerRepo.findBySessionAndUserId(event.sessionId, req.auth.sub);
             if (!player) throw new AuthorizationError("You are not a player in this session");
             requestingPlayerId = player.id;
