@@ -31,10 +31,10 @@ export function CardBack({ event }: CardBackProps): React.JSX.Element {
                     ...(isReparations ? styles.revealBackFrameReparations : undefined),
                 }}
             />
-            <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>◆</span>
+            <span style={{ ...styles.cornerDiamond, top: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+            <span style={{ ...styles.cornerDiamond, top: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+            <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+            <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
             <div style={styles.revealBackLogo}>C</div>
             <p style={styles.revealBackSub}>CHANCE</p>
             {imageUrl && (
@@ -128,12 +128,12 @@ export function CardFront({
                         ...(isReparations ? styles.revealFrontTopRuleReparations : undefined),
                     }}
                 />
-                <span style={{ ...styles.cornerDiamond, top: 12, left: 12, fontSize: 16 }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, top: 12, right: 12, fontSize: 16 }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, bottom: 12, left: 12, fontSize: 16 }}>
+                <span style={{ ...styles.cornerDiamond, top: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+                <span style={{ ...styles.cornerDiamond, top: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+                <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>
                     ◆
                 </span>
-                <span style={{ ...styles.cornerDiamond, bottom: 12, right: 12, fontSize: 16 }}>
+                <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>
                     ◆
                 </span>
 
@@ -375,7 +375,7 @@ const styles: Record<string, React.CSSProperties> = {
     // NOTE: intentional copy of cornerDiamond — see also Game.tsx styles.cornerDiamond
     cornerDiamond: {
         position: "absolute",
-        fontSize: 10,
+        fontSize: "2.4cqi",
         color: "var(--color-border)",
         lineHeight: 1,
         pointerEvents: "none",
@@ -383,6 +383,7 @@ const styles: Record<string, React.CSSProperties> = {
 
     // Card back
     revealBackFace: {
+        containerType: "inline-size",
         backgroundImage: "url(/img/card.png)",
         backgroundSize: "contain",
         backgroundPosition: "center",
@@ -399,7 +400,7 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: "center",
         gap: "var(--space-2)",
         position: "relative",
-    },
+    } as React.CSSProperties,
     revealBackFaceReparations: {
         backgroundImage: "url(/img/reparations.png)",
         aspectRatio: "433 / 609",
@@ -408,14 +409,14 @@ const styles: Record<string, React.CSSProperties> = {
     },
     revealBackFrame: {
         position: "absolute",
-        inset: "14px",
+        inset: "3.4cqi",
         border: "1px solid color-mix(in srgb, var(--color-accent-amber) 52%, transparent)",
         clipPath:
             "polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0% calc(100% - 6px), 0% 6px)",
         pointerEvents: "none",
     },
     revealBackFrameReparations: {
-        inset: "16px",
+        inset: "3.9cqi",
         border: "1px solid color-mix(in srgb, var(--color-accent-reparations) 74%, var(--color-border) 26%)",
     },
     revealBackLogo: {
@@ -441,7 +442,7 @@ const styles: Record<string, React.CSSProperties> = {
     } as React.CSSProperties,
     revealFrontFrame: {
         position: "absolute",
-        inset: "12px",
+        inset: "2.9cqi",
         border: "1px solid color-mix(in srgb, var(--color-accent-amber) 44%, transparent)",
         clipPath:
             "polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0% calc(100% - 6px), 0% 6px)",
@@ -453,7 +454,7 @@ const styles: Record<string, React.CSSProperties> = {
         top: "0",
         left: "0",
         width: "100%",
-        height: "4px",
+        height: "1cqi",
         background:
             "linear-gradient(90deg, color-mix(in srgb, var(--color-accent-amber) 82%, transparent) 0%, color-mix(in srgb, var(--color-accent-amber) 45%, transparent) 100%)",
         zIndex: 1,
@@ -475,10 +476,10 @@ const styles: Record<string, React.CSSProperties> = {
             "linear-gradient(160deg, color-mix(in srgb, var(--color-surface-elevated) 90%, var(--color-accent-reparations) 10%) 0%, color-mix(in srgb, var(--color-surface) 94%, var(--color-accent-primary) 6%) 100%)",
     },
     revealCardContent: {
-        padding: "clamp(14px, 6cqi, 28px)",
+        padding: "6.8cqi",
         display: "flex",
         flexDirection: "column",
-        gap: "clamp(8px, 3cqi, 16px)",
+        gap: "3.9cqi",
         position: "relative",
         zIndex: 2,
         overflow: "hidden",
@@ -490,7 +491,7 @@ const styles: Record<string, React.CSSProperties> = {
     revealCardContentBody: {
         display: "flex",
         flexDirection: "column",
-        gap: "clamp(8px, 3cqi, 16px)",
+        gap: "3.9cqi",
         position: "relative",
         zIndex: 1,
         minHeight: 0,
@@ -518,12 +519,12 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "var(--space-2)",
+        gap: "1.9cqi",
         overflow: "hidden",
     },
     revealImageEmblem: {
         fontFamily: "var(--font-display)",
-        fontSize: "clamp(36px, 11cqi, 58px)",
+        fontSize: "max(18px, 11cqi)",
         fontWeight: 700,
         lineHeight: 1,
         letterSpacing: "-0.02em",
@@ -533,14 +534,14 @@ const styles: Record<string, React.CSSProperties> = {
     revealImageSlotLabel: {
         margin: 0,
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "2.7cqi",
         fontWeight: 600,
         letterSpacing: "0.18em",
         color: "var(--color-text-secondary)",
     },
     revealHeroTitle: {
         fontFamily: "var(--font-display)",
-        fontSize: "clamp(26px, 9.5cqi, 44px)",
+        fontSize: "max(18px, 9.5cqi)",
         fontWeight: 700,
         color: "var(--color-text-primary)",
         letterSpacing: "-0.025em",
@@ -554,7 +555,7 @@ const styles: Record<string, React.CSSProperties> = {
     } as React.CSSProperties,
     revealHeroMeta: {
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "2.7cqi",
         fontWeight: 600,
         color: "color-mix(in srgb, var(--color-text-secondary) 90%, var(--color-accent-amber) 10%)",
         margin: 0,
@@ -565,16 +566,16 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1,
         minHeight: 0,
         overflow: "auto",
-        paddingRight: "8px",
+        paddingRight: "1.9cqi",
         scrollBehavior: "smooth",
         WebkitOverflowScrolling: "touch",
         display: "flex",
         flexDirection: "column",
-        gap: "clamp(8px, 3cqi, 16px)",
+        gap: "3.9cqi",
     } as React.CSSProperties & { scrollbarWidth?: string; scrollbarColor?: string },
     revealDescription: {
         fontFamily: "var(--font-ui)",
-        fontSize: "clamp(13px, 3.5cqi, 15px)",
+        fontSize: "max(11px, 3.6cqi)",
         color: "var(--color-text-primary)",
         lineHeight: 1.5,
         margin: 0,
@@ -588,12 +589,12 @@ const styles: Record<string, React.CSSProperties> = {
     hiddenInstrSection: {
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-3)",
+        gap: "2.9cqi",
     },
     hiddenInstrDivider: {
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-2)",
+        gap: "1.9cqi",
     },
     hiddenInstrDividerLine: {
         flex: 1,
@@ -602,7 +603,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     hiddenInstrDividerLabel: {
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
+        fontSize: "2.9cqi",
         color: "var(--color-text-secondary)",
         letterSpacing: "0.12em",
         textTransform: "uppercase" as const,
@@ -610,7 +611,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     hiddenInstrText: {
         fontFamily: "var(--font-ui)",
-        fontSize: "clamp(13px, 3.5cqi, 15px)",
+        fontSize: "max(11px, 3.6cqi)",
         color: "var(--color-text-secondary)",
         lineHeight: 1.5,
         margin: 0,
@@ -626,7 +627,7 @@ const styles: Record<string, React.CSSProperties> = {
         background:
             "repeating-linear-gradient(45deg, color-mix(in srgb, var(--color-border) 30%, transparent) 0px, color-mix(in srgb, var(--color-border) 30%, transparent) 1px, transparent 1px, transparent 8px)",
         border: "1px solid var(--color-border)",
-        padding: "var(--space-5)",
+        padding: "4.9cqi",
         cursor: "pointer",
         width: "100%",
         boxSizing: "border-box",
@@ -636,7 +637,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     hiddenDescLabel: {
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
+        fontSize: "2.9cqi",
         color: "var(--color-text-secondary)",
         letterSpacing: "0.05em",
     },
@@ -645,10 +646,10 @@ const styles: Record<string, React.CSSProperties> = {
         border: "1px solid var(--color-accent-primary)",
         color: "var(--color-accent-primary)",
         fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
+        fontSize: "2.7cqi",
         fontWeight: 500,
         letterSpacing: "0.1em",
-        padding: "var(--space-2) var(--space-4)",
+        padding: "1.9cqi 3.9cqi",
         cursor: "pointer",
         alignSelf: "flex-start",
         minHeight: "44px",
