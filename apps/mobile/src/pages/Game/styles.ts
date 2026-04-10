@@ -546,22 +546,26 @@ export const styles: Record<string, React.CSSProperties | Record<string, unknown
     },
 
     // CardRevealOverlay
-    preFlipBadge: {
+    gcLogoWrap: {
         position: "absolute",
-        top: "calc(var(--space-3) * -1)",
+        top: "50%",
         left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 3,
-        background: "var(--color-accent-amber)",
-        color: "var(--color-bg)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 700,
-        letterSpacing: "0.2em",
-        padding: "6px var(--space-3)",
-        boxShadow: "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
-        animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
-        whiteSpace: "nowrap" as const,
+        transform: "translate(-50%, -50%)",
+        width: "90%",
+        zIndex: 10,
+        pointerEvents: "none",
+    },
+    gcLogoImgEnter: {
+        width: "100%",
+        height: "auto",
+        display: "block",
+        animation: "gcLogoEnter 500ms cubic-bezier(0.25, 0, 0.1, 1) forwards, gcLogoFloat 2.2s ease-in-out 500ms infinite",
+    },
+    gcLogoImgExit: {
+        width: "100%",
+        height: "auto",
+        display: "block",
+        animation: "gcLogoExit 220ms cubic-bezier(0.55, 0, 1, 0.45) forwards",
     },
     revealCardWrap: {
         display: "flex",

@@ -326,10 +326,6 @@ export function FlippingCard({
 
     return (
         <div style={styles.revealFlipScene}>
-            {isGameChanger && !flipComplete && (
-                <div style={styles.gameChangerBadge}>GAME CHANGER</div>
-            )}
-
             <div
                 style={{
                     ...styles.revealFlipShadow,
@@ -692,21 +688,4 @@ const styles: Record<string, React.CSSProperties> = {
         WebkitBackfaceVisibility: "hidden",
     },
 
-    // Game changer badge
-    gameChangerBadge: {
-        position: "absolute",
-        top: "calc(var(--space-3) * -1)",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 3,
-        background: "var(--color-accent-amber)",
-        color: "var(--color-bg)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 700,
-        letterSpacing: "0.2em",
-        padding: "6px var(--space-3)",
-        boxShadow: "0 6px 14px -8px color-mix(in srgb, var(--color-accent-amber) 75%, transparent)",
-        animation: "gameChangerBadgePulse 900ms ease-in-out infinite",
-    },
 };

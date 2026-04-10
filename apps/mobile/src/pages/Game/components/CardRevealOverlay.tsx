@@ -239,8 +239,9 @@ function SpotlightCanvas({ isGameChanger, isReparations, flipping, locked }: Spo
 }
 
 // ── ReparationsIntroSequence ──────────────────────────────────────────────────
-// Pre-reveal tribunal sequence: scanner sweep → 3 staccato name title-cards.
-// Calls onComplete when the sequence ends (~2100ms).
+// Pre-reveal tribunal sequence: scanner sweep → 3 staccato title-card flashes.
+// Label is picked randomly from REPARATIONS_LABELS at mount.
+// Calls onComplete when the sequence ends (~1750ms).
 
 const REPARATIONS_INTRO_CSS = `
 @keyframes repScanLine {
@@ -257,12 +258,16 @@ const REPARATIONS_INTRO_CSS = `
 }
 `;
 
+const REPARATIONS_LABELS = ["REPARATIONS", "NOWHERE TO RUN", "GUILTY", "SETTLE UP"] as const;
+
 interface ReparationsIntroProps {
-    playerDisplayName: string;
     onComplete: () => void;
 }
 
-function ReparationsIntroSequence({ playerDisplayName, onComplete }: ReparationsIntroProps) {
+function ReparationsIntroSequence({ onComplete }: ReparationsIntroProps) {
+    const [label] = useState(
+        () => REPARATIONS_LABELS[Math.floor(Math.random() * REPARATIONS_LABELS.length)]
+    );
     // frame: null = scanner phase, 1/2/3 = title-card flashes
     const [frame, setFrame] = useState<null | 1 | 2 | 3>(null);
 
@@ -331,9 +336,11 @@ function ReparationsIntroSequence({ playerDisplayName, onComplete }: Reparations
                                 fontFamily: "var(--font-display)",
                                 fontSize: "clamp(52px, 14vw, 88px)",
                                 fontWeight: 700,
-                                letterSpacing: "-0.03em",
+                                letterSpacing: "0.04em",
                                 lineHeight: 1,
                                 color: "rgb(220, 14, 14)",
+                                WebkitTextStroke: "1.5px rgba(212, 168, 71, 0.4)",
+                                WebkitTextFillColor: "rgb(220, 14, 14)",
                                 opacity: p.opacity,
                                 transform: `scale(${p.scale}) translateX(${p.x}px)`,
                                 whiteSpace: "nowrap",
@@ -342,12 +349,14 @@ function ReparationsIntroSequence({ playerDisplayName, onComplete }: Reparations
                                 maxWidth: "85vw",
                                 userSelect: "none",
                                 textShadow:
-                                    frame === 2
-                                        ? "0 0 60px rgba(220,14,14,0.6), 0 0 120px rgba(180,8,8,0.3)"
-                                        : "none",
+                                    frame === 1
+                                        ? "0 0 40px rgba(220,14,14,0.35)"
+                                        : frame === 2
+                                          ? "2px 2px 0 rgba(60,0,0,0.9), 0 0 30px rgba(220,14,14,0.8), 0 0 80px rgba(180,8,8,0.5), 0 0 140px rgba(140,6,6,0.3)"
+                                          : "0 0 50px rgba(220,14,14,0.45)",
                             }}
                         >
-                            {playerDisplayName}
+                            {label}
                         </div>
                     );
                 })()}
@@ -361,11 +370,13 @@ export function CardRevealOverlay() {
     const { revealCard, revealDrama, players, onDismissReveal } = useGamePageContext();
     const event = revealCard!;
     const drama: DrawDrama | undefined = revealDrama ?? undefined;
-    const playerDisplayName = players.find((p) => p.id === event.playerId)?.displayName;
     const onDismiss = onDismissReveal;
     const loopRef = useRef<HTMLAudioElement | null>(null);
     const isGameChanger = Boolean(event.cardVersion.isGameChanger);
     const isReparations = event.card.cardType === "reparations";
+    const prefersReduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const initialPhase: RevealPhase = isReparations
         ? "reparations-intro"
@@ -373,6 +384,7 @@ export function CardRevealOverlay() {
           ? "audio-intro"
           : "flipping";
     const [phase, setPhase] = useState<RevealPhase>(initialPhase);
+    const [gcExiting, setGcExiting] = useState(false);
 
     // ── Intro sound (game changer drama.mp3) ─────────────────────────────────
     // Plays once during "audio-intro" phase. When it ends, advances to "flipping".
@@ -380,13 +392,20 @@ export function CardRevealOverlay() {
         if (phase !== "audio-intro" || !drama?.introSound) return;
         const audio = getAudio(drama.introSound);
         audio.loop = false;
-        audio.onended = () => setPhase("flipping");
+        audio.onended = () => setGcExiting(true);
         audio.play().catch(() => {});
         return () => {
             audio.onended = null;
             audio.pause();
         };
     }, [phase, drama]);
+
+    // ── Advance to "flipping" after gc logo exit animation ───────────────────
+    useEffect(() => {
+        if (!gcExiting) return;
+        const t = setTimeout(() => setPhase("flipping"), 220);
+        return () => clearTimeout(t);
+    }, [gcExiting]);
 
     // ── Loop sound (drumroll) ────────────────────────────────────────────────
     // Plays during "flipping" and "reparations-intro" phases. For reparations,
@@ -453,7 +472,6 @@ export function CardRevealOverlay() {
     if (phase === "reparations-intro") {
         return (
             <ReparationsIntroSequence
-                playerDisplayName={playerDisplayName ?? "—"}
                 onComplete={handleReparationsIntroDone}
             />
         );
@@ -482,8 +500,21 @@ export function CardRevealOverlay() {
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {drama?.preFlipLabel && phase === "audio-intro" && (
-                    <div style={styles.preFlipBadge as React.CSSProperties}>{drama.preFlipLabel}</div>
+                {isGameChanger && (phase === "audio-intro" || gcExiting) && (
+                    <div style={styles.gcLogoWrap as React.CSSProperties}>
+                        <img
+                            src="/img/GameChanger.png"
+                            alt=""
+                            aria-hidden="true"
+                            style={
+                                prefersReduced
+                                    ? { width: "100%", height: "auto", display: "block" }
+                                    : gcExiting
+                                      ? (styles.gcLogoImgExit as React.CSSProperties)
+                                      : (styles.gcLogoImgEnter as React.CSSProperties)
+                            }
+                        />
+                    </div>
                 )}
                 <FlippingCard
                     event={event}
