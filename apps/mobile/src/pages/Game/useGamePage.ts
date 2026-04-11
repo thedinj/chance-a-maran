@@ -2,18 +2,83 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { useCards } from "../../cards/useCards";
-import type { CardTransfer, DrawEvent, Player, Session } from "../../lib/api";
+import type { Card, CardTransfer, CardVersion, DrawEvent, Player, Session } from "../../lib/api";
 import { apiClient } from "../../lib/api";
 import { hapticMedium } from "../../lib/haptics";
 import { useExitSession } from "../../session/useExitSession";
 import { useSession } from "../../session/useSession";
 import { useTransfers } from "../../transfers/useTransfers";
-import type { DrawDrama } from "./types";
+import type { DevDrawMode, DrawDrama } from "./types";
 import { GAME_CHANGER_DRAMA, REPARATIONS_DRAMA, STANDARD_DRAW_DRAMA } from "./types";
 
 // Tracks which session IDs have already auto-shown the join code so navigation
 // away and back does not trigger it again.
 const joinCodeShownSessions = new Set<string>();
+
+// ─── Dev-only fake draw factory ───────────────────────────────────────────────
+// Constructs a structurally valid DrawEvent without hitting the API.
+// Only called when import.meta.env.DEV is true and a forced mode is armed.
+function makeFakeDrawEvent(
+    mode: Exclude<DevDrawMode, "live">,
+    sessionId: string,
+    playerId: string,
+): DrawEvent {
+    const isReparations = mode === "reparations";
+    const isGameChanger = mode === "game-changer";
+
+    const fakeVersion: CardVersion = {
+        id: `dev-cv-${mode}`,
+        cardId: `dev-card-${mode}`,
+        versionNumber: 1,
+        title: isReparations
+            ? "Dev Reparations Card"
+            : isGameChanger
+              ? "Dev Game Changer"
+              : "Dev Standard Card",
+        description: `[DEV] Synthetic card — mode: ${mode}`,
+        hiddenInstructions: null,
+        hasHiddenInstructions: false,
+        imageId: null,
+        imageYOffset: 0.5,
+        drinkingLevel: 0,
+        spiceLevel: 0,
+        isGameChanger,
+        gameTags: [],
+        requirements: [],
+        authoredByUserId: "dev",
+        authorDisplayName: "Dev",
+        createdAt: new Date().toISOString(),
+    };
+
+    const fakeCard: Card = {
+        id: `dev-card-${mode}`,
+        authorUserId: "dev",
+        authorDisplayName: "Dev",
+        ownerUserId: "dev",
+        ownerDisplayName: "Dev",
+        cardType: isReparations ? "reparations" : "standard",
+        active: true,
+        isGlobal: false,
+        pendingGlobal: false,
+        createdInSessionId: null,
+        currentVersionId: fakeVersion.id,
+        currentVersion: fakeVersion,
+        netVotes: 0,
+        createdAt: new Date().toISOString(),
+    };
+
+    return {
+        id: `dev-draw-${Date.now()}`,
+        sessionId,
+        playerId,
+        cardVersionId: fakeVersion.id,
+        cardVersion: fakeVersion,
+        card: fakeCard,
+        drawnAt: new Date().toISOString(),
+        descriptionShared: false,
+        resolved: false,
+    };
+}
 
 export interface UseGamePageReturn {
     // From context
@@ -56,6 +121,10 @@ export interface UseGamePageReturn {
     drawPending: boolean;
     reparationsPending: boolean;
 
+    // Dev
+    devDrawMode: DevDrawMode;
+    setDevDrawMode: React.Dispatch<React.SetStateAction<DevDrawMode>>;
+
     // Handlers
     handleDraw: () => void;
     handleDrawReparations: () => void;
@@ -97,6 +166,7 @@ export function useGamePage(): UseGamePageReturn {
     const [reparationsPending, startReparationsTransition] = useTransition();
     const [showReparationsConfirm, setShowReparationsConfirm] = useState(false);
     const [actionSheetTarget, setActionSheetTarget] = useState<Player | null>(null);
+    const [devDrawMode, setDevDrawMode] = useState<DevDrawMode>("live");
     const { isGuest, accessToken } = useAuth();
 
     // Redirect if no session
@@ -146,6 +216,12 @@ export function useGamePage(): UseGamePageReturn {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.id]);
 
+    // Reset dev draw mode when leaving the page
+    useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        return () => setDevDrawMode("live");
+    }, []);
+
     // Active player derivation — true only if the active player is on this device AND still active (not left)
     const isActivePlayerOnDevice = useMemo(() => {
         if (!activePlayerId) return false;
@@ -183,6 +259,24 @@ export function useGamePage(): UseGamePageReturn {
         if (!session || !activePlayerId) return;
         setError(null);
         hapticMedium();
+
+        // ── Dev-only bypass ──────────────────────────────────────────────────
+        if (import.meta.env.DEV && devDrawMode !== "live") {
+            const fakeEvent = makeFakeDrawEvent(devDrawMode, session.id, activePlayerId);
+            const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const drama: DrawDrama | null = prefersReduced
+                ? null
+                : devDrawMode === "game-changer"
+                  ? GAME_CHANGER_DRAMA
+                  : devDrawMode === "reparations"
+                    ? REPARATIONS_DRAMA
+                    : STANDARD_DRAW_DRAMA;
+            setRevealDrama(drama);
+            setRevealCard(fakeEvent);
+            // Intentionally NOT calling addDrawEvent — fake draws must not pollute history
+            return;
+        }
+
         startDrawTransition(async () => {
             const result = await apiClient.drawCard(session.id, activePlayerId);
             if (!result.ok) {
@@ -199,7 +293,7 @@ export function useGamePage(): UseGamePageReturn {
             );
             setRevealCard(result.data);
         });
-    }, [activePlayerId, addDrawEvent, session, startDrawTransition]);
+    }, [activePlayerId, addDrawEvent, devDrawMode, session, startDrawTransition]);
 
     const handleDrawReparations = useCallback(() => {
         if (!session || !activePlayerId) return;
@@ -367,6 +461,8 @@ export function useGamePage(): UseGamePageReturn {
         error,
         drawPending,
         reparationsPending,
+        devDrawMode,
+        setDevDrawMode,
         handleDraw,
         handleDrawReparations,
         handleVote,

@@ -53,7 +53,8 @@
       "Bash(xargs cat:*)",
       "Bash(head -n 1904 \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/mobile/src/pages/Game/index.tsx\")",
       "Bash(mv /tmp/game_index_trimmed.tsx \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/mobile/src/pages/Game/index.tsx\")",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(git -C /d/Users/thedinj/Programming/Apps/chance-a-maran log --oneline -25 --name-only)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

@@ -46,3 +46,7 @@ export const REPARATIONS_DRAMA: DrawDrama = {
     flipMs: 2000, // dramatic but not sluggish
     flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)", // ease-in-out — fills the full 2s
 };
+
+// ─── Dev-only draw mode ───────────────────────────────────────────────────────
+
+export type DevDrawMode = "live" | "standard" | "game-changer" | "reparations";

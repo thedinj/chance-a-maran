@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useGamePageContext } from "../GamePageContext";
 import { styles } from "../styles";
 
@@ -9,6 +9,17 @@ export function DrawButton() {
     const isEnabled = isActivePlayerOnDevice && !drawPending && session!.status === "active";
     const [holdState, setHoldState] = useState<"idle" | "holding" | "flashing">("idle");
     const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+
+    // Suppress the long-press context menu via a native listener.
+    // React's synthetic onContextMenu can be beaten by Chrome DevTools touch emulation.
+    useEffect(() => {
+        const el = buttonRef.current;
+        if (!el) return;
+        const suppress = (e: Event) => e.preventDefault();
+        el.addEventListener("contextmenu", suppress);
+        return () => el.removeEventListener("contextmenu", suppress);
+    }, []);
 
     function cancelHold() {
         if (holdTimerRef.current !== null) {
@@ -63,6 +74,7 @@ export function DrawButton() {
 
     return (
         <button
+            ref={buttonRef}
             style={{
                 ...(styles.drawButton as React.CSSProperties),
                 borderColor,
@@ -73,6 +85,7 @@ export function DrawButton() {
                 position: "relative",
                 overflow: "hidden",
                 userSelect: "none",
+                touchAction: "none",
             }}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}

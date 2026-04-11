@@ -334,19 +334,18 @@ function ReparationsIntroSequence({ onComplete }: ReparationsIntroProps) {
                         <div
                             style={{
                                 fontFamily: "var(--font-display)",
-                                fontSize: "clamp(52px, 14vw, 88px)",
+                                fontSize: "clamp(40px, 10.5vw, 88px)",
                                 fontWeight: 700,
                                 letterSpacing: "0.04em",
-                                lineHeight: 1,
+                                lineHeight: 1.1,
                                 color: "rgb(220, 14, 14)",
                                 WebkitTextStroke: "1.5px rgba(212, 168, 71, 0.4)",
                                 WebkitTextFillColor: "rgb(220, 14, 14)",
                                 opacity: p.opacity,
                                 transform: `scale(${p.scale}) translateX(${p.x}px)`,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                maxWidth: "85vw",
+                                whiteSpace: "normal",
+                                textAlign: "center",
+                                maxWidth: "88vw",
                                 userSelect: "none",
                                 textShadow:
                                     frame === 1

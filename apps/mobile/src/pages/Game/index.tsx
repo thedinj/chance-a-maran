@@ -9,6 +9,7 @@ import { DrawButton } from "./components/DrawButton";
 import { GameHeader } from "./components/GameHeader";
 import { JoinCodeModal } from "./components/JoinCodeModal";
 import { PlayerActionSheet } from "./components/PlayerActionSheet";
+import { DevDrawPanel } from "./components/DevDrawPanel";
 import { ReparationsButton } from "./components/ReparationsButton";
 import { GamePageProvider } from "./GamePageContext";
 import { styles } from "./styles";
@@ -73,6 +74,7 @@ export default function Game() {
                         )}
                         <DrawButton />
                         <ReparationsButton />
+                        {import.meta.env.DEV && <DevDrawPanel />}
                     </div>
                 </IonFooter>
 

@@ -22,6 +22,7 @@ export default function MyCards() {
     const [myCards, setMyCards] = useState<Card[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [myCardsSort, setMyCardsSort] = useState<"alpha" | "date">("alpha");
 
     // ── All Cards tab (admin) ─────────────────────────────────────────────────
     const [allCards, setAllCards] = useState<Card[]>([]);
@@ -235,8 +236,32 @@ export default function MyCards() {
                                     </button>
                                 </div>
                             )}
+                            {!isLoading && myCards.length > 0 && (
+                                <div style={styles.sortRow}>
+                                    <button
+                                        style={styles.sortLink}
+                                        onClick={() =>
+                                            setMyCardsSort((s) => (s === "date" ? "alpha" : "date"))
+                                        }
+                                    >
+                                        {myCardsSort === "alpha" ? "A–Z" : "newest first"}
+                                    </button>
+                                </div>
+                            )}
                             <div style={styles.tileList}>
-                                {!isLoading && myCards.map(renderTile)}
+                                {!isLoading &&
+                                    [...myCards]
+                                        .sort((a, b) =>
+                                            myCardsSort === "alpha"
+                                                ? a.currentVersion.title
+                                                      .toLowerCase()
+                                                      .localeCompare(
+                                                          b.currentVersion.title.toLowerCase()
+                                                      )
+                                                : new Date(b.createdAt).getTime() -
+                                                  new Date(a.createdAt).getTime()
+                                        )
+                                        .map(renderTile)}
                             </div>
                         </>
                     )}
@@ -683,6 +708,24 @@ const styles: Record<string, React.CSSProperties> = {
         padding: "var(--space-1) var(--space-3)",
         cursor: "pointer",
         minHeight: "32px",
+    },
+    // Sort toggle
+    sortRow: {
+        display: "flex",
+        justifyContent: "flex-end",
+        padding: "0 var(--space-5) var(--space-2)",
+    },
+    sortLink: {
+        background: "none",
+        border: "none",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-text-secondary)",
+        cursor: "pointer",
+        padding: "var(--space-1) 0",
+        textDecoration: "underline",
+        textDecorationColor: "transparent",
+        opacity: 0.6,
     },
     // Card tiles
     tileList: {
