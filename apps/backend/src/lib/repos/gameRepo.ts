@@ -1,6 +1,5 @@
-import { db } from "../db/db";
-import { intToBool } from "../db/boolBridge";
 import type { Game } from "@chance/core";
+import { db } from "../db/db";
 
 export interface DbGame {
     id: string;
@@ -16,17 +15,20 @@ export function mapGame(row: DbGame): Game {
     };
 }
 
-const stmts = {
-    findAll: db.prepare<[], DbGame>("SELECT * FROM games WHERE active = 1 ORDER BY name ASC"),
-    findById: db.prepare<[string], DbGame>("SELECT * FROM games WHERE id = ?"),
-    create: db.prepare<[string, string], void>(
-        "INSERT INTO games (id, name) VALUES (?, ?)"
-    ),
-    setActive: db.prepare<[number, string], void>("UPDATE games SET active = ? WHERE id = ?"),
-};
+function makeStmts() {
+    return {
+        findAll: db.prepare<[], DbGame>("SELECT * FROM games WHERE active = 1 ORDER BY name ASC"),
+        findById: db.prepare<[string], DbGame>("SELECT * FROM games WHERE id = ?"),
+        create: db.prepare<[string, string], void>("INSERT INTO games (id, name) VALUES (?, ?)"),
+        setActive: db.prepare<[number, string], void>("UPDATE games SET active = ? WHERE id = ?"),
+    };
+}
+
+let stmts: ReturnType<typeof makeStmts> | null = null;
+const getStmts = () => (stmts ??= makeStmts());
 
 export function findAll(): Game[] {
-    return stmts.findAll.all().map(mapGame);
+    return getStmts().findAll.all().map(mapGame);
 }
 
 export function findAllIncludingInactive(): DbGame[] {
@@ -48,16 +50,16 @@ export function update(id: string, data: { name?: string }): void {
 }
 
 export function findById(id: string): DbGame | null {
-    return stmts.findById.get(id) ?? null;
+    return getStmts().findById.get(id) ?? null;
 }
 
 export function create(data: { id: string; name: string }): Game {
-    stmts.create.run(data.id, data.name);
+    getStmts().create.run(data.id, data.name);
     return mapGame(findById(data.id)!);
 }
 
 export function setActive(id: string, active: boolean): void {
-    stmts.setActive.run(active ? 1 : 0, id);
+    getStmts().setActive.run(active ? 1 : 0, id);
 }
 
 export function countSessionReferences(gameId: string): number {
