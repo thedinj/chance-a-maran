@@ -18,9 +18,14 @@ See `~/basket-bot/apps/backend/scripts/DEPLOY.md` for the full guide.
 
 ## Install Chance-a-Maran
 
-First, bring the hoisted scripts up to date with the latest fixes from basket-bot:
+First, bring the hoisted scripts up to date with the latest fixes from basket-bot.
+Use bootstrap for a fast refresh (no build or service restart):
 
 ```bash
+# Fast — pull latest scripts and hoist, no build or service restart
+cd ~/basket-bot && git pull && apps/backend/scripts/bootstrap.sh
+
+# Full — pull, rebuild, restart basket-bot, then hoist (use when updating basket-bot itself)
 cd ~/basket-bot/apps/backend/scripts && ./update.sh
 ```
 
@@ -73,6 +78,9 @@ cat /etc/caddy/conf.d/chance-a-maran.caddy
 
 # Database backup location
 ls ~/chance-a-maran/apps/backend/backups/
+
+# Refresh hoisted scripts only (no build or service restart)
+cd ~/basket-bot && git pull && apps/backend/scripts/bootstrap.sh
 ```
 
 ---
