@@ -31,7 +31,9 @@ const REQUEST_TIMEOUT_MS = 15_000;
 function resolveBaseUrl(): string {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
     if (import.meta.env.DEV) return "http://localhost:3000";
-    return "https://api.chance.app";
+    // Web production: same-origin — Caddy routes /api/* to the backend.
+    // Native (Capacitor) builds must set VITE_API_URL explicitly.
+    return "";
 }
 
 export class ApiClient {
