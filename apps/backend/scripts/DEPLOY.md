@@ -59,6 +59,26 @@ cd ~/basket-bot/apps/backend/scripts && ./update.sh && \
 pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 ```
 
+### Skip flags
+
+The update script uses incremental builds — it skips packages whose source hasn't
+changed since the last successful build. You can also force-skip builds manually:
+
+```bash
+# Skip only the backend build (e.g. frontend-only change)
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --skip-backend
+
+# Skip only the frontend build (e.g. backend-only change)
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --skip-frontend
+
+# Skip all builds — just pull, migrate, and restart the service
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --skip-builds
+```
+
+Flags work before or after the config path. Skipping a build does **not** update
+that package's marker file, so the next regular update will still detect any
+accumulated changes correctly.
+
 ---
 
 ## Useful commands
