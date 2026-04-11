@@ -1,5 +1,6 @@
 import {
     CreateSessionRequestSchema,
+    ElementGroupId,
     FilterSettingsSchema,
     MAX_SESSION_NAME_LENGTH,
     DRINKING_LEVELS,
@@ -81,6 +82,7 @@ export default function GameSettings() {
         handleSubmit,
         control,
         setValue,
+        watch,
         formState: { errors },
     } = useForm<GameSettingsFormValues>({
         resolver: zodResolver(GameSettingsFormSchema),
@@ -372,12 +374,6 @@ export default function GameSettings() {
                             control={control}
                             render={({ field }) => {
                                 const selected = field.value ?? [];
-                                const defaultOnElements = availableElements.filter(
-                                    (el) => el.defaultAvailable
-                                );
-                                const extraElements = availableElements.filter(
-                                    (el) => !el.defaultAvailable
-                                );
                                 const selectedCount = selected.length;
                                 const totalCount = availableElements.length;
 
@@ -386,6 +382,63 @@ export default function GameSettings() {
                                         selected.includes(id)
                                             ? selected.filter((x) => x !== id)
                                             : [...selected, id]
+                                    );
+                                }
+
+                                // Derive ordered unique groups from elements (sort by groupId asc,
+                                // which puts system groups "1"–"4" before future UUID groups).
+                                const groupOrder: { id: string; name: string }[] = [];
+                                const seenGroups = new Set<string>();
+                                const sortedByGroup = [...availableElements].sort((a, b) => {
+                                    if (a.groupId === b.groupId) return 0;
+                                    if (a.groupId == null) return 1;
+                                    if (b.groupId == null) return -1;
+                                    return a.groupId.localeCompare(b.groupId);
+                                });
+                                for (const el of sortedByGroup) {
+                                    if (el.groupId && !seenGroups.has(el.groupId)) {
+                                        seenGroups.add(el.groupId);
+                                        groupOrder.push({
+                                            id: el.groupId,
+                                            name: el.groupName ?? el.groupId,
+                                        });
+                                    }
+                                }
+                                const ungrouped = availableElements.filter(
+                                    (el) => !el.groupId
+                                );
+
+                                const drinkingLevel = watch("filterSettings.maxDrinkingLevel");
+
+                                function renderChips(
+                                    els: typeof availableElements,
+                                    groupDisabled = false
+                                ) {
+                                    return (
+                                        <div style={styles.tagList}>
+                                            {els.map((el) => {
+                                                const isOn = selected.includes(el.id);
+                                                const isDisabled = isPending || groupDisabled;
+                                                return (
+                                                    <button
+                                                        key={el.id}
+                                                        style={
+                                                            groupDisabled
+                                                                ? styles.elementChipDisabled
+                                                                : isOn
+                                                                  ? styles.elementChipOn
+                                                                  : styles.elementChipOff
+                                                        }
+                                                        onClick={() =>
+                                                            !groupDisabled && toggle(el.id)
+                                                        }
+                                                        disabled={isDisabled}
+                                                    >
+                                                        {el.title}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     );
                                 }
 
@@ -406,87 +459,52 @@ export default function GameSettings() {
                                             </button>
 
                                             {!venueExpanded ? (
-                                                /* Collapsed: show summary of non-default selections */
                                                 <p style={styles.hint}>
-                                                    {extraElements.filter((el) =>
-                                                        selected.includes(el.id)
-                                                    ).length > 0
-                                                        ? `Extras: ${extraElements
-                                                              .filter((el) =>
-                                                                  selected.includes(el.id)
-                                                              )
-                                                              .map((el) => el.title)
-                                                              .join(", ")}`
-                                                        : "Tap to configure available props & items"}
+                                                    Tap to configure available props &amp; items
                                                 </p>
                                             ) : (
-                                                /* Expanded: full chip list */
                                                 <>
                                                     <p style={styles.hint}>
                                                         Select items available at your venue. Cards
                                                         requiring missing items won't be drawn.
                                                     </p>
 
-                                                    {defaultOnElements.length > 0 && (
-                                                        <>
-                                                            <p style={styles.venueGroupLabel}>
-                                                                Common
-                                                            </p>
-                                                            <div style={styles.tagList}>
-                                                                {defaultOnElements.map((el) => {
-                                                                    const isOn = selected.includes(
-                                                                        el.id
-                                                                    );
-                                                                    return (
-                                                                        <button
-                                                                            key={el.id}
+                                                    {groupOrder.map((group) => {
+                                                        const els = availableElements.filter(
+                                                            (el) => el.groupId === group.id
+                                                        );
+                                                        if (els.length === 0) return null;
+                                                        const groupDisabled =
+                                                            group.id === ElementGroupId.Drinks &&
+                                                            drinkingLevel === 0;
+                                                        return (
+                                                            <div key={group.id}>
+                                                                <p style={styles.venueGroupLabel}>
+                                                                    {group.name}
+                                                                    {groupDisabled && (
+                                                                        <span
                                                                             style={
-                                                                                isOn
-                                                                                    ? styles.elementChipOn
-                                                                                    : styles.elementChipOff
+                                                                                styles.venueGroupDisabledNote
                                                                             }
-                                                                            onClick={() =>
-                                                                                toggle(el.id)
-                                                                            }
-                                                                            disabled={isPending}
                                                                         >
-                                                                            {el.title}
-                                                                        </button>
-                                                                    );
-                                                                })}
+                                                                            {" "}
+                                                                            — disabled at drinking
+                                                                            level None
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                                {renderChips(els, groupDisabled)}
                                                             </div>
-                                                        </>
-                                                    )}
+                                                        );
+                                                    })}
 
-                                                    {extraElements.length > 0 && (
-                                                        <>
+                                                    {ungrouped.length > 0 && (
+                                                        <div>
                                                             <p style={styles.venueGroupLabel}>
-                                                                Extras
+                                                                Miscellaneous
                                                             </p>
-                                                            <div style={styles.tagList}>
-                                                                {extraElements.map((el) => {
-                                                                    const isOn = selected.includes(
-                                                                        el.id
-                                                                    );
-                                                                    return (
-                                                                        <button
-                                                                            key={el.id}
-                                                                            style={
-                                                                                isOn
-                                                                                    ? styles.elementChipOn
-                                                                                    : styles.elementChipOff
-                                                                            }
-                                                                            onClick={() =>
-                                                                                toggle(el.id)
-                                                                            }
-                                                                            disabled={isPending}
-                                                                        >
-                                                                            {el.title}
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </>
+                                                            {renderChips(ungrouped)}
+                                                        </div>
                                                     )}
                                                 </>
                                             )}
@@ -852,6 +870,23 @@ const styles: Record<string, React.CSSProperties> = {
         color: "var(--color-text-secondary)",
         margin: 0,
     },
+    venueGroupDisabledNote: {
+        fontWeight: 400,
+        opacity: 0.6,
+    },
+    elementChipDisabled: {
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "not-allowed",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+        opacity: 0.35,
+    } as React.CSSProperties,
     elementChipOff: {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",

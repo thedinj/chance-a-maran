@@ -13,6 +13,8 @@ CORE_PACKAGE="@chance/core"
 DB_INIT_SCRIPT="db:seed"       # pnpm script that initialises/seeds the database
 
 HAS_MOBILE_APP=true            # Builds apps/mobile/ SPA and serves it via Caddy
+
+WARMUP_PATHS=("/api/health" "/api/config")  # Paths to hit after startup to prime Next.js route compilation
 MOBILE_BUILD_DIR="apps/mobile/dist"   # Relative to PROJECT_ROOT; Vite output directory
 
 DEFAULT_DOMAIN="chanceamaran.ddns.net"      # Default used if user presses Enter at the HTTPS prompt

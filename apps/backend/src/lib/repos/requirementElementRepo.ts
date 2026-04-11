@@ -8,6 +8,8 @@ interface DbRequirementElement {
     title: string;
     active: number;
     default_available: number;
+    group_id: string | null;
+    group_name: string | null;
 }
 
 function mapElement(row: DbRequirementElement): RequirementElement {
@@ -16,15 +18,22 @@ function mapElement(row: DbRequirementElement): RequirementElement {
         title: row.title,
         active: intToBool(row.active),
         defaultAvailable: intToBool(row.default_available),
+        groupId: row.group_id ?? null,
+        groupName: row.group_name ?? null,
     };
 }
+
+const SELECT_COLS = `
+    re.id, re.title, re.active, re.default_available,
+    g.id AS group_id, g.name AS group_name
+    FROM requirement_elements re
+    LEFT JOIN requirement_element_groups g ON g.id = re.group_id
+`;
 
 export function listActive(): RequirementElement[] {
     return (
         db
-            .prepare(
-                "SELECT id, title, active, default_available FROM requirement_elements WHERE active = 1 ORDER BY title"
-            )
+            .prepare(`SELECT ${SELECT_COLS} WHERE re.active = 1 ORDER BY re.title`)
             .all() as DbRequirementElement[]
     ).map(mapElement);
 }
@@ -35,7 +44,7 @@ export function findByIds(ids: string[]): RequirementElement[] {
     return (
         db
             .prepare(
-                `SELECT id, title, active, default_available FROM requirement_elements WHERE id IN (${placeholders}) AND active = 1`
+                `SELECT ${SELECT_COLS} WHERE re.id IN (${placeholders}) AND re.active = 1`
             )
             .all(...ids) as DbRequirementElement[]
     ).map(mapElement);
@@ -44,9 +53,7 @@ export function findByIds(ids: string[]): RequirementElement[] {
 export function listAll(): RequirementElement[] {
     return (
         db
-            .prepare(
-                "SELECT id, title, active, default_available FROM requirement_elements ORDER BY title"
-            )
+            .prepare(`SELECT ${SELECT_COLS} ORDER BY re.title`)
             .all() as DbRequirementElement[]
     ).map(mapElement);
 }
@@ -58,7 +65,13 @@ export function create(title: string, defaultAvailable = false): RequirementElem
     ).run(id, title, boolToInt(defaultAvailable));
     return mapElement(
         db
-            .prepare("SELECT id, title, active, default_available FROM requirement_elements WHERE id = ?")
+            .prepare(
+                `SELECT re.id, re.title, re.active, re.default_available,
+                        g.id AS group_id, g.name AS group_name
+                 FROM requirement_elements re
+                 LEFT JOIN requirement_element_groups g ON g.id = re.group_id
+                 WHERE re.id = ?`
+            )
             .get(id) as DbRequirementElement
     );
 }
@@ -79,6 +92,17 @@ export function setDefaultAvailable(id: string, available: boolean): void {
 
 export function update(id: string, title: string): void {
     db.prepare("UPDATE requirement_elements SET title = ? WHERE id = ?").run(title, id);
+}
+
+export function setGroup(id: string, groupId: string | null): void {
+    db.prepare("UPDATE requirement_elements SET group_id = ? WHERE id = ?").run(groupId, id);
+}
+
+export function listIdsByGroup(groupId: string): string[] {
+    const rows = db
+        .prepare("SELECT id FROM requirement_elements WHERE group_id = ? AND active = 1")
+        .all(groupId) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
 }
 
 export function countUsage(id: string): number {

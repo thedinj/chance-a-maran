@@ -15,9 +15,18 @@ import {
     Center,
     ActionIcon,
     Tooltip,
+    Select,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
+
+interface AdminGroup {
+    id: string;
+    name: string;
+    sortOrder: number;
+    locked: boolean;
+    elementCount: number;
+}
 
 interface AdminElement {
     id: string;
@@ -25,18 +34,23 @@ interface AdminElement {
     active: boolean;
     defaultAvailable: boolean;
     cardCount: number;
+    groupId: string | null;
+    groupName: string | null;
 }
 
 export default function RequirementElementsPage() {
     const adminFetch = useAdminFetch();
     const [elements, setElements] = useState<AdminElement[]>([]);
+    const [groups, setGroups] = useState<AdminGroup[]>([]);
     const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
+    const [groupFilter, setGroupFilter] = useState<string | null>("__all__");
     const [createOpen, setCreateOpen] = useState(false);
     const [newTitle, setNewTitle] = useState("");
     const [creating, setCreating] = useState(false);
     const [editTarget, setEditTarget] = useState<AdminElement | null>(null);
     const [editTitle, setEditTitle] = useState("");
+    const [editGroupId, setEditGroupId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<AdminElement | null>(null);
     const [deleteImpact, setDeleteImpact] = useState<{
@@ -46,19 +60,38 @@ export default function RequirementElementsPage() {
     } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    function loadElements() {
+    function loadData() {
         setLoading(true);
-        adminFetch("/api/admin/requirement-elements")
-            .then((r) => r.json())
-            .then((d) => {
-                if (d.ok) setElements(d.data as AdminElement[]);
-                setLoading(false);
-            });
+        Promise.all([
+            adminFetch("/api/admin/requirement-elements").then((r) => r.json()),
+            adminFetch("/api/admin/element-groups").then((r) => r.json()),
+        ]).then(([elementsData, groupsData]) => {
+            if (elementsData.ok) setElements(elementsData.data as AdminElement[]);
+            if (groupsData.ok) setGroups(groupsData.data as AdminGroup[]);
+            setLoading(false);
+        });
     }
 
     useEffect(() => {
-        loadElements();
+        loadData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const filteredElements = elements.filter((el) => {
+        if (groupFilter === "__all__") return true;
+        if (groupFilter === "__ungrouped__") return el.groupId === null;
+        return el.groupId === groupFilter;
+    });
+
+    const groupSelectData = [
+        { value: "__all__", label: "All groups" },
+        { value: "__ungrouped__", label: "Ungrouped" },
+        ...groups.map((g) => ({ value: g.id, label: g.name })),
+    ];
+
+    const groupDropdownData = [
+        { value: "", label: "None" },
+        ...groups.map((g) => ({ value: g.id, label: g.name })),
+    ];
 
     function toggleActive(el: AdminElement) {
         startTransition(async () => {
@@ -97,6 +130,7 @@ export default function RequirementElementsPage() {
     function openEdit(el: AdminElement) {
         setEditTarget(el);
         setEditTitle(el.title);
+        setEditGroupId(el.groupId);
     }
 
     async function saveEdit() {
@@ -104,7 +138,10 @@ export default function RequirementElementsPage() {
         setSaving(true);
         const res = await adminFetch(`/api/admin/requirement-elements/${editTarget.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ title: editTitle.trim() }),
+            body: JSON.stringify({
+                title: editTitle.trim(),
+                groupId: editGroupId || null,
+            }),
         });
         const data = await res.json();
         setSaving(false);
@@ -185,6 +222,14 @@ export default function RequirementElementsPage() {
                     </Button>
                 </Group>
 
+                <Select
+                    data={groupSelectData}
+                    value={groupFilter}
+                    onChange={setGroupFilter}
+                    w={220}
+                    size="sm"
+                />
+
                 {loading ? (
                     <Center py="xl">
                         <Loader />
@@ -194,6 +239,7 @@ export default function RequirementElementsPage() {
                         <Table.Thead>
                             <Table.Tr>
                                 <Table.Th>Title</Table.Th>
+                                <Table.Th>Group</Table.Th>
                                 <Table.Th>Active</Table.Th>
                                 <Table.Th>Default On</Table.Th>
                                 <Table.Th>Cards using</Table.Th>
@@ -201,9 +247,14 @@ export default function RequirementElementsPage() {
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                            {elements.map((el) => (
+                            {filteredElements.map((el) => (
                                 <Table.Tr key={el.id}>
                                     <Table.Td>{el.title}</Table.Td>
+                                    <Table.Td>
+                                        <Text size="sm" c={el.groupName ? undefined : "dimmed"}>
+                                            {el.groupName ?? "—"}
+                                        </Text>
+                                    </Table.Td>
                                     <Table.Td>
                                         <Switch
                                             checked={el.active}
@@ -284,6 +335,13 @@ export default function RequirementElementsPage() {
                         onChange={(e) => setEditTitle(e.currentTarget.value)}
                         autoFocus
                     />
+                    <Select
+                        label="Group"
+                        data={groupDropdownData}
+                        value={editGroupId ?? ""}
+                        onChange={(v) => setEditGroupId(v || null)}
+                        clearable
+                    />
                     <Button
                         onClick={() => void saveEdit()}
                         loading={saving}
@@ -294,6 +352,7 @@ export default function RequirementElementsPage() {
                     </Button>
                 </Stack>
             </Modal>
+
             <Modal
                 opened={!!deleteTarget}
                 onClose={() => {

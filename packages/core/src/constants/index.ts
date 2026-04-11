@@ -1,6 +1,9 @@
 // Text field length limits
 export * from "./textLimits";
 
+// Requirement element groups
+export * from "./elementGroups";
+
 // Scopes
 export const ADMIN_SCOPE = "admin";
 

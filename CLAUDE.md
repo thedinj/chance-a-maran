@@ -140,7 +140,7 @@ PORT=3001
 
 ### Media
 
-`POST /api/media` — upload image (max 5 MB, JPEG/PNG/GIF). Returns `mediaId` UUID. Referenced by `CardVersion.imageId`; `CardVersion.imageYOffset` (0–1) controls vertical crop position (`object-position: center {n*100}%`).
+`POST /api/media` — upload image (max 5 MB, JPEG/PNG/GIF). Returns `mediaId` UUID. Referenced by `CardVersion.imageId`. `media.imageYOffset` (0–1) controls vertical crop position (`object-position: center {n*100}%`) — stored on the media record, not the card version.
 
 ### Admin Portal
 

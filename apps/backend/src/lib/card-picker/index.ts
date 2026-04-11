@@ -2,12 +2,14 @@ import type { FilterSettings } from "@chance/core";
 import {
     BASE_WEIGHT,
     DOWNVOTE_MULTIPLIER,
+    ElementGroupId,
     SESSION_CARD_BOOST,
     UPVOTE_BONUS,
     UPVOTE_BONUS_CAP,
 } from "@chance/core";
 import * as cardRepo from "../repos/cardRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
+import * as requirementElementRepo from "../repos/requirementElementRepo";
 
 // ─── Weighted random ──────────────────────────────────────────────────────────
 
@@ -96,9 +98,19 @@ export function pick(
         passesGameTagFilter(c.gameTagIds, filterSettings.gameTags)
     );
 
-    // 3. Apply requirement element filter
+    // 3. Apply requirement element filter.
+    // When maxDrinkingLevel is 0, treat all Drinks-group elements as unavailable
+    // regardless of what the host selected — even if they're stored in availableElementIds.
+    let effectiveAvailableIds = filterSettings.availableElementIds;
+    if (filterSettings.maxDrinkingLevel === 0 && effectiveAvailableIds !== undefined) {
+        const drinkingElementIds = new Set(
+            requirementElementRepo.listIdsByGroup(ElementGroupId.Drinks)
+        );
+        effectiveAvailableIds = effectiveAvailableIds.filter((id) => !drinkingElementIds.has(id));
+    }
+
     const eligible = afterGameTags.filter((c) =>
-        passesElementFilter(c.requirementElementIds, filterSettings.availableElementIds)
+        passesElementFilter(c.requirementElementIds, effectiveAvailableIds)
     );
 
     if (eligible.length === 0) return null;

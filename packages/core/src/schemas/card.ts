@@ -1,12 +1,25 @@
 import { z } from "zod";
 import { GameSchema } from "./game";
 
+export const RequirementElementGroupSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    sortOrder: z.number().int(),
+    locked: z.boolean(),
+});
+
+export type RequirementElementGroup = z.infer<typeof RequirementElementGroupSchema>;
+
 export const RequirementElementSchema = z.object({
     id: z.string(),
     title: z.string(),
     active: z.boolean(),
     /** If true, this element is assumed available by default when a host doesn't configure venue elements. */
     defaultAvailable: z.boolean(),
+    /** ID of the group this element belongs to, if any. */
+    groupId: z.string().nullable().optional(),
+    /** Display name of the group, denormalized for convenience. */
+    groupName: z.string().nullable().optional(),
 });
 
 export type RequirementElement = z.infer<typeof RequirementElementSchema>;

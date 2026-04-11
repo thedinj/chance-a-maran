@@ -126,12 +126,21 @@ export function initializeDatabase() {
             created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Groupings for requirement elements (system groups are locked; future admin groups are not)
+        CREATE TABLE IF NOT EXISTS requirement_element_groups (
+            id         TEXT    NOT NULL PRIMARY KEY,
+            name       TEXT    NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            locked     INTEGER NOT NULL DEFAULT 0
+        );
+
         -- Physical/game prop requirements for card versions
         CREATE TABLE IF NOT EXISTS requirement_elements (
             id                TEXT NOT NULL PRIMARY KEY,
             title             TEXT NOT NULL,
             active            INTEGER NOT NULL DEFAULT 1,
-            default_available INTEGER NOT NULL DEFAULT 0
+            default_available INTEGER NOT NULL DEFAULT 0,
+            group_id          TEXT REFERENCES requirement_element_groups(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS card_version_requirements (
