@@ -38,7 +38,7 @@ export function findAll(): AdminUser[] {
             `SELECT u.id, u.email, u.display_name, u.is_admin, u.created_at,
                     COUNT(c.id) AS card_count
              FROM users u
-             LEFT JOIN cards c ON c.author_user_id = u.id
+             LEFT JOIN cards c ON c.owner_user_id = u.id
              GROUP BY u.id
              ORDER BY u.created_at DESC`
         )

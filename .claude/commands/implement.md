@@ -135,7 +135,8 @@ Consume via `apiClient.<method>()`. Rules:
 | Field                | Notes                                                                |
 | -------------------- | -------------------------------------------------------------------- |
 | `id`                 | uuid                                                                 |
-| `authorUserId`       | FK → User — never null                                               |
+| `authorUserId`       | FK → User — original creator, set at creation, never changes         |
+| `ownerUserId`        | FK → User — current owner, starts = authorUserId, mutable via transfer |
 | `cardType`           | `chanceCard` or `reparationsCard` — Card-level, admin-only to change |
 | `active`             | false = excluded from all draw pools; history unaffected             |
 | `isGlobal`           | admin-promoted to global pool                                        |

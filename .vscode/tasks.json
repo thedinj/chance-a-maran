@@ -22,6 +22,16 @@
             }
         },
         {
+            "label": "Run Database Migrations",
+            "type": "shell",
+            "command": "pnpm --filter backend db:migrate",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Import Legacy Cards",
             "type": "shell",
             "command": "pnpm --filter backend db:import",

@@ -420,7 +420,7 @@ function CardDrawer({
                     <Button
                         onClick={() => void saveTransfer()}
                         loading={transferSaving}
-                        disabled={!newOwnerUserId || newOwnerUserId === card.authorUserId}
+                        disabled={!newOwnerUserId || newOwnerUserId === card.ownerUserId}
                         color="orange"
                     >
                         Transfer
@@ -1215,7 +1215,7 @@ function CardDrawer({
                 </Group>
 
                 <Text size="xs" c="dimmed">
-                    Owner: {card.ownerDisplayName} · Author: {cv.authorDisplayName} ·{" "}
+                    Owner: {card.ownerDisplayName} · Author: {card.authorDisplayName} ·{" "}
                     {formatDate(card.createdAt)}
                     {card.netVotes !== 0 && (
                         <>
@@ -1550,16 +1550,9 @@ export default function CardsPage() {
                 )}
             </Table.Td>
             <Table.Td>
-                <Stack gap={0}>
-                    <Text size="xs" c="dimmed">
-                        {card.ownerDisplayName}
-                    </Text>
-                    {card.authorUserId !== card.currentVersion.authoredByUserId && (
-                        <Text size="xs" c="dimmed" fs="italic">
-                            by {card.currentVersion.authorDisplayName}
-                        </Text>
-                    )}
-                </Stack>
+                <Text size="xs" c="dimmed">
+                    {card.ownerDisplayName}
+                </Text>
             </Table.Td>
             <Table.Td>
                 <Text size="xs" c="dimmed">

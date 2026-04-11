@@ -5,7 +5,7 @@ import * as cardService from "@/lib/services/cardService";
 
 export const dynamic = "force-dynamic";
 
-/** POST /api/admin/cards/:cardId/transfer-owner — reassign card.author_user_id to a different registered user. */
+/** POST /api/admin/cards/:cardId/transfer-owner — reassign card.owner_user_id to a different registered user. */
 export const POST = withAdmin(async (req, { params }) => {
     try {
         const { cardId } = await params;

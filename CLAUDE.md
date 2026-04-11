@@ -19,7 +19,7 @@ Chance is a social party app played on a single shared phone alongside physical 
 
 ## Project Status
 
-This is an early-stage project. The monorepo structure, app code, and package files are being built out.
+This app is **released and in production**. The database is live on real devices. Any schema change requires a migration — never modify `init.ts` alone.
 
 ## Monorepo Structure
 
@@ -94,7 +94,7 @@ Single source of truth for:
 
 - All queries use prepared statements — no string interpolation.
 - Boolean columns use `boolToInt`/`intToBool` bridge helpers (SQLite has no native bool).
-- Migrations are timestamp-named files in `lib/db/migrations/`, applied in order by the migration runner.
+- Migrations are timestamp-named TypeScript files in `src/db/migrations/`, applied in order by `pnpm db:migrate` (`src/db/migrate.ts`). **Every schema change requires a migration** — `init.ts` only runs on fresh databases.
 - `withAuth` HOF wraps protected routes; `withAdmin` additionally checks `users.is_admin`.
 - Every API response uses the `{ ok, data/error, serverTimestamp }` envelope — no exceptions.
 - Mutations return the full updated entity so the client can reconcile in one step.

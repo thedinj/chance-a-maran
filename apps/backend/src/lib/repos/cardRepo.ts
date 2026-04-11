@@ -9,6 +9,8 @@ import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
 export interface DbCard {
     id: string;
     author_user_id: string;
+    author_display_name: string;
+    owner_user_id: string;
     owner_display_name: string;
     card_type: "standard" | "reparations";
     active: number;
@@ -108,6 +110,8 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
     return {
         id: cardRow.id,
         authorUserId: cardRow.author_user_id,
+        authorDisplayName: cardRow.author_display_name,
+        ownerUserId: cardRow.owner_user_id,
         ownerDisplayName: cardRow.owner_display_name,
         cardType: cardRow.card_type,
         active: intToBool(cardRow.active),
@@ -127,9 +131,12 @@ function findRawById(id: string): DbCard | null {
     return (
         (db
             .prepare(
-                `SELECT c.*, u.display_name AS owner_display_name
+                `SELECT c.*,
+                        author_u.display_name AS author_display_name,
+                        owner_u.display_name  AS owner_display_name
                  FROM cards c
-                 JOIN users u ON u.id = c.author_user_id
+                 JOIN users author_u ON author_u.id = c.author_user_id
+                 JOIN users owner_u  ON owner_u.id  = c.owner_user_id
                  WHERE c.id = ?`
             )
             .get(id) as DbCard | undefined) ?? null
@@ -178,13 +185,16 @@ export function findVersionsByCardId(cardId: string): CardVersion[] {
     return rows.map(mapCardVersion);
 }
 
-export function findByAuthorUserId(userId: string): Card[] {
+export function findByOwnerUserId(userId: string): Card[] {
     const cards = db
         .prepare(
-            `SELECT c.*, u.display_name AS owner_display_name
+            `SELECT c.*,
+                    author_u.display_name AS author_display_name,
+                    owner_u.display_name  AS owner_display_name
              FROM cards c
-             JOIN users u ON u.id = c.author_user_id
-             WHERE c.author_user_id = ?
+             JOIN users author_u ON author_u.id = c.author_user_id
+             JOIN users owner_u  ON owner_u.id  = c.owner_user_id
+             WHERE c.owner_user_id = ?
              ORDER BY c.created_at DESC`
         )
         .all(userId) as DbCard[];
@@ -240,10 +250,13 @@ export function findAll(filters?: {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const cards = db
         .prepare(
-            `SELECT c.*, u.display_name AS owner_display_name
+            `SELECT c.*,
+                    author_u.display_name AS author_display_name,
+                    owner_u.display_name  AS owner_display_name
              FROM cards c
              JOIN card_versions cv ON cv.id = c.current_version_id
-             JOIN users u ON u.id = c.author_user_id
+             JOIN users author_u ON author_u.id = c.author_user_id
+             JOIN users owner_u  ON owner_u.id  = c.owner_user_id
              ${where}
              ORDER BY c.created_at DESC`
         )
@@ -276,9 +289,9 @@ export function create(data: {
 
     db.transaction(() => {
         db.prepare(
-            `INSERT INTO cards (id, author_user_id, card_type, active, is_global, created_in_session_id, current_version_id, created_at)
-             VALUES (?, ?, ?, 1, 0, ?, ?, ?)`
-        ).run(cardId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
+            `INSERT INTO cards (id, author_user_id, owner_user_id, card_type, active, is_global, created_in_session_id, current_version_id, created_at)
+             VALUES (?, ?, ?, ?, 1, 0, ?, ?, ?)`
+        ).run(cardId, data.authorUserId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
 
         db.prepare(
             `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, image_y_offset, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
@@ -432,8 +445,8 @@ export function setCardType(id: string, cardType: "standard" | "reparations"): v
     db.prepare("UPDATE cards SET card_type = ? WHERE id = ?").run(cardType, id);
 }
 
-export function setAuthorUserId(id: string, userId: string): void {
-    db.prepare("UPDATE cards SET author_user_id = ? WHERE id = ?").run(userId, id);
+export function setOwnerUserId(id: string, userId: string): void {
+    db.prepare("UPDATE cards SET owner_user_id = ? WHERE id = ?").run(userId, id);
 }
 
 // ─── Draw pool query ──────────────────────────────────────────────────────────
@@ -464,7 +477,7 @@ export function getDrawPool(
                AND cv.spice_level   <= ?
                AND (
                  ${globalClause}c.created_in_session_id = ?
-                 OR c.author_user_id IN (
+                 OR c.owner_user_id IN (
                    SELECT user_id FROM session_players
                    WHERE session_id = ?
                      AND user_id IS NOT NULL

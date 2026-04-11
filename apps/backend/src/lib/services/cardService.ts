@@ -77,7 +77,7 @@ export function updateCard(
 ): Card {
     const card = cardRepo.findById(cardId);
     if (!card) throw new NotFoundError("Card not found");
-    if (!isAdmin && card.authorUserId !== userId) {
+    if (!isAdmin && card.ownerUserId !== userId) {
         throw new AuthorizationError("You can only edit your own cards");
     }
     if (card.isGlobal && !isAdmin) {
@@ -107,7 +107,7 @@ export function updateCard(
 export function deactivateCard(userId: string, cardId: string, isAdmin: boolean): Card {
     const card = cardRepo.findById(cardId);
     if (!card) throw new NotFoundError("Card not found");
-    if (!isAdmin && card.authorUserId !== userId) {
+    if (!isAdmin && card.ownerUserId !== userId) {
         throw new AuthorizationError("You can only deactivate your own cards");
     }
     if (card.isGlobal && !isAdmin) {
@@ -120,7 +120,7 @@ export function deactivateCard(userId: string, cardId: string, isAdmin: boolean)
 export function reactivateCard(userId: string, cardId: string, isAdmin: boolean): Card {
     const card = cardRepo.findById(cardId);
     if (!card) throw new NotFoundError("Card not found");
-    if (!isAdmin && card.authorUserId !== userId) {
+    if (!isAdmin && card.ownerUserId !== userId) {
         throw new AuthorizationError("You can only reactivate your own cards");
     }
     if (card.isGlobal && !isAdmin) {
@@ -158,7 +158,7 @@ export function demoteFromGlobal(cardId: string): Card {
 export function nominateForGlobal(userId: string, cardId: string): Card {
     const card = cardRepo.findById(cardId);
     if (!card) throw new NotFoundError("Card not found");
-    if (card.authorUserId !== userId) {
+    if (card.ownerUserId !== userId) {
         throw new AuthorizationError("You can only nominate your own cards");
     }
     if (card.isGlobal) {
@@ -177,7 +177,7 @@ export function nominateForGlobal(userId: string, cardId: string): Card {
 export function withdrawNomination(userId: string, cardId: string, isAdmin: boolean): Card {
     const card = cardRepo.findById(cardId);
     if (!card) throw new NotFoundError("Card not found");
-    if (!isAdmin && card.authorUserId !== userId) {
+    if (!isAdmin && card.ownerUserId !== userId) {
         throw new AuthorizationError("You can only withdraw nominations for your own cards");
     }
     cardRepo.setGlobalNomination(cardId, false);
@@ -189,7 +189,7 @@ export function transferOwnership(cardId: string, newOwnerUserId: string): Card 
     if (!card) throw new NotFoundError("Card not found");
     const newOwner = userRepo.findById(newOwnerUserId);
     if (!newOwner) throw new NotFoundError("User not found");
-    cardRepo.setAuthorUserId(cardId, newOwnerUserId);
+    cardRepo.setOwnerUserId(cardId, newOwnerUserId);
     return cardRepo.findById(cardId)!;
 }
 

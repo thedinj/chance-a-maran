@@ -330,10 +330,9 @@ export default function MyCards() {
                             {/* ── Authorship ───────────────────────────────── */}
                             <div style={styles.authorshipRow}>
                                 <span style={styles.authorshipText}>
-                                    by {selectedCard.currentVersion.authorDisplayName}
+                                    by {selectedCard.authorDisplayName}
                                 </span>
-                                {selectedCard.authorUserId !==
-                                    selectedCard.currentVersion.authoredByUserId && (
+                                {selectedCard.authorUserId !== selectedCard.ownerUserId && (
                                     <span style={styles.authorshipText}>
                                         owned by {selectedCard.ownerDisplayName}
                                     </span>

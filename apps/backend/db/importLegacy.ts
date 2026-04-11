@@ -10,7 +10,7 @@
  *   2. Parses ChanceCardElements, ChanceCards, ChanceCardRequirements
  *   3. Skips cards where Inactive = 1
  *   4. Imports images to the filesystem (data/), maps ratings to drinking/spice levels
- *   5. All cards are set to pending_global = 1 (nominated for global promotion) and attributed to the admin user
+ *   5. All cards are set to pending_global = 1 (nominated for global promotion); both author_user_id and owner_user_id are set to the resolved legacy creator
  */
 
 import { randomBytes, randomUUID } from "crypto";
@@ -372,8 +372,8 @@ async function main() {
         const cardIdMap = new Map<number, { cardId: string; versionId: string }>();
 
         const insertCard = db.prepare(
-            `INSERT INTO cards (id, author_user_id, card_type, active, is_global, pending_global, created_in_session_id, current_version_id, created_at)
-             VALUES (?, ?, ?, 1, 0, 1, NULL, ?, ?)`
+            `INSERT INTO cards (id, author_user_id, owner_user_id, card_type, active, is_global, pending_global, created_in_session_id, current_version_id, created_at)
+             VALUES (?, ?, ?, ?, 1, 0, 1, NULL, ?, ?)`
         );
         const insertVersion = db.prepare(
             `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
@@ -429,7 +429,7 @@ async function main() {
             const cardId = randomUUID();
             const versionId = randomUUID();
 
-            insertCard.run(cardId, authorId, cardType, versionId, createdAt);
+            insertCard.run(cardId, authorId, authorId, cardType, versionId, createdAt);
             insertVersion.run(
                 versionId,
                 cardId,

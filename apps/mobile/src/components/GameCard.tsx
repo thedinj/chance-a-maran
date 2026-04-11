@@ -177,7 +177,7 @@ export function CardFront({
                         </div>
 
                         <p style={styles.revealHeroTitle}>{cv.title}</p>
-                        <p style={styles.revealHeroMeta}>{cv.authorDisplayName}</p>
+                        <p style={styles.revealHeroMeta}>{event.card.authorDisplayName}</p>
 
                         {readOnly ? (
                             // ── Carousel: both sections visible, each line-clamped ──

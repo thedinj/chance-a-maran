@@ -96,17 +96,18 @@ export function initializeDatabase() {
 
         -- Cards and versioned content
         CREATE TABLE IF NOT EXISTS cards (
-            id                   TEXT NOT NULL PRIMARY KEY,
-            author_user_id       TEXT NOT NULL REFERENCES users(id),
-            card_type            TEXT NOT NULL DEFAULT 'standard'
+            id                    TEXT NOT NULL PRIMARY KEY,
+            author_user_id        TEXT NOT NULL REFERENCES users(id),
+            owner_user_id         TEXT NOT NULL REFERENCES users(id),
+            card_type             TEXT NOT NULL DEFAULT 'standard'
                 CHECK(card_type IN ('standard', 'reparations')),
-            active               INTEGER NOT NULL DEFAULT 1,
-            is_global            INTEGER NOT NULL DEFAULT 0,
-            pending_global       INTEGER NOT NULL DEFAULT 0,
+            active                INTEGER NOT NULL DEFAULT 1,
+            is_global             INTEGER NOT NULL DEFAULT 0,
+            pending_global        INTEGER NOT NULL DEFAULT 0,
             created_in_session_id TEXT REFERENCES sessions(id),
-            current_version_id   TEXT NOT NULL,
-            net_votes            INTEGER NOT NULL DEFAULT 0,
-            created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            current_version_id    TEXT NOT NULL,
+            net_votes             INTEGER NOT NULL DEFAULT 0,
+            created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS card_versions (
@@ -189,6 +190,8 @@ export function initializeDatabase() {
 
         CREATE INDEX IF NOT EXISTS idx_cards_author_user_id
             ON cards(author_user_id);
+        CREATE INDEX IF NOT EXISTS idx_cards_owner_user_id
+            ON cards(owner_user_id);
         CREATE INDEX IF NOT EXISTS idx_card_versions_card_id
             ON card_versions(card_id);
         CREATE INDEX IF NOT EXISTS idx_draw_events_session_id
