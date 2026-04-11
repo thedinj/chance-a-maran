@@ -72,6 +72,7 @@ export function initializeDatabase() {
             mime_type           TEXT NOT NULL,
             size                INTEGER NOT NULL,
             uploaded_by_user_id TEXT NOT NULL REFERENCES users(id),
+            y_offset            REAL NOT NULL DEFAULT 0.5,
             created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -118,7 +119,6 @@ export function initializeDatabase() {
             description          TEXT NOT NULL,
             hidden_instructions  TEXT,
             image_id             TEXT REFERENCES media(id),
-            image_y_offset       REAL NOT NULL DEFAULT 0.5,
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,

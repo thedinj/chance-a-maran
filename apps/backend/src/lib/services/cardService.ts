@@ -10,6 +10,7 @@ import {
 import type { Card, CardTransfer, CardVersion, DrawEvent, SubmitCardRequest } from "@chance/core";
 import { db } from "../db/db";
 import * as cardRepo from "../repos/cardRepo";
+import * as mediaRepo from "../repos/mediaRepo";
 import * as requirementElementRepo from "../repos/requirementElementRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
@@ -50,7 +51,7 @@ export function submitCard(userId: string, sessionId: string | null, req: Submit
         { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
         { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
     );
-    return cardRepo.create({
+    const card = cardRepo.create({
         authorUserId: userId,
         cardType: req.cardType,
         createdInSessionId: sessionId,
@@ -58,16 +59,29 @@ export function submitCard(userId: string, sessionId: string | null, req: Submit
         description: req.description,
         hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
-        imageYOffset: req.imageYOffset ?? 0.5,
         drinkingLevel: levels.drinkingLevel,
         spiceLevel: levels.spiceLevel,
         isGameChanger: req.cardType === "reparations" ? false : req.isGameChanger,
         gameTags: req.gameTags,
         requirementIds: req.requirementIds,
     });
+    // Store the initial crop offset on the media row (outside the version snapshot).
+    if (req.imageId && req.imageYOffset !== undefined) {
+        mediaRepo.updateYOffset(req.imageId, req.imageYOffset);
+    }
+    // Re-fetch so the returned card reflects the updated media y_offset via JOIN.
+    return cardRepo.findById(card.id)!;
 }
 
 // ─── Card editing ─────────────────────────────────────────────────────────────
+
+/** Returns true if two string arrays contain the same elements (order-insensitive). */
+function sortedEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort();
+    const sb = [...b].sort();
+    return sa.every((v, i) => v === sb[i]);
+}
 
 export function updateCard(
     userId: string,
@@ -89,19 +103,46 @@ export function updateCard(
         { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
         { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
     );
-    return cardRepo.createVersion(cardId, {
-        authoredByUserId: userId,
-        title: req.title,
-        description: req.description,
-        hiddenInstructions: req.hiddenInstructions,
-        imageId: req.imageId,
-        imageYOffset: req.imageYOffset ?? 0.5,
-        drinkingLevel: levels.drinkingLevel,
-        spiceLevel: levels.spiceLevel,
-        isGameChanger: card.cardType === "reparations" ? false : req.isGameChanger,
-        gameTags: req.gameTags,
-        requirementIds: req.requirementIds,
-    });
+
+    const cv = card.currentVersion;
+    const isGameChanger = card.cardType === "reparations" ? false : req.isGameChanger;
+
+    // Determine whether any card content actually changed.
+    // imageYOffset is intentionally excluded — it lives on the media row, not the version.
+    const sameContent =
+        req.title === cv.title &&
+        req.description === cv.description &&
+        req.hiddenInstructions === cv.hiddenInstructions &&
+        (req.imageId ?? null) === cv.imageId &&
+        levels.drinkingLevel === cv.drinkingLevel &&
+        levels.spiceLevel === cv.spiceLevel &&
+        isGameChanger === cv.isGameChanger &&
+        sortedEqual(req.gameTags, cv.gameTags.map((t) => t.id)) &&
+        sortedEqual(req.requirementIds, cv.requirements.map((r) => r.id));
+
+    if (!sameContent) {
+        cardRepo.createVersion(cardId, {
+            authoredByUserId: userId,
+            title: req.title,
+            description: req.description,
+            hiddenInstructions: req.hiddenInstructions,
+            imageId: req.imageId,
+            drinkingLevel: levels.drinkingLevel,
+            spiceLevel: levels.spiceLevel,
+            isGameChanger,
+            gameTags: req.gameTags,
+            requirementIds: req.requirementIds,
+        });
+    }
+
+    // Update the crop offset on whichever image will be active after this save.
+    // When content changed, the imageId may have changed too; use the requested one.
+    const effectiveImageId = sameContent ? cv.imageId : (req.imageId ?? null);
+    if (effectiveImageId && req.imageYOffset !== undefined) {
+        mediaRepo.updateYOffset(effectiveImageId, req.imageYOffset);
+    }
+
+    return cardRepo.findById(cardId)!;
 }
 
 export function deactivateCard(userId: string, cardId: string, isAdmin: boolean): Card {

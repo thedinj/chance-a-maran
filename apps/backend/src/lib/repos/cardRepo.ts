@@ -30,6 +30,7 @@ export interface DbCardVersion {
     description: string;
     hidden_instructions: string | null;
     image_id: string | null;
+    /** Sourced from media.y_offset via LEFT JOIN — not stored on card_versions. */
     image_y_offset: number;
     drinking_level: number;
     spice_level: number;
@@ -147,9 +148,11 @@ function findRawVersionById(id: string): DbCardVersion | null {
     return (
         (db
             .prepare(
-                `SELECT cv.*, u.display_name AS author_display_name
+                `SELECT cv.*, u.display_name AS author_display_name,
+                        COALESCE(m.y_offset, 0.5) AS image_y_offset
                  FROM card_versions cv
                  JOIN users u ON u.id = cv.authored_by_user_id
+                 LEFT JOIN media m ON m.id = cv.image_id
                  WHERE cv.id = ?`
             )
             .get(id) as DbCardVersion | undefined) ?? null
@@ -175,9 +178,11 @@ export function findVersionById(cvId: string): CardVersion | null {
 export function findVersionsByCardId(cardId: string): CardVersion[] {
     const rows = db
         .prepare(
-            `SELECT cv.*, u.display_name AS author_display_name
+            `SELECT cv.*, u.display_name AS author_display_name,
+                    COALESCE(m.y_offset, 0.5) AS image_y_offset
              FROM card_versions cv
              JOIN users u ON u.id = cv.authored_by_user_id
+             LEFT JOIN media m ON m.id = cv.image_id
              WHERE cv.card_id = ?
              ORDER BY cv.version_number ASC`
         )
@@ -276,7 +281,6 @@ export function create(data: {
     description: string;
     hiddenInstructions: string | null;
     imageId: string | null;
-    imageYOffset: number;
     drinkingLevel: number;
     spiceLevel: number;
     isGameChanger: boolean;
@@ -294,8 +298,8 @@ export function create(data: {
         ).run(cardId, data.authorUserId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
 
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, image_y_offset, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -303,7 +307,6 @@ export function create(data: {
             data.description,
             data.hiddenInstructions,
             data.imageId,
-            data.imageYOffset,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),
@@ -335,7 +338,6 @@ export function createVersion(
         description: string;
         hiddenInstructions: string | null;
         imageId: string | null;
-        imageYOffset: number;
         drinkingLevel: number;
         spiceLevel: number;
         isGameChanger: boolean;
@@ -355,8 +357,8 @@ export function createVersion(
 
     db.transaction(() => {
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, image_y_offset, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -365,7 +367,6 @@ export function createVersion(
             data.description,
             data.hiddenInstructions,
             data.imageId,
-            data.imageYOffset,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),

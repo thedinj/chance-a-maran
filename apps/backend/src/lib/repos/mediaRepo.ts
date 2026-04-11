@@ -12,6 +12,7 @@ interface DbMediaMeta {
     mime_type: string;
     size: number;
     uploaded_by_user_id: string;
+    y_offset: number;
     created_at: string;
 }
 
@@ -63,6 +64,10 @@ export function findMetaById(id: string): Pick<DbMediaMeta, "id" | "uploaded_by_
             .prepare("SELECT id, uploaded_by_user_id FROM media WHERE id = ?")
             .get(id) as Pick<DbMediaMeta, "id" | "uploaded_by_user_id"> | undefined) ?? null
     );
+}
+
+export function updateYOffset(id: string, yOffset: number): void {
+    db.prepare("UPDATE media SET y_offset = ? WHERE id = ?").run(yOffset, id);
 }
 
 export function deleteById(id: string): void {
