@@ -8,7 +8,7 @@ export interface AdminSessionContextValue {
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
-    tryRefreshToken: () => Promise<boolean>;
+    tryRefreshToken: () => Promise<string | null>;
 }
 
 export const AdminSessionContext = createContext<AdminSessionContextValue | undefined>(undefined);

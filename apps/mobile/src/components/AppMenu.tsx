@@ -75,7 +75,7 @@ export function AppMenu() {
                       },
                   ]
                 : []),
-            { label: "Create game", path: "/game-settings", disabled: !!session },
+            { label: "Create game", path: "/game-settings", disabled: !!session || !user },
             { label: "Submit card", path: "/submit-card", disabled: !user },
             { label: "My cards", path: "/cards", disabled: !user },
             { label: "Game history", path: "/history", disabled: !user },

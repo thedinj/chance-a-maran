@@ -3,6 +3,7 @@
 import { useCallback, useRef } from "react";
 import type { ApiResult } from "@chance/core";
 import { useAdminSession } from "./useAdminSession";
+import { authLog, authWarn, tokenExpiry } from "./authDebug";
 
 /**
  * Unwraps the standard API envelope `{ ok, data, serverTimestamp }`.
@@ -17,7 +18,9 @@ export async function parseApiResult<T>(response: Response): Promise<T> {
 export function useAdminFetch() {
     const { accessToken, tryRefreshToken } = useAdminSession();
 
-    // Keep a ref so the retry closure always reads the latest token after refresh
+    // Keep a ref so the initial request always reads the latest token without
+    // adding accessToken to the useCallback dep array (which would recreate
+    // adminFetch on every token rotation and break memoized callers).
     const tokenRef = useRef(accessToken);
     tokenRef.current = accessToken;
 
@@ -32,12 +35,33 @@ export function useAdminFetch() {
 
             const response = await doFetch(tokenRef.current);
 
-            // On 401, try to refresh and replay once
             if (response.status === 401) {
-                const refreshed = await tryRefreshToken();
-                if (refreshed) {
-                    return doFetch(tokenRef.current);
+                // Extract just the path for safe logging (no query params / sensitive data)
+                const path = (() => {
+                    try { return new URL(url, "http://x").pathname; } catch { return url; }
+                })();
+
+                authWarn("adminFetch: 401 — attempting token refresh before retry", {
+                    path,
+                    currentToken: tokenExpiry(tokenRef.current),
+                });
+
+                // Use the token returned directly from tryRefreshToken rather than
+                // tokenRef.current: React state hasn't updated yet (no re-render has
+                // happened), so tokenRef.current still holds the expired token.
+                const freshToken = await tryRefreshToken();
+
+                if (freshToken) {
+                    authLog("adminFetch: refresh succeeded — retrying original request", {
+                        path,
+                        freshToken: tokenExpiry(freshToken),
+                    });
+                    return doFetch(freshToken);
                 }
+
+                authWarn("adminFetch: refresh failed — returning original 401 (user will be redirected to login)", {
+                    path,
+                });
             }
 
             return response;
