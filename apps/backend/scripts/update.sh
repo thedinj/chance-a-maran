@@ -8,17 +8,20 @@ set -e
 #
 # GETTING STARTED - Running an update:
 # -------------------------------------
+# Always update basket-bot first — it is the canonical source for the shared
+# scripts and re-hoists them so pi-app-update is current before running here.
+#
 # 1. SSH into your Raspberry Pi:
 #      ssh admin@your-pi-hostname
 #
-# 2. Navigate to the scripts directory:
-#      cd ~/chance-a-maran/apps/backend/scripts
+# 2. Update basket-bot first:
+#      cd ~/basket-bot/apps/backend/scripts && ./update.sh
 #
-# 3. If update.sh doesn't have execute permissions:
-#      chmod +x update.sh
+# 3. Then update Chance-a-Maran (preferred):
+#      pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 #
-# 4. Run the update:
-#      ./update.sh
+#    Or use this thin-wrapper (delegates to the same hoisted script):
+#      cd ~/chance-a-maran/apps/backend/scripts && ./update.sh
 #
 # WHAT THIS SCRIPT DOES:
 # ----------------------

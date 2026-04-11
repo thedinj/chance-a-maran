@@ -8,43 +8,29 @@ set -e
 #
 # GETTING STARTED - First-time setup:
 # ------------------------------------
-# 1. Install basket-bot first (it bootstraps the shared pi-deploy scripts):
+# basket-bot must be installed first — it is the canonical source for the shared
+# pi-deploy scripts. See ~/basket-bot/apps/backend/scripts/DEPLOY.md for the
+# full guide, including how to install basket-bot itself.
 #
-#    If basket-bot is not yet cloned:
-#      cd ~
-#      git clone https://github.com/thedinj/basket-bot.git
-#      cd basket-bot && git config core.filemode false
-#
-#    Then bootstrap:
-#      cd ~/basket-bot/apps/backend/scripts
-#      chmod +x bootstrap.sh install.sh update.sh
-#      ./bootstrap.sh
-#
-#    (You only need to do this once per Pi. If basket-bot is already installed,
-#    the shared scripts are likely already in place.)
-#
-# 2. SSH into your Raspberry Pi as the admin user (if not already):
+# 1. SSH into your Raspberry Pi as the admin user:
 #      ssh admin@your-pi-hostname
 #
-# 3. Install Node.js v20 if not already installed:
-#      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-#      sudo apt-get install -y nodejs
-#      node --version && npm --version   # verify
+# 2. Update basket-bot to ensure the hoisted scripts have all the latest fixes:
+#      cd ~/basket-bot/apps/backend/scripts && ./update.sh
 #
-# 4. Clone chance-a-maran (recommended: ~/chance-a-maran):
+# 3. Clone chance-a-maran (recommended: ~/chance-a-maran):
 #      cd ~
 #      git clone https://github.com/thedinj/chance-a-maran.git
-#
-# 5. Disable file mode change tracking:
 #      cd ~/chance-a-maran && git config core.filemode false
 #
-# 6. Edit deploy.config.sh if needed (e.g. to set DEFAULT_DOMAIN):
-#      nano ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
+# 4. Make these scripts executable:
+#      chmod +x ~/chance-a-maran/apps/backend/scripts/*.sh
 #
-# 7. Make this script executable and run it:
-#      cd ~/chance-a-maran/apps/backend/scripts
-#      chmod +x install.sh update.sh
-#      ./install.sh
+# 5. Run the install (preferred — uses the up-to-date hoisted script directly):
+#      pi-app-install ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
+#
+#    Or use this thin-wrapper (delegates to the same hoisted script):
+#      cd ~/chance-a-maran/apps/backend/scripts && ./install.sh
 #
 # WHAT THIS SCRIPT DOES:
 # ----------------------
