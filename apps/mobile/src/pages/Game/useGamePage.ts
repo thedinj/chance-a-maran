@@ -8,9 +8,8 @@ import { hapticMedium } from "../../lib/haptics";
 import { useExitSession } from "../../session/useExitSession";
 import { useSession } from "../../session/useSession";
 import { useTransfers } from "../../transfers/useTransfers";
-import type { DevDrawMode, DrawDrama } from "./types";
-import { GAME_CHANGER_DRAMA, REPARATIONS_DRAMA, STANDARD_DRAW_DRAMA } from "./types";
-import { preloadSoundIfNeeded } from "./sounds";
+import type { DevDrawMode } from "./types";
+import { preloadSoundIfNeeded } from "../../lib/sounds";
 
 // Tracks which session IDs have already auto-shown the join code so navigation
 // away and back does not trigger it again.
@@ -110,7 +109,6 @@ export interface UseGamePageReturn {
     selectedCard: DrawEvent | null;
     setSelectedCard: React.Dispatch<React.SetStateAction<DrawEvent | null>>;
     revealCard: DrawEvent | null;
-    revealDrama: DrawDrama | null;
     onDismissReveal: () => void;
     showJoinCode: boolean;
     setShowJoinCode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -163,7 +161,6 @@ export function useGamePage(): UseGamePageReturn {
 
     const [selectedCard, setSelectedCard] = useState<DrawEvent | null>(null);
     const [revealCard, setRevealCard] = useState<DrawEvent | null>(null);
-    const [revealDrama, setRevealDrama] = useState<DrawDrama | null>(null);
     const [showJoinCode, setShowJoinCode] = useState(false);
     const [showAddPlayer, setShowAddPlayer] = useState(false);
     const [showClaim, setShowClaim] = useState(false);
@@ -270,15 +267,6 @@ export function useGamePage(): UseGamePageReturn {
         // ── Dev-only bypass ──────────────────────────────────────────────────
         if (import.meta.env.DEV && devDrawMode !== "live") {
             const fakeEvent = makeFakeDrawEvent(devDrawMode, session.id, activePlayerId);
-            const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            const drama: DrawDrama | null = prefersReduced
-                ? null
-                : devDrawMode === "game-changer"
-                  ? GAME_CHANGER_DRAMA
-                  : devDrawMode === "reparations"
-                    ? REPARATIONS_DRAMA
-                    : STANDARD_DRAW_DRAMA;
-            setRevealDrama(drama);
             setRevealCard(fakeEvent);
             // Intentionally NOT calling addDrawEvent — fake draws must not pollute history
             return;
@@ -291,20 +279,9 @@ export function useGamePage(): UseGamePageReturn {
                 return;
             }
             addDrawEvent(result.data);
-            const prefersReduced =
-                typeof window !== "undefined" &&
-                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            const isGameChanger = Boolean(result.data.cardVersion.isGameChanger);
-            let drama: DrawDrama | null = null;
-            if (!prefersReduced) {
-                const hitSound =
-                    resolveHitSound(result.data.cardVersion) ??
-                    (isGameChanger ? GAME_CHANGER_DRAMA.hitSound : STANDARD_DRAW_DRAMA.hitSound);
-                const base = isGameChanger ? GAME_CHANGER_DRAMA : STANDARD_DRAW_DRAMA;
-                drama = { ...base, ...(hitSound !== undefined ? { hitSound } : {}) };
-                if (hitSound) preloadSoundIfNeeded(hitSound);
-            }
-            setRevealDrama(drama);
+            // Preload custom sound if present so it's ready when CardReveal mounts
+            const customSound = resolveHitSound(result.data.cardVersion);
+            if (customSound) preloadSoundIfNeeded(customSound);
             setRevealCard(result.data);
         });
     }, [activePlayerId, addDrawEvent, devDrawMode, session, startDrawTransition]);
@@ -320,24 +297,9 @@ export function useGamePage(): UseGamePageReturn {
                 return;
             }
             addDrawEvent(result.data);
-            const prefersReduced =
-                typeof window !== "undefined" &&
-                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            let reparationsDrama: DrawDrama | null = null;
-            if (!prefersReduced) {
-                const hitSound = resolveHitSound(result.data.cardVersion);
-                if (hitSound) {
-                    preloadSoundIfNeeded(hitSound);
-                    reparationsDrama = {
-                        ...REPARATIONS_DRAMA,
-                        hitSound,
-                        hitSoundOffsetMs: REPARATIONS_DRAMA.flipMs - 250,
-                    };
-                } else {
-                    reparationsDrama = REPARATIONS_DRAMA;
-                }
-            }
-            setRevealDrama(reparationsDrama);
+            // Preload custom sound if present so it's ready when CardReveal mounts
+            const customSound = resolveHitSound(result.data.cardVersion);
+            if (customSound) preloadSoundIfNeeded(customSound);
             setRevealCard(result.data);
         });
     }, [activePlayerId, addDrawEvent, session, startReparationsTransition]);
@@ -451,7 +413,6 @@ export function useGamePage(): UseGamePageReturn {
 
     const onDismissReveal = useCallback(() => {
         setRevealCard(null);
-        setRevealDrama(null);
     }, []);
 
     return {
@@ -472,7 +433,6 @@ export function useGamePage(): UseGamePageReturn {
         selectedCard,
         setSelectedCard,
         revealCard,
-        revealDrama,
         onDismissReveal,
         showJoinCode,
         setShowJoinCode,

@@ -1,4 +1,6 @@
+Card preview from My Cards.
 Read querystring when F5 refreshing page?
+Back button handling from overlays.
 
 ====
 

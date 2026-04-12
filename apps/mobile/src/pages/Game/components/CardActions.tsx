@@ -1,17 +1,22 @@
 import React, { useState } from "react";
 import { AppDialog } from "../../../components/AppDialog";
-import { FlippingCard } from "../../../components/GameCard";
 import { hapticLight } from "../../../lib/haptics";
+import type { DrawEvent } from "../../../lib/api";
 import { useGamePageContext } from "../GamePageContext";
 import { styles } from "../styles";
 
-export function CardDetailOverlay() {
+interface CardActionsProps {
+    event: DrawEvent;
+    onDismiss: () => void;
+    /** Whether the drawer has already tapped "Tap to reveal" for hidden instructions. */
+    hasRevealed?: boolean;
+}
+
+export function CardActions({ event, onDismiss, hasRevealed: hasRevealedProp }: CardActionsProps) {
     const {
-        selectedCard: event,
         players,
         activePlayerId,
         pendingTransfers,
-        setSelectedCard,
         handleVote,
         handleResolve,
         handleTransfer,
@@ -19,9 +24,9 @@ export function CardDetailOverlay() {
         handleShareDescription,
     } = useGamePageContext();
 
-    const cv = event!.cardVersion;
-    const isDrawer = event!.playerId === activePlayerId;
-    const pendingTransfer = pendingTransfers.find((t) => t.drawEventId === event!.id) ?? null;
+    const cv = event.cardVersion;
+    const isDrawer = event.playerId === activePlayerId;
+    const pendingTransfer = pendingTransfers.find((t) => t.drawEventId === event.id) ?? null;
 
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
     const [votePending, setVotePending] = useState(false);
@@ -31,13 +36,13 @@ export function CardDetailOverlay() {
         toPlayerId: string;
         toPlayerName: string;
     } | null>(null);
-    const [resolved, setResolved] = useState(event!.resolved);
+    const [resolved, setResolved] = useState(event.resolved);
     const [sharing, setSharing] = useState(false);
-    const [sharedViaActionBar, setSharedViaActionBar] = useState(event!.descriptionShared);
-    const [hasRevealed, setHasRevealed] = useState(
-        !cv.hasHiddenInstructions || event!.descriptionShared
-    );
+    const [sharedViaActionBar, setSharedViaActionBar] = useState(event.descriptionShared);
     const [showRetractConfirm, setShowRetractConfirm] = useState(false);
+
+    // hasRevealed: controlled externally (via onCardReveal) or derived from card state
+    const hasRevealed = hasRevealedProp ?? (!cv.hasHiddenInstructions || event.descriptionShared);
 
     const showActionBarShareBtn =
         cv.hasHiddenInstructions && !sharedViaActionBar && isDrawer && hasRevealed;
@@ -60,7 +65,7 @@ export function CardDetailOverlay() {
         hapticLight();
         const next = !resolved;
         setResolved(next);
-        await handleResolve(event!.id, next);
+        await handleResolve(event.id, next);
         setResolvePending(false);
     }
 
@@ -74,7 +79,7 @@ export function CardDetailOverlay() {
         const { toPlayerId } = confirmTransfer;
         setConfirmTransfer(null);
         hapticLight();
-        await handleTransfer(event!.id, toPlayerId);
+        await handleTransfer(event.id, toPlayerId);
     }
 
     async function handleConfirmRetract() {
@@ -87,28 +92,15 @@ export function CardDetailOverlay() {
     async function handleShare() {
         setSharing(true);
         hapticLight();
-        const ok = await handleShareDescription(event!.id);
+        const ok = await handleShareDescription(event.id);
         if (ok) setSharedViaActionBar(true);
         setSharing(false);
     }
 
-    const transferablePlayers = players.filter((p) => p.id !== event!.playerId && p.active);
+    const transferablePlayers = players.filter((p) => p.id !== event.playerId && p.active);
 
     return (
-        <div style={styles.detailWrap as React.CSSProperties} onClick={() => setSelectedCard(null)}>
-            <div style={styles.detailCardArea as React.CSSProperties}>
-                <div
-                    style={{ maxWidth: "430px", width: "100%" }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <FlippingCard
-                        event={event!}
-                        overrideDuration={480}
-                        onReveal={() => setHasRevealed(true)}
-                    />
-                </div>
-            </div>
-
+        <>
             {showTransferPicker && (
                 <div style={styles.transferPicker as React.CSSProperties} onClick={(e) => e.stopPropagation()}>
                     <p style={styles.transferPickerLabel as React.CSSProperties}>TRANSFER TO</p>
@@ -283,6 +275,8 @@ export function CardDetailOverlay() {
                     </button>
                 )}
             </div>
-        </div>
+
+            <div style={{ display: "none" }} onClick={onDismiss} />
+        </>
     );
 }

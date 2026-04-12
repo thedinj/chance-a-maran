@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiClient } from "../lib/api";
-import type { DrawEvent } from "../lib/api";
+import type { Card, CardVersion } from "../lib/api";
 import { useSession } from "../session/useSession";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
 import { CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
@@ -9,13 +9,14 @@ import { CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 // Static card back face. Size the container; this fills it at 412:581 aspect ratio (or 433:609 for reparations cards).
 
 interface CardBackProps {
-    event: DrawEvent;
+    card: Card;
+    cardVersion: CardVersion;
 }
 
-export function CardBack({ event }: CardBackProps): React.JSX.Element {
-    const isReparations = event.card.cardType === "reparations";
-    const imageUrl = event.cardVersion.imageId
-        ? apiClient.resolveMediaUrl(event.cardVersion.imageId)
+export function CardBack({ card, cardVersion }: CardBackProps): React.JSX.Element {
+    const isReparations = card.cardType === "reparations";
+    const imageUrl = cardVersion.imageId
+        ? apiClient.resolveMediaUrl(cardVersion.imageId)
         : null;
 
     return (
@@ -65,7 +66,12 @@ function HiddenInstrDivider() {
 // Manages its own description reveal and share state.
 
 interface CardFrontProps {
-    event: DrawEvent;
+    card: Card;
+    cardVersion: CardVersion;
+    /** The player who holds this card. Compared to activePlayerId to determine isDrawer. */
+    drawerId?: string;
+    /** Whether the description has been shared with everyone. */
+    descriptionShared?: boolean;
     /** Pass true while a flip animation is in flight to animate the sheen effect. */
     flipInFlight?: boolean;
     /** Flip duration in ms — syncs the sheen transition to the actual flip speed. */
@@ -77,20 +83,21 @@ interface CardFrontProps {
 }
 
 export function CardFront({
-    event,
+    card,
+    cardVersion: cv,
+    drawerId,
+    descriptionShared = false,
     flipInFlight = false,
     flipDurationMs = 1180,
     readOnly = false,
     onReveal,
 }: CardFrontProps): React.JSX.Element {
-    const cv = event.cardVersion;
-    const isReparations = event.card.cardType === "reparations";
+    const isReparations = card.cardType === "reparations";
     const { activePlayerId } = useSession();
 
-    const isDrawer = event.playerId === activePlayerId;
-    const descriptionShared = event.descriptionShared;
+    const isDrawer = drawerId !== undefined && drawerId === activePlayerId;
     const [descrRevealed, setDescrRevealed] = useState(
-        !cv.hasHiddenInstructions || event.descriptionShared
+        !cv.hasHiddenInstructions || descriptionShared
     );
 
     // Server sends hiddenInstructions only to the drawer — use as an extra confirmation gate.
@@ -101,6 +108,7 @@ export function CardFront({
         !descriptionShared &&
         isDrawer &&
         !descrRevealed;
+
 
     function handleReveal() {
         setDescrRevealed(true);
@@ -177,7 +185,7 @@ export function CardFront({
                         </div>
 
                         <p style={styles.revealHeroTitle}>{cv.title}</p>
-                        <p style={styles.revealHeroMeta}>{event.card.authorDisplayName}</p>
+                        <p style={styles.revealHeroMeta}>{card.authorDisplayName}</p>
 
                         {readOnly ? (
                             // ── Carousel: both sections visible, each line-clamped ──
@@ -256,7 +264,12 @@ export function CardFront({
 // Animated back→front flip. Composes CardBack and CardFront.
 
 interface FlippingCardProps {
-    event: DrawEvent;
+    card: Card;
+    cardVersion: CardVersion;
+    /** The player who holds this card. Forwarded to CardFront for drawer-specific UI. */
+    drawerId?: string;
+    /** Whether the description has been shared with everyone. Forwarded to CardFront. */
+    descriptionShared?: boolean;
     /** Fires once when the flip animation completes. */
     onFlipComplete?: () => void;
     /** Override flip duration in ms. Default 1180ms. */
@@ -272,7 +285,10 @@ interface FlippingCardProps {
 }
 
 export function FlippingCard({
-    event,
+    card,
+    cardVersion,
+    drawerId,
+    descriptionShared,
     onFlipComplete,
     overrideDuration,
     overrideEasing,
@@ -280,7 +296,7 @@ export function FlippingCard({
     flipHeld,
     onReveal,
 }: FlippingCardProps): React.JSX.Element {
-    const isGameChanger = Boolean(event.cardVersion.isGameChanger);
+    const isGameChanger = Boolean(cardVersion.isGameChanger);
     const prefersReducedMotion =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -311,12 +327,12 @@ export function FlippingCard({
             window.clearTimeout(startTimer);
             window.clearTimeout(doneTimer);
         };
-    }, [event.id, flipDelayMs, flipDurationMs, flipHeld]);
+    }, [cardVersion.id, flipDelayMs, flipDurationMs, flipHeld]);
 
     const firedRef = useRef(false);
     useEffect(() => {
         firedRef.current = false;
-    }, [event.id]);
+    }, [cardVersion.id]);
     useEffect(() => {
         if (flipComplete && !firedRef.current) {
             firedRef.current = true;
@@ -348,13 +364,16 @@ export function FlippingCard({
             >
                 {/* Back face — initially visible */}
                 <div style={styles.revealFlipFace}>
-                    <CardBack event={event} />
+                    <CardBack card={card} cardVersion={cardVersion} />
                 </div>
 
                 {/* Front face — initially hidden (rotated 180deg away from viewer) */}
                 <div style={{ ...styles.revealFlipFace, transform: "rotateY(180deg)" }}>
                     <CardFront
-                        event={event}
+                        card={card}
+                        cardVersion={cardVersion}
+                        drawerId={drawerId}
+                        descriptionShared={descriptionShared}
                         flipInFlight={flipInFlight}
                         flipDurationMs={flipDurationMs}
                         onReveal={onReveal}

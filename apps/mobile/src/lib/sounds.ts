@@ -1,7 +1,5 @@
 // ─── Audio Cache & Utilities ─────────────────────────────────────────────────
 // Preload all drama sounds at module load so they play without delay.
-// This module is imported by CardRevealOverlay, which loads lazily with the
-// Game chunk — so preloading fires before any user interaction triggers a reveal.
 
 const preloadedAudio: Record<string, HTMLAudioElement> = {};
 

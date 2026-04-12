@@ -1,9 +1,9 @@
 import { IonContent, IonFooter, IonPage } from "@ionic/react";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { CardCarousel } from "../../components/CardCarousel";
+import { CardReveal } from "../../components/CardReveal";
 import { AddPlayerModal } from "./components/AddPlayerModal";
-import { CardCarousel } from "./components/CardCarousel";
-import { CardDetailOverlay } from "./components/CardDetailOverlay";
-import { CardRevealOverlay } from "./components/CardRevealOverlay";
+import { CardActions } from "./components/CardActions";
 import { ClaimAccountModal } from "./components/ClaimAccountModal";
 import { DrawButton } from "./components/DrawButton";
 import { GameHeader } from "./components/GameHeader";
@@ -22,16 +22,41 @@ export default function Game() {
     const {
         session,
         history,
+        players,
+        activePlayerId,
+        devicePlayerIds,
+        displayCards,
         resolvedCards,
+        selectedCard,
+        setSelectedCard,
+        revealCard,
+        onDismissReveal,
         showResolved,
         setShowResolved,
         error,
         showAddPlayer,
         showJoinCode,
         showClaim,
-        revealCard,
-        selectedCard,
     } = page;
+
+    // Compute viewing-player label for the carousel
+    const viewingPlayerName = useMemo(() => {
+        const p = players.find((pp) => pp.id === activePlayerId);
+        if (!p) return null;
+        const isLeft = devicePlayerIds.includes(p.id) && !p.active;
+        const isRemote = !devicePlayerIds.includes(p.id);
+        return isLeft || isRemote ? p.displayName : null;
+    }, [players, activePlayerId, devicePlayerIds]);
+
+    // Track whether the drawer has tapped "Tap to reveal" in the detail overlay
+    const [detailHasRevealed, setDetailHasRevealed] = useState(false);
+    useEffect(() => {
+        setDetailHasRevealed(
+            !selectedCard?.cardVersion.hasHiddenInstructions || !!selectedCard?.descriptionShared
+        );
+    }, [selectedCard?.id]);
+
+    const handleDismissDetail = () => setSelectedCard(null);
 
     return (
         <GamePageProvider value={page}>
@@ -40,7 +65,11 @@ export default function Game() {
 
                 <IonContent scrollY className="game-content">
                     <div style={styles.contentArea as React.CSSProperties}>
-                        <CardCarousel />
+                        <CardCarousel
+                            displayCards={displayCards}
+                            onSelectCard={setSelectedCard}
+                            viewingPlayerName={viewingPlayerName}
+                        />
 
                         {session.status !== "active" && (
                             <div style={styles.endedBanner as React.CSSProperties}>
@@ -78,8 +107,29 @@ export default function Game() {
                     </div>
                 </IonFooter>
 
-                {revealCard && <CardRevealOverlay />}
-                {selectedCard && !revealCard && <CardDetailOverlay />}
+                {revealCard && (
+                    <CardReveal
+                        card={revealCard.card}
+                        cardVersion={revealCard.cardVersion}
+                        onDismiss={onDismissReveal}
+                    />
+                )}
+                {selectedCard && !revealCard && (
+                    <CardReveal
+                        card={selectedCard.card}
+                        cardVersion={selectedCard.cardVersion}
+                        mode="quick"
+                        onDismiss={handleDismissDetail}
+                        onCardReveal={() => setDetailHasRevealed(true)}
+                        footer={
+                            <CardActions
+                                event={selectedCard}
+                                onDismiss={handleDismissDetail}
+                                hasRevealed={detailHasRevealed}
+                            />
+                        }
+                    />
+                )}
                 {showAddPlayer && <AddPlayerModal />}
                 {showJoinCode && <JoinCodeModal />}
                 {showClaim && <ClaimAccountModal />}
