@@ -55,7 +55,8 @@
       "Bash(mv /tmp/game_index_trimmed.tsx \"D:/Users/thedinj/Programming/Apps/chance-a-maran/apps/mobile/src/pages/Game/index.tsx\")",
       "Bash(npx vite:*)",
       "Bash(git -C /d/Users/thedinj/Programming/Apps/chance-a-maran log --oneline -25 --name-only)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(bash --version)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

@@ -4,6 +4,7 @@ import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
+import { CardReveal } from "../components/CardReveal";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
 import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
@@ -37,7 +38,7 @@ export default function MyCards() {
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [versions, setVersions] = useState<CardVersion[]>([]);
     const [showVersionHistory, setShowVersionHistory] = useState(false);
-    const [showPreviewNote, setShowPreviewNote] = useState(false);
+    const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
     const [editError, setEditError] = useState<string | null>(null);
 
     // ── Load my cards on mount ────────────────────────────────────────────────
@@ -81,7 +82,6 @@ export default function MyCards() {
         setSelectedCard(card);
         setEditError(null);
         setShowVersionHistory(false);
-        setShowPreviewNote(false);
         setVersions([]);
         modalRef.current?.present();
         apiClient.getCardVersions(card.id).then((r) => {
@@ -142,6 +142,48 @@ export default function MyCards() {
         });
     }
 
+
+    function handlePreview() {
+        if (!editorRef.current || !user || !selectedCard) return;
+        const values = editorRef.current.getPreviewData();
+        const previewVersion: CardVersion = {
+            id: "preview",
+            cardId: selectedCard.id,
+            versionNumber: (selectedCard.currentVersion.versionNumber ?? 0) + 1,
+            title: values.title || "Untitled",
+            description: values.description || "",
+            hiddenInstructions: values.hiddenInstructions ?? null,
+            hasHiddenInstructions: !!values.hiddenInstructions,
+            imageId: values.imageId || null,
+            soundId: values.soundId ?? null,
+            imageYOffset: values.imageYOffset ?? 0.5,
+            drinkingLevel: values.drinkingLevel ?? 0,
+            spiceLevel: values.spiceLevel ?? 0,
+            isGameChanger: values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
+            gameTags: [],
+            requirements: [],
+            authoredByUserId: user.id,
+            authorDisplayName: user.displayName,
+            createdAt: new Date().toISOString(),
+        };
+        const previewCardObj: Card = {
+            id: selectedCard.id,
+            authorUserId: user.id,
+            authorDisplayName: user.displayName,
+            ownerUserId: user.id,
+            ownerDisplayName: user.displayName,
+            cardType: values.cardType ?? "standard",
+            active: true,
+            isGlobal: false,
+            pendingGlobal: false,
+            createdInSessionId: null,
+            currentVersionId: "preview",
+            currentVersion: previewVersion,
+            netVotes: 0,
+            createdAt: selectedCard.createdAt,
+        };
+        setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
+    }
 
     // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -399,22 +441,14 @@ export default function MyCards() {
 
                             <div style={styles.divider} />
 
-                            {/* ── Preview card link (stub) ───────────────────── */}
+                            {/* ── Preview card ──────────────────────────────── */}
                             <div style={styles.modalSection}>
                                 <button
                                     style={styles.previewLink}
-                                    onClick={() => setShowPreviewNote((v) => !v)}
+                                    onClick={handlePreview}
                                 >
-                                    <span>Preview card</span>
-                                    <span style={styles.previewSoon}>coming soon</span>
+                                    Preview card
                                 </button>
-                                {showPreviewNote && (
-                                    <p style={styles.previewNote}>
-                                        Preview will show the full in-game reveal — card flip,
-                                        hidden description behaviour, and Game Changer intro
-                                        sequence.
-                                    </p>
-                                )}
                             </div>
 
                             <div style={styles.divider} />
@@ -515,6 +549,14 @@ export default function MyCards() {
                     </div>
                 </IonFooter>
             </IonModal>
+
+            {previewCard && (
+                <CardReveal
+                    card={previewCard.card}
+                    cardVersion={previewCard.cardVersion}
+                    onDismiss={() => setPreviewCard(null)}
+                />
+            )}
         </IonPage>
     );
 }

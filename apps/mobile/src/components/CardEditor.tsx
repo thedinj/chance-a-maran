@@ -15,6 +15,8 @@ export interface CardEditorHandle {
     submitForm(): void;
     /** Resets the form to its initial empty state. */
     reset(): void;
+    /** Returns current form values without triggering validation. Use to build a preview. */
+    getPreviewData(): SubmitCardRequest;
 }
 
 export interface CardEditorProps {
@@ -48,6 +50,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         control,
         watch,
         setValue,
+        getValues,
         reset: resetForm,
         formState: { errors },
     } = useForm<SubmitCardRequest>({
@@ -161,6 +164,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             setSubmitError(null);
             setContentWarning(null);
         },
+        getPreviewData: () => getValues(),
     }));
 
     // ── Image handlers ────────────────────────────────────────────────────────

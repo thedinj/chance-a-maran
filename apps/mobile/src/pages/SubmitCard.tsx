@@ -1,12 +1,13 @@
 import { IonButton, IonContent, IonFooter, IonPage, useIonViewWillEnter } from "@ionic/react";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
+import { CardReveal } from "../components/CardReveal";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
-import type { SubmitCardRequest } from "../lib/api/types";
+import type { Card, CardVersion, SubmitCardRequest } from "../lib/api/types";
 import { useSession } from "../session/useSession";
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ export default function SubmitCard() {
     const history = useHistory();
     const editorRef = useRef<CardEditorHandle>(null);
     const goToHomeBase = useGoToHomeBase();
+    const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
 
     useIonViewWillEnter(() => {
         editorRef.current?.reset();
@@ -26,6 +28,48 @@ export default function SubmitCard() {
     if (!user) {
         if (!isInitializing) history.replace("/");
         return null;
+    }
+
+    function handlePreview() {
+        if (!editorRef.current || !user) return;
+        const values = editorRef.current.getPreviewData();
+        const previewVersion: CardVersion = {
+            id: "preview",
+            cardId: "preview",
+            versionNumber: 1,
+            title: values.title || "Untitled",
+            description: values.description || "",
+            hiddenInstructions: values.hiddenInstructions ?? null,
+            hasHiddenInstructions: !!values.hiddenInstructions,
+            imageId: values.imageId || null,
+            soundId: values.soundId ?? null,
+            imageYOffset: values.imageYOffset ?? 0.5,
+            drinkingLevel: values.drinkingLevel ?? 0,
+            spiceLevel: values.spiceLevel ?? 0,
+            isGameChanger: values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
+            gameTags: [],
+            requirements: [],
+            authoredByUserId: user.id,
+            authorDisplayName: user.displayName,
+            createdAt: new Date().toISOString(),
+        };
+        const previewCardObj: Card = {
+            id: "preview",
+            authorUserId: user.id,
+            authorDisplayName: user.displayName,
+            ownerUserId: user.id,
+            ownerDisplayName: user.displayName,
+            cardType: values.cardType ?? "standard",
+            active: true,
+            isGlobal: false,
+            pendingGlobal: false,
+            createdInSessionId: null,
+            currentVersionId: "preview",
+            currentVersion: previewVersion,
+            netVotes: 0,
+            createdAt: new Date().toISOString(),
+        };
+        setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
     }
 
     async function onValidSubmit(data: SubmitCardRequest): Promise<string | null> {
@@ -60,11 +104,22 @@ export default function SubmitCard() {
                     >
                         Submit card
                     </IonButton>
+                    <button style={styles.previewButton} onClick={handlePreview}>
+                        Preview
+                    </button>
                     <button style={styles.cancelLink} onClick={goToHomeBase}>
                         Cancel
                     </button>
                 </div>
             </IonFooter>
+
+            {previewCard && (
+                <CardReveal
+                    card={previewCard.card}
+                    cardVersion={previewCard.cardVersion}
+                    onDismiss={() => setPreviewCard(null)}
+                />
+            )}
         </IonPage>
     );
 }
@@ -124,6 +179,20 @@ const styles: Record<string, React.CSSProperties> = {
         textTransform: "uppercase",
         fontSize: "var(--text-label)",
     } as React.CSSProperties,
+    previewButton: {
+        background: "none",
+        border: "1px solid var(--color-border)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-text-secondary)",
+        cursor: "pointer",
+        padding: "var(--space-3)",
+        textAlign: "center",
+        alignSelf: "stretch",
+        minHeight: "44px",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+    },
     cancelLink: {
         background: "none",
         border: "none",
