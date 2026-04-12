@@ -1,9 +1,3 @@
-Test setup/update scripts
-
-Set up DDNS
-
-====
-more menacing Game Changer graphic
 Read querystring when F5 refreshing page?
 
 ====
@@ -11,12 +5,6 @@ Read querystring when F5 refreshing page?
 Mobile/Android version
 
 ====
-
-Browse global cards? (or do we want to keep it a secret?)
-
-Haptics, esp. game changers
-
-Full screen for card reveal, using capacitor
 
 Tools: 
 Maybe app-specific? (Not website version.)
@@ -27,7 +15,6 @@ Send poll/question to other players, can be secret (or players can opt out of se
 Random consequences
 
 Attach a sound effect to a card
-Mulligan
 
 Running game effects tracker
 

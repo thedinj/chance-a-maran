@@ -28,10 +28,17 @@ export function clearRefreshCookie(response: NextResponse): void {
     });
 }
 
-/** Read refresh token from cookie (web) or request body (native Capacitor). */
+/** Read refresh token from cookie (web) or request body (native Capacitor).
+ *  When the caller sends X-Token-Transport: body it manages tokens itself
+ *  (e.g. admin portal, native Capacitor) — skip the cookie entirely so a
+ *  mobile-web session cookie on the same localhost origin cannot interfere. */
 export function readRefreshToken(
     req: import("next/server").NextRequest,
     body?: Record<string, unknown>
 ): string | null {
-    return req.cookies.get(COOKIE_NAME)?.value ?? (body?.refreshToken as string | undefined) ?? null;
+    const bodyToken = body?.refreshToken as string | undefined;
+    if (req.headers.get("X-Token-Transport") === "body") {
+        return bodyToken ?? null;
+    }
+    return req.cookies.get(COOKIE_NAME)?.value ?? bodyToken ?? null;
 }
