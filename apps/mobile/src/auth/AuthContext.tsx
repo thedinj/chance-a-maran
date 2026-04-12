@@ -10,6 +10,8 @@ import {
     setApiCallbacks,
 } from "../lib/api";
 import { secureStorage, SECURE_KEYS } from "../lib/secureStorage";
+import { queryClient } from "../lib/queryClient";
+import { ACTIVE_SESSIONS_KEY, SESSION_HISTORY_KEY } from "../hooks/useSessionQueries";
 import { AuthContext, type AuthState } from "./useAuth";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -38,6 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         if (Capacitor.isNativePlatform()) {
                             secureStorage.remove(SECURE_KEYS.REFRESH_TOKEN);
                         }
+                        queryClient.removeQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+                        queryClient.removeQueries({ queryKey: SESSION_HISTORY_KEY });
                         setState({
                             user: null,
                             isGuest: false,
@@ -101,6 +105,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             secureStorage.set(SECURE_KEYS.REFRESH_TOKEN, response.refreshToken).catch(() => {});
         }
         // Web: HttpOnly cookie was already set by the server response
+        // Invalidate so the session lists refetch for the newly signed-in user.
+        queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+        queryClient.invalidateQueries({ queryKey: SESSION_HISTORY_KEY });
     }, []);
 
     const login = useCallback(
@@ -138,6 +145,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (Capacitor.isNativePlatform()) {
             await secureStorage.remove(SECURE_KEYS.REFRESH_TOKEN);
         }
+        // Remove cached session data — it belongs to the signed-out user and must
+        // not be visible if a different user signs in on the same device.
+        queryClient.removeQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+        queryClient.removeQueries({ queryKey: SESSION_HISTORY_KEY });
         setState({ user: null, isGuest: false, accessToken: null, isInitializing: false });
     }, []);
 

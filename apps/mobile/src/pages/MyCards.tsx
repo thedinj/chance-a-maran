@@ -1,6 +1,6 @@
-import { IonButton, IonContent, IonFooter, IonModal, IonPage } from "@ionic/react";
+import { IonButton, IonContent, IonFooter, IonModal, IonPage, useIonViewWillEnter } from "@ionic/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
@@ -8,12 +8,15 @@ import { CardReveal } from "../components/CardReveal";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { apiClient } from "../lib/api";
 import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
+import { useSession } from "../session/useSession";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyCards() {
     const { user, isInitializing } = useAuth();
+    const { session } = useSession();
     const history = useHistory();
+    const location = useLocation<{ newCard?: boolean }>();
     const [isPending, startTransition] = useTransition();
 
     // ── Tab state ─────────────────────────────────────────────────────────────
@@ -32,8 +35,9 @@ export default function MyCards() {
     const [search, setSearch] = useState("");
     const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("active");
 
-    // ── Modal state ───────────────────────────────────────────────────────────
+    // ── Edit modal state ──────────────────────────────────────────────────────
     const modalRef = useRef<HTMLIonModalElement>(null);
+    const modalContentRef = useRef<HTMLIonContentElement>(null);
     const editorRef = useRef<CardEditorHandle>(null);
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [versions, setVersions] = useState<CardVersion[]>([]);
@@ -41,15 +45,39 @@ export default function MyCards() {
     const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
     const [editError, setEditError] = useState<string | null>(null);
 
-    // ── Load my cards on mount ────────────────────────────────────────────────
-    useEffect(() => {
+    // ── New card modal state ──────────────────────────────────────────────────
+    const newModalRef = useRef<HTMLIonModalElement>(null);
+    const newModalContentRef = useRef<HTMLIonContentElement>(null);
+    const newEditorRef = useRef<CardEditorHandle>(null);
+    const [newSubmitError, setNewSubmitError] = useState<string | null>(null);
+    const [newPreviewCard, setNewPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
+
+    // ── Load my cards on mount and every time the view re-enters ─────────────
+    function fetchMyCards() {
         if (!user) return;
         apiClient.getMyCards().then((result) => {
             if (result.ok) setMyCards(result.data);
             else setLoadError(result.error.message);
             setIsLoading(false);
         });
-    }, [user]);
+    }
+
+    useEffect(() => {
+        fetchMyCards();
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useIonViewWillEnter(() => {
+        fetchMyCards();
+    });
+
+    // Open new card modal when navigated here with { newCard: true } state
+    // (e.g. from the app menu "Submit card" item).
+    useEffect(() => {
+        if (location.state?.newCard) {
+            newModalRef.current?.present();
+            history.replace(location.pathname, {});
+        }
+    }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Load all cards when admin tab is active ───────────────────────────────
     useEffect(() => {
@@ -91,6 +119,15 @@ export default function MyCards() {
 
     function closeModal() {
         modalRef.current?.dismiss();
+    }
+
+    function openNewCard() {
+        setNewSubmitError(null);
+        newModalRef.current?.present();
+    }
+
+    function closeNewModal() {
+        newModalRef.current?.dismiss();
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -185,6 +222,64 @@ export default function MyCards() {
         setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
     }
 
+    async function onNewCardSubmit(data: SubmitCardRequest): Promise<string | null> {
+        const req: SubmitCardRequest = {
+            ...data,
+            title: data.title.trim(),
+            description: data.description.trim(),
+            isGameChanger: data.cardType === "reparations" ? false : data.isGameChanger,
+        };
+        const result = session
+            ? await apiClient.submitCard(session.id, req)
+            : await apiClient.submitCardOutsideSession(req);
+        if (!result.ok) return result.error.message;
+        setMyCards((prev) => [result.data, ...prev]);
+        closeNewModal();
+        return null;
+    }
+
+    function handleNewPreview() {
+        if (!newEditorRef.current || !user) return;
+        const values = newEditorRef.current.getPreviewData();
+        const previewVersion: CardVersion = {
+            id: "preview",
+            cardId: "preview",
+            versionNumber: 1,
+            title: values.title || "Untitled",
+            description: values.description || "",
+            hiddenInstructions: values.hiddenInstructions ?? null,
+            hasHiddenInstructions: !!values.hiddenInstructions,
+            imageId: values.imageId || null,
+            soundId: values.soundId ?? null,
+            imageYOffset: values.imageYOffset ?? 0.5,
+            drinkingLevel: values.drinkingLevel ?? 0,
+            spiceLevel: values.spiceLevel ?? 0,
+            isGameChanger: values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
+            gameTags: [],
+            requirements: [],
+            authoredByUserId: user.id,
+            authorDisplayName: user.displayName,
+            createdAt: new Date().toISOString(),
+        };
+        const previewCardObj: Card = {
+            id: "preview",
+            authorUserId: user.id,
+            authorDisplayName: user.displayName,
+            ownerUserId: user.id,
+            ownerDisplayName: user.displayName,
+            cardType: values.cardType ?? "standard",
+            active: true,
+            isGlobal: false,
+            pendingGlobal: false,
+            createdInSessionId: null,
+            currentVersionId: "preview",
+            currentVersion: previewVersion,
+            netVotes: 0,
+            createdAt: new Date().toISOString(),
+        };
+        setNewPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
+    }
+
     // ── Render helpers ────────────────────────────────────────────────────────
 
     function renderTile(card: Card) {
@@ -235,7 +330,7 @@ export default function MyCards() {
                         </div>
                         <button
                             style={styles.newCardLink}
-                            onClick={() => history.push("/submit-card")}
+                            onClick={openNewCard}
                         >
                             + New card
                         </button>
@@ -272,7 +367,7 @@ export default function MyCards() {
                                     </p>
                                     <button
                                         style={styles.emptyAction}
-                                        onClick={() => history.push("/submit-card")}
+                                        onClick={openNewCard}
                                     >
                                         Submit a card
                                     </button>
@@ -357,9 +452,10 @@ export default function MyCards() {
             <IonModal
                 ref={modalRef}
                 onDidDismiss={() => setSelectedCard(null)}
+                onDidPresent={() => modalContentRef.current?.scrollToTop(0)}
                 style={{ "--border-radius": "0" } as React.CSSProperties}
             >
-                <IonContent style={{ "--background": "var(--color-bg)" } as React.CSSProperties}>
+                <IonContent ref={modalContentRef} style={{ "--background": "var(--color-bg)" } as React.CSSProperties}>
                     {selectedCard && (
                         <div style={styles.modalRoot}>
                             {/* Modal header */}
@@ -550,11 +646,75 @@ export default function MyCards() {
                 </IonFooter>
             </IonModal>
 
+            {/* ── New card modal ──────────────────────────────────────────────── */}
+            <IonModal
+                ref={newModalRef}
+                onDidPresent={() => newModalContentRef.current?.scrollToTop(0)}
+                onDidDismiss={() => {
+                    newEditorRef.current?.reset();
+                    setNewSubmitError(null);
+                }}
+                style={{ "--border-radius": "0" } as React.CSSProperties}
+            >
+                <IonContent
+                    ref={newModalContentRef}
+                    style={{ "--background": "var(--color-bg)" } as React.CSSProperties}
+                >
+                    <div style={styles.modalRoot}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={styles.modalTitle}>New card</h2>
+                            <button style={styles.closeButton} onClick={closeNewModal}>
+                                ×
+                            </button>
+                        </div>
+
+                        <CardEditor
+                            ref={newEditorRef}
+                            onValidSubmit={onNewCardSubmit}
+                        />
+
+                        <div style={styles.divider} />
+
+                        <div style={styles.modalSection}>
+                            <button style={styles.previewLink} onClick={handleNewPreview}>
+                                Preview card
+                            </button>
+                        </div>
+
+                        {newSubmitError && <p style={styles.errorInline}>{newSubmitError}</p>}
+
+                        <div style={{ height: "140px" }} />
+                    </div>
+                </IonContent>
+
+                <IonFooter>
+                    <div style={styles.modalFooter}>
+                        <IonButton
+                            expand="block"
+                            style={styles.saveButton as React.CSSProperties}
+                            onClick={() => newEditorRef.current?.submitForm()}
+                        >
+                            Submit card
+                        </IonButton>
+                        <button style={styles.cancelLink} onClick={closeNewModal}>
+                            Cancel
+                        </button>
+                    </div>
+                </IonFooter>
+            </IonModal>
+
             {previewCard && (
                 <CardReveal
                     card={previewCard.card}
                     cardVersion={previewCard.cardVersion}
                     onDismiss={() => setPreviewCard(null)}
+                />
+            )}
+            {newPreviewCard && (
+                <CardReveal
+                    card={newPreviewCard.card}
+                    cardVersion={newPreviewCard.cardVersion}
+                    onDismiss={() => setNewPreviewCard(null)}
                 />
             )}
         </IonPage>

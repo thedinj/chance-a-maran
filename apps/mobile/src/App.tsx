@@ -43,7 +43,6 @@ const Register = React.lazy(() => import("./pages/Register"));
 const Settings = React.lazy(() => import("./pages/AppSettings"));
 const About = React.lazy(() => import("./pages/About"));
 const InviteRequest = React.lazy(() => import("./pages/InviteRequest"));
-const SubmitCard = React.lazy(() => import("./pages/SubmitCard"));
 const MyCards = React.lazy(() => import("./pages/MyCards"));
 const PlayerGameOptions = React.lazy(() => import("./pages/PlayerGameOptions"));
 const Notifications = React.lazy(() => import("./pages/Notifications"));
@@ -179,12 +178,6 @@ export default function App() {
                                             <Route exact path="/invite-request">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <InviteRequest />
-                                                </Suspense>
-                                            </Route>
-
-                                            <Route exact path="/submit-card">
-                                                <Suspense fallback={<PageSkeleton />}>
-                                                    <SubmitCard />
                                                 </Suspense>
                                             </Route>
 

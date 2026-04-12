@@ -7,9 +7,10 @@ import {
     SPICE_LEVELS,
 } from "@chance/core";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { IonButton, IonContent, IonFooter, IonPage } from "@ionic/react";
+import { IonButton, IonContent, IonFooter, IonPage, useIonViewWillEnter } from "@ionic/react";
 import { useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useState, useTransition } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useHistory, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -75,7 +76,13 @@ export default function GameSettings() {
     const [elementsLoading, setElementsLoading] = useState(true);
     const [venueExpanded, setVenueExpanded] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const prefersReducedMotion = useReducedMotion();
     const [resetPendingId, setResetPendingId] = useState<string | null>(null);
+    const contentRef = useRef<HTMLIonContentElement>(null);
+
+    useIonViewWillEnter(() => {
+        contentRef.current?.scrollToTop(0);
+    });
 
     const {
         register,
@@ -228,7 +235,7 @@ export default function GameSettings() {
     return (
         <IonPage>
             <AppHeader />
-            <IonContent>
+            <IonContent ref={contentRef}>
                 <div style={styles.root}>
                     {/* Page header */}
                     <div style={styles.pageHeader}>
@@ -443,73 +450,118 @@ export default function GameSettings() {
                                 }
 
                                 return (
-                                    <>
-                                        <div style={styles.divider} />
-                                        <div style={styles.section}>
-                                            <button
-                                                style={styles.collapsibleHeader}
-                                                onClick={() => setVenueExpanded((v) => !v)}
-                                                type="button"
-                                            >
-                                                <span style={styles.sectionLabel}>VENUE</span>
-                                                <span style={styles.collapsibleMeta}>
-                                                    {selectedCount}/{totalCount}{" "}
+                                    <div
+                                        style={{
+                                            ...styles.venueTile,
+                                            border: venueExpanded
+                                                ? "1px solid var(--color-accent-amber)"
+                                                : "1px solid color-mix(in srgb, var(--color-accent-amber) 35%, transparent)",
+                                        }}
+                                    >
+                                        <button
+                                            style={styles.venueTileHeader}
+                                            onClick={() => setVenueExpanded((v) => !v)}
+                                            type="button"
+                                            aria-expanded={venueExpanded}
+                                        >
+                                            <div style={styles.venueTitleRow}>
+                                                <span style={styles.venueTileLabel}>Venue</span>
+                                                <span
+                                                    style={
+                                                        selectedCount < totalCount
+                                                            ? styles.venueCountWarning
+                                                            : styles.venueCountOk
+                                                    }
+                                                >
+                                                    {selectedCount}/{totalCount}
+                                                </span>
+                                            </div>
+                                            <div style={styles.venueTileSubRow}>
+                                                <span style={styles.venueTileHint}>
+                                                    {venueExpanded
+                                                        ? "Select items available at your venue"
+                                                        : selectedCount === totalCount
+                                                          ? "All items available — cards draw freely"
+                                                          : `${totalCount - selectedCount} item${totalCount - selectedCount !== 1 ? "s" : ""} unavailable — some cards won't draw`}
+                                                </span>
+                                                <span style={styles.venueChevron}>
                                                     {venueExpanded ? "▴" : "▾"}
                                                 </span>
-                                            </button>
+                                            </div>
+                                        </button>
 
-                                            {!venueExpanded ? (
-                                                <p style={styles.hint}>
-                                                    Tap to configure available props &amp; items
-                                                </p>
-                                            ) : (
-                                                <>
-                                                    <p style={styles.hint}>
-                                                        Select items available at your venue. Cards
-                                                        requiring missing items won't be drawn.
-                                                    </p>
-
-                                                    {groupOrder.map((group) => {
-                                                        const els = availableElements.filter(
-                                                            (el) => el.groupId === group.id
-                                                        );
-                                                        if (els.length === 0) return null;
-                                                        const groupDisabled =
-                                                            group.id === ElementGroupId.Drinks &&
-                                                            drinkingLevel === 0;
-                                                        return (
-                                                            <div key={group.id}>
-                                                                <p style={styles.venueGroupLabel}>
-                                                                    {group.name}
-                                                                    {groupDisabled && (
-                                                                        <span
-                                                                            style={
-                                                                                styles.venueGroupDisabledNote
-                                                                            }
-                                                                        >
-                                                                            {" "}
-                                                                            — disabled at drinking
-                                                                            level None
-                                                                        </span>
+                                        <AnimatePresence initial={false}>
+                                            {venueExpanded && (
+                                                <motion.div
+                                                    key="venue-body"
+                                                    initial={
+                                                        prefersReducedMotion
+                                                            ? { opacity: 1, height: "auto" }
+                                                            : { opacity: 0, height: 0 }
+                                                    }
+                                                    animate={{ opacity: 1, height: "auto" }}
+                                                    exit={
+                                                        prefersReducedMotion
+                                                            ? { opacity: 1, height: "auto" }
+                                                            : { opacity: 0, height: 0 }
+                                                    }
+                                                    transition={{
+                                                        duration: 0.22,
+                                                        ease: [0.4, 0, 0.2, 1],
+                                                    }}
+                                                    style={{ overflow: "hidden" }}
+                                                >
+                                                    <div style={styles.venueBody}>
+                                                        {groupOrder.map((group) => {
+                                                            const els = availableElements.filter(
+                                                                (el) => el.groupId === group.id
+                                                            );
+                                                            if (els.length === 0) return null;
+                                                            const groupDisabled =
+                                                                group.id ===
+                                                                    ElementGroupId.Drinks &&
+                                                                drinkingLevel === 0;
+                                                            return (
+                                                                <div key={group.id}>
+                                                                    <p
+                                                                        style={
+                                                                            styles.venueGroupLabel
+                                                                        }
+                                                                    >
+                                                                        {group.name}
+                                                                        {groupDisabled && (
+                                                                            <span
+                                                                                style={
+                                                                                    styles.venueGroupDisabledNote
+                                                                                }
+                                                                            >
+                                                                                {" "}
+                                                                                — disabled at
+                                                                                drinking level None
+                                                                            </span>
+                                                                        )}
+                                                                    </p>
+                                                                    {renderChips(
+                                                                        els,
+                                                                        groupDisabled
                                                                     )}
-                                                                </p>
-                                                                {renderChips(els, groupDisabled)}
-                                                            </div>
-                                                        );
-                                                    })}
+                                                                </div>
+                                                            );
+                                                        })}
 
-                                                    {ungrouped.length > 0 && (
-                                                        <div>
-                                                            <p style={styles.venueGroupLabel}>
-                                                                Miscellaneous
-                                                            </p>
-                                                            {renderChips(ungrouped)}
-                                                        </div>
-                                                    )}
-                                                </>
+                                                        {ungrouped.length > 0 && (
+                                                            <div>
+                                                                <p style={styles.venueGroupLabel}>
+                                                                    Miscellaneous
+                                                                </p>
+                                                                {renderChips(ungrouped)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
                                             )}
-                                        </div>
-                                    </>
+                                        </AnimatePresence>
+                                    </div>
                                 );
                             }}
                         />
@@ -863,6 +915,79 @@ const styles: Record<string, React.CSSProperties> = {
         color: "var(--color-text-secondary)",
         flexShrink: 0,
     },
+    // Venue tile
+    venueTile: {
+        margin: "0 var(--space-5)",
+        marginTop: "var(--space-5)",
+        backgroundColor: "var(--color-surface-elevated)",
+    } as React.CSSProperties,
+    venueTileHeader: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-1)",
+        width: "100%",
+        background: "none",
+        border: "none",
+        padding: "var(--space-4)",
+        cursor: "pointer",
+        textAlign: "left",
+        boxSizing: "border-box",
+    } as React.CSSProperties,
+    venueTitleRow: {
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: "var(--space-3)",
+    } as React.CSSProperties,
+    venueTileLabel: {
+        fontFamily: "var(--font-display)",
+        fontSize: "var(--text-subheading)",
+        fontWeight: 600,
+        color: "var(--color-text-primary)",
+        letterSpacing: "-0.01em",
+        lineHeight: 1.2,
+    } as React.CSSProperties,
+    venueCountOk: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        flexShrink: 0,
+    } as React.CSSProperties,
+    venueCountWarning: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        color: "var(--color-accent-amber)",
+        flexShrink: 0,
+    } as React.CSSProperties,
+    venueTileSubRow: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "var(--space-3)",
+    } as React.CSSProperties,
+    venueTileHint: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        lineHeight: 1.4,
+        flex: 1,
+        textAlign: "left",
+        margin: 0,
+    } as React.CSSProperties,
+    venueChevron: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        flexShrink: 0,
+    } as React.CSSProperties,
+    venueBody: {
+        padding: "var(--space-3) var(--space-4) var(--space-4)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+        borderTop: "1px solid color-mix(in srgb, var(--color-border) 60%, transparent)",
+    } as React.CSSProperties,
     venueGroupLabel: {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",

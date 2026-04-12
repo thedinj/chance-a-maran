@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import type { Card, CardVersion } from "../../lib/api";
 import { FlippingCard } from "../GameCard";
 import { getAudio, preloadSoundIfNeeded } from "../../lib/sounds";
 import { apiClient } from "../../lib/api";
+import { useOverlayBackButton } from "../../hooks/useOverlayBackButton";
 import type { DrawDrama, RevealPhase } from "./types";
 import { GAME_CHANGER_DRAMA, REPARATIONS_DRAMA, STANDARD_DRAW_DRAMA } from "./types";
 
@@ -415,6 +417,8 @@ export function CardReveal({
     footer,
     onCardReveal,
 }: CardRevealProps) {
+    useOverlayBackButton(onDismiss);
+
     const isReparations = card.cardType === "reparations";
     const isGameChanger = Boolean(cardVersion.isGameChanger);
     const prefersReduced =
@@ -423,14 +427,15 @@ export function CardReveal({
 
     // ── Quick mode ────────────────────────────────────────────────────────────
     if (mode === "quick") {
-        return (
+        return ReactDOM.createPortal(
             <QuickReveal
                 card={card}
                 cardVersion={cardVersion}
                 onDismiss={onDismiss}
                 footer={footer}
                 onCardReveal={onCardReveal}
-            />
+            />,
+            document.body
         );
     }
 
@@ -441,7 +446,7 @@ export function CardReveal({
     const customHitSound =
         cardVersion.soundId ? (apiClient.resolveMediaUrl(cardVersion.soundId) ?? undefined) : undefined;
 
-    return (
+    return ReactDOM.createPortal(
         <DramaticReveal
             card={card}
             cardVersion={cardVersion}
@@ -453,7 +458,8 @@ export function CardReveal({
             onDismiss={onDismiss}
             footer={footer}
             onCardReveal={onCardReveal}
-        />
+        />,
+        document.body
     );
 }
 
@@ -535,16 +541,20 @@ function DramaticReveal({
         if (customHitSound) preloadSoundIfNeeded(customHitSound);
     }, [customHitSound]);
 
-    // Resolve the effective drama (with custom hit sound override)
-    const effectiveDrama = drama
-        ? customHitSound !== undefined
-            ? {
-                  ...drama,
-                  hitSound: customHitSound,
-                  ...(isReparations ? { hitSoundOffsetMs: REPARATIONS_DRAMA.flipMs - 250 } : {}),
-              }
-            : drama
-        : null;
+    // Resolve the effective drama (with custom hit sound override).
+    // Memoized so the object reference stays stable across re-renders — prevents sound
+    // useEffects from re-running (and replaying audio) on unrelated state changes.
+    const effectiveDrama = useMemo(() => {
+        if (!drama) return null;
+        if (customHitSound !== undefined) {
+            return {
+                ...drama,
+                hitSound: customHitSound,
+                ...(isReparations ? { hitSoundOffsetMs: REPARATIONS_DRAMA.flipMs - 250 } : {}),
+            };
+        }
+        return drama;
+    }, [drama, customHitSound, isReparations]);
 
     const initialPhase: RevealPhase = isReparations
         ? "reparations-intro"

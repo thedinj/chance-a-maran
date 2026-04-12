@@ -26,6 +26,7 @@ interface NavItem {
     path: string;
     soon?: boolean;
     disabled?: boolean;
+    onClick?: () => void;
 }
 
 const MAIN_NAV: NavItem[] = [{ label: "Home", path: "/" }];
@@ -76,11 +77,16 @@ export function AppMenu() {
                   ]
                 : []),
             { label: "Create game", path: "/game-settings", disabled: !!session || !user },
-            { label: "Submit card", path: "/submit-card", disabled: !user },
+            {
+                label: "Submit card",
+                path: "/submit-card",
+                disabled: !user,
+                onClick: user ? () => history.push("/cards", { newCard: true }) : undefined,
+            },
             { label: "My cards", path: "/cards", disabled: !user },
             { label: "Game history", path: "/history", disabled: !user },
         ],
-        [isHost, registeredDevicePlayer, session, user]
+        [history, isHost, registeredDevicePlayer, session, user]
     );
 
     const isActive = (path: string) =>
@@ -268,10 +274,12 @@ export function AppMenu() {
 function NavRow({ item, active, accent }: { item: NavItem; active: boolean; accent?: boolean }) {
     return (
         <IonItem
-            routerLink={item.soon || item.disabled ? undefined : item.path}
+            routerLink={item.soon || item.disabled || item.onClick ? undefined : item.path}
             routerDirection="root"
+            button={!!item.onClick}
             detail={false}
             disabled={item.soon || item.disabled}
+            onClick={item.onClick}
             style={{
                 ...styles.item,
                 ...(active ? styles.itemActive : {}),

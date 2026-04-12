@@ -621,33 +621,82 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                         <Controller
                             name="requirementIds"
                             control={control}
-                            render={({ field }) => (
-                                <div style={styles.tagList}>
-                                    {availableRequirements.map((req) => {
-                                        const selected = field.value.includes(req.id);
-                                        return (
-                                            <button
-                                                key={req.id}
-                                                style={
-                                                    (selected
-                                                        ? styles.gameChipOn
-                                                        : styles.gameChipOff) as React.CSSProperties
-                                                }
-                                                onClick={() =>
-                                                    field.onChange(
-                                                        selected
-                                                            ? field.value.filter((id) => id !== req.id)
-                                                            : [...field.value, req.id]
-                                                    )
-                                                }
-                                                disabled={isDisabled}
-                                            >
-                                                {req.title}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
+                            render={({ field }) => {
+                                const groupOrder: { id: string; name: string }[] = [];
+                                const seenGroups = new Set<string>();
+                                const sortedByGroup = [...availableRequirements].sort((a, b) => {
+                                    if (a.groupId === b.groupId) return 0;
+                                    if (a.groupId == null) return 1;
+                                    if (b.groupId == null) return -1;
+                                    return a.groupId.localeCompare(b.groupId);
+                                });
+                                for (const el of sortedByGroup) {
+                                    if (el.groupId && !seenGroups.has(el.groupId)) {
+                                        seenGroups.add(el.groupId);
+                                        groupOrder.push({ id: el.groupId, name: el.groupName ?? el.groupId });
+                                    }
+                                }
+                                const ungrouped = availableRequirements.filter((el) => !el.groupId);
+
+                                function renderChips(els: typeof availableRequirements) {
+                                    return (
+                                        <div style={styles.tagList}>
+                                            {els.map((req) => {
+                                                const selected = field.value.includes(req.id);
+                                                return (
+                                                    <button
+                                                        key={req.id}
+                                                        style={
+                                                            (selected
+                                                                ? styles.elementChipOn
+                                                                : styles.elementChipOff) as React.CSSProperties
+                                                        }
+                                                        onClick={() =>
+                                                            field.onChange(
+                                                                selected
+                                                                    ? field.value.filter((id) => id !== req.id)
+                                                                    : [...field.value, req.id]
+                                                            )
+                                                        }
+                                                        disabled={isDisabled}
+                                                    >
+                                                        {req.title}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div style={styles.requirementGroups}>
+                                        {groupOrder.map((group) => {
+                                            const els = availableRequirements.filter(
+                                                (el) => el.groupId === group.id
+                                            );
+                                            if (els.length === 0) return null;
+                                            return (
+                                                <div key={group.id}>
+                                                    <p style={styles.requirementGroupLabel}>
+                                                        {group.name}
+                                                    </p>
+                                                    {renderChips(els)}
+                                                </div>
+                                            );
+                                        })}
+                                        {ungrouped.length > 0 && (
+                                            <div>
+                                                {groupOrder.length > 0 && (
+                                                    <p style={styles.requirementGroupLabel}>
+                                                        Miscellaneous
+                                                    </p>
+                                                )}
+                                                {renderChips(ungrouped)}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }}
                         />
                     </div>
                     <div style={styles.divider} />
@@ -1002,6 +1051,45 @@ export const styles: Record<string, React.CSSProperties> = {
         background: "var(--color-surface)",
         border: "1.5px solid var(--color-accent-primary)",
         color: "var(--color-accent-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    },
+
+    // Requirement element chips
+    requirementGroups: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+    },
+    requirementGroupLabel: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        fontWeight: 500,
+        color: "var(--color-text-secondary)",
+        margin: "0 0 var(--space-2)",
+    },
+    elementChipOff: {
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) var(--space-3)",
+        cursor: "pointer",
+        minHeight: "36px",
+        display: "inline-flex",
+        alignItems: "center",
+    },
+    elementChipOn: {
+        background: "var(--color-surface)",
+        border: "1.5px solid var(--color-accent-amber)",
+        color: "var(--color-accent-amber)",
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
         fontWeight: 500,

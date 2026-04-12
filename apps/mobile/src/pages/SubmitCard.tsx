@@ -17,11 +17,13 @@ export default function SubmitCard() {
     const { session } = useSession();
     const history = useHistory();
     const editorRef = useRef<CardEditorHandle>(null);
+    const contentRef = useRef<HTMLIonContentElement>(null);
     const goToHomeBase = useGoToHomeBase();
     const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
 
     useIonViewWillEnter(() => {
         editorRef.current?.reset();
+        contentRef.current?.scrollToTop(0);
     });
 
     // Registered-only page
@@ -84,7 +86,7 @@ export default function SubmitCard() {
     return (
         <IonPage>
             <AppHeader />
-            <IonContent>
+            <IonContent ref={contentRef}>
                 <div style={styles.pageHeader}>
                     <button style={styles.backLink} onClick={goToHomeBase}>
                         «

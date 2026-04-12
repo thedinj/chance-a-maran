@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import { useOverlayBackButton } from "../hooks/useOverlayBackButton";
 
 export type DialogButtonVariant = "default" | "accent" | "danger" | "ghost";
 
@@ -30,6 +31,8 @@ export function AppDialog({
     accent = "amber",
     onDismiss,
 }: AppDialogProps) {
+    useOverlayBackButton(onDismiss);
+
     const anyPending = buttons.some((b) => b.isPending);
 
     const accentGradient: Record<string, string> = {
