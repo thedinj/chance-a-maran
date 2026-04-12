@@ -59,6 +59,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             hiddenInstructions: null,
             imageId: "",
             imageYOffset: 0.5,
+            soundId: null,
             drinkingLevel: 0,
             spiceLevel: 0,
             cardType: "standard",
@@ -85,6 +86,15 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const [pendingImageId, setPendingImageId] = useState<string | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Sound state ───────────────────────────────────────────────────────────
+    const existingDefaultSoundId = defaultValues?.soundId ?? null;
+    const [pendingSoundId, setPendingSoundId] = useState<string | null>(null);
+    const [soundFileName, setSoundFileName] = useState<string | null>(
+        existingDefaultSoundId ? "Saved sound" : null
+    );
+    const [soundUploading, setSoundUploading] = useState(false);
+    const soundFileInputRef = useRef<HTMLInputElement>(null);
     const dragStartY = useRef(0);
     const dragStartOffset = useRef(0.5);
 
@@ -146,6 +156,8 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             resetForm();
             setImagePreview(null);
             setPendingImageId(null);
+            setPendingSoundId(null);
+            setSoundFileName(null);
             setSubmitError(null);
             setContentWarning(null);
         },
@@ -220,14 +232,61 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         setValue("imageId", "", { shouldValidate: true });
     }
 
+    // ── Sound handlers ────────────────────────────────────────────────────────
+    async function handlePickSound() {
+        const file = await new Promise<File | null>((resolve) => {
+            const input = soundFileInputRef.current!;
+            input.value = "";
+            input.onchange = () => resolve(input.files?.[0] ?? null);
+            input.click();
+        });
+        if (!file) return;
+
+        // Delete the previous pending upload before replacing
+        if (pendingSoundId) {
+            void apiClient.deleteMedia(pendingSoundId);
+            setPendingSoundId(null);
+        }
+
+        setSoundFileName(file.name);
+        setValue("soundId", null, { shouldValidate: false });
+        setSoundUploading(true);
+
+        const result = await apiClient.uploadMedia(file);
+        setSoundUploading(false);
+
+        if (result.ok) {
+            setValue("soundId", result.data.mediaId, { shouldValidate: true });
+            setPendingSoundId(result.data.mediaId);
+        } else {
+            setSubmitError(result.error.message);
+            setSoundFileName(null);
+        }
+    }
+
+    function handleRemoveSound() {
+        if (pendingSoundId) {
+            void apiClient.deleteMedia(pendingSoundId);
+            setPendingSoundId(null);
+        }
+        setSoundFileName(null);
+        setValue("soundId", null, { shouldValidate: true });
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div style={styles.root}>
-            {/* Hidden file input for web image picking */}
+            {/* Hidden file inputs */}
             <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/gif"
+                style={{ display: "none" }}
+            />
+            <input
+                ref={soundFileInputRef}
+                type="file"
+                accept="audio/mpeg"
                 style={{ display: "none" }}
             />
 
@@ -371,6 +430,66 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 {errors.imageId && (
                     <p style={styles.fieldError}>{errors.imageId.message}</p>
                 )}
+            </div>
+
+            <div style={styles.divider} />
+
+            {/* ── Reveal sound ──────────────────────────────────────────────── */}
+            <div style={styles.section}>
+                <Controller
+                    name="soundId"
+                    control={control}
+                    render={({ field }) => (
+                        <>
+                            <p style={styles.sectionLabel}>REVEAL SOUND</p>
+                            {soundFileName ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={styles.hint}>{soundFileName}</span>
+                                        {soundUploading ? (
+                                            <span style={styles.imageStatus}>Uploading…</span>
+                                        ) : field.value ? (
+                                            <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                                ✓ Ready
+                                            </span>
+                                        ) : (
+                                            <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                                ✓ Saved
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                        <button
+                                            style={styles.toggleOff}
+                                            onClick={() => void handlePickSound()}
+                                            disabled={isDisabled || soundUploading}
+                                        >
+                                            Replace
+                                        </button>
+                                        <button
+                                            style={styles.imageClearBtn}
+                                            onClick={handleRemoveSound}
+                                            disabled={isDisabled}
+                                        >
+                                            Remove sound
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    style={styles.toggleOff}
+                                    onClick={() => void handlePickSound()}
+                                    disabled={isDisabled || soundUploading}
+                                >
+                                    {soundUploading ? "Uploading…" : "Add reveal sound"}
+                                </button>
+                            )}
+                            <p style={styles.hint}>
+                                Optional MP3 played instead of the default cymbal when this card is revealed. Max 1 MB / 10 s.
+                            </p>
+                        </>
+                    )}
+                />
             </div>
 
             <div style={styles.divider} />

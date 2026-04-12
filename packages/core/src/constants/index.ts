@@ -1,6 +1,9 @@
 // Text field length limits
 export * from "./textLimits";
 
+// Sound upload constraints
+export * from "./sound";
+
 // Requirement element groups
 export * from "./elementGroups";
 

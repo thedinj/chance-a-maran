@@ -1,4 +1,5 @@
 import { db } from "../lib/db/db";
+import { cleanupStaleTempFiles } from "../lib/media/tempMedia";
 
 export function initializeDatabase() {
     db.exec(`
@@ -119,6 +120,7 @@ export function initializeDatabase() {
             description          TEXT NOT NULL,
             hidden_instructions  TEXT,
             image_id             TEXT REFERENCES media(id),
+            sound_id             TEXT REFERENCES media(id),
             drinking_level       INTEGER NOT NULL DEFAULT 1,
             spice_level          INTEGER NOT NULL DEFAULT 1,
             is_game_changer      INTEGER NOT NULL DEFAULT 0,
@@ -212,4 +214,7 @@ export function initializeDatabase() {
     `);
 
     console.log("Database initialized successfully");
+
+    // Clean up abandoned temp media uploads from any prior run.
+    cleanupStaleTempFiles();
 }

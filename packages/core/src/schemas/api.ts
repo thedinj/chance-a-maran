@@ -158,6 +158,8 @@ export const SubmitCardRequestSchema = z.object({
     imageId: z.string().min(1).nullable(),
     /** Vertical crop offset for the card image. 0 = top, 0.5 = center, 1 = bottom. Optional — defaults to 0.5 if omitted. */
     imageYOffset: z.number().min(0).max(1).optional(),
+    /** UUID of an uploaded MP3 media record to play instead of the default cymbal at card reveal. Null = use default. */
+    soundId: z.string().min(1).nullable().optional(),
     drinkingLevel: z.number().int().min(0).max(3),
     spiceLevel: z.number().int().min(0).max(3),
     /**
@@ -222,6 +224,7 @@ export const MIME_TO_EXT: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/gif": "gif",
+    "audio/mpeg": "mp3",
 };
 
 /** Derive the relative path for a media file: `{shard}/{id}.{ext}` */

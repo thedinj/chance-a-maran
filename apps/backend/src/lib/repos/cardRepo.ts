@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { db } from "../db/db";
 import { boolToInt, intToBool } from "../db/boolBridge";
 import * as mediaRepo from "./mediaRepo";
+import { promoteMedia } from "../media/tempMedia";
 import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ export interface DbCardVersion {
     image_id: string | null;
     /** Sourced from media.y_offset via LEFT JOIN — not stored on card_versions. */
     image_y_offset: number;
+    sound_id: string | null;
     drinking_level: number;
     spice_level: number;
     is_game_changer: number;
@@ -91,6 +93,7 @@ export function mapCardVersion(row: DbCardVersion): CardVersion {
         hasHiddenInstructions: row.hidden_instructions !== null,
         imageId: row.image_id,
         imageYOffset: row.image_y_offset,
+        soundId: row.sound_id ?? null,
         drinkingLevel: row.drinking_level,
         spiceLevel: row.spice_level,
         isGameChanger: intToBool(row.is_game_changer),
@@ -281,6 +284,7 @@ export function create(data: {
     description: string;
     hiddenInstructions: string | null;
     imageId: string | null;
+    soundId?: string | null;
     drinkingLevel: number;
     spiceLevel: number;
     isGameChanger: boolean;
@@ -292,14 +296,18 @@ export function create(data: {
     const now = new Date().toISOString();
 
     db.transaction(() => {
+        // Promote any temp media to permanent before inserting the FK references.
+        if (data.imageId) promoteMedia(data.imageId, data.authorUserId);
+        if (data.soundId) promoteMedia(data.soundId, data.authorUserId);
+
         db.prepare(
             `INSERT INTO cards (id, author_user_id, owner_user_id, card_type, active, is_global, created_in_session_id, current_version_id, created_at)
              VALUES (?, ?, ?, ?, 1, 0, ?, ?, ?)`
         ).run(cardId, data.authorUserId, data.authorUserId, data.cardType, data.createdInSessionId, versionId, now);
 
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, sound_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -307,6 +315,7 @@ export function create(data: {
             data.description,
             data.hiddenInstructions,
             data.imageId,
+            data.soundId ?? null,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),
@@ -338,6 +347,7 @@ export function createVersion(
         description: string;
         hiddenInstructions: string | null;
         imageId: string | null;
+        soundId?: string | null;
         drinkingLevel: number;
         spiceLevel: number;
         isGameChanger: boolean;
@@ -356,9 +366,13 @@ export function createVersion(
     const nextVersionNumber = maxRow.max + 1;
 
     db.transaction(() => {
+        // Promote any temp media to permanent before inserting the FK references.
+        if (data.imageId) promoteMedia(data.imageId, data.authoredByUserId);
+        if (data.soundId) promoteMedia(data.soundId, data.authoredByUserId);
+
         db.prepare(
-            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO card_versions (id, card_id, version_number, title, description, hidden_instructions, image_id, sound_id, drinking_level, spice_level, is_game_changer, authored_by_user_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             versionId,
             cardId,
@@ -367,6 +381,7 @@ export function createVersion(
             data.description,
             data.hiddenInstructions,
             data.imageId,
+            data.soundId ?? null,
             data.drinkingLevel,
             data.spiceLevel,
             boolToInt(data.isGameChanger),
@@ -404,24 +419,34 @@ export function pruneOldVersions(cardId: string, currentVersionId?: string): voi
 
     const orphaned = db
         .prepare(
-            `SELECT id, image_id FROM card_versions
+            `SELECT id, image_id, sound_id FROM card_versions
              WHERE card_id = ?
                AND id != ?
                AND id NOT IN (SELECT card_version_id FROM draw_events)`
         )
-        .all(cardId, cvId) as Array<{ id: string; image_id: string | null }>;
+        .all(cardId, cvId) as Array<{ id: string; image_id: string | null; sound_id: string | null }>;
 
     for (const v of orphaned) {
         // CASCADE deletes card_game_tags and card_version_requirements
         db.prepare("DELETE FROM card_versions WHERE id = ?").run(v.id);
 
-        // Remove media if no remaining version references it
+        // Remove image media if no remaining version references it
         if (v.image_id) {
             const stillUsed = db
                 .prepare("SELECT 1 FROM card_versions WHERE image_id = ? LIMIT 1")
                 .get(v.image_id);
             if (!stillUsed) {
                 mediaRepo.deleteById(v.image_id);
+            }
+        }
+
+        // Remove sound media if no remaining version references it
+        if (v.sound_id) {
+            const stillUsed = db
+                .prepare("SELECT 1 FROM card_versions WHERE sound_id = ? LIMIT 1")
+                .get(v.sound_id);
+            if (!stillUsed) {
+                mediaRepo.deleteById(v.sound_id);
             }
         }
     }

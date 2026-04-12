@@ -1,6 +1,4 @@
-import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, readdirSync } from "fs";
-import { writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { mediaRelativePath } from "@chance/core";
 import { db } from "../db/db";
@@ -27,23 +25,11 @@ function ensureDir(filePath: string): void {
     }
 }
 
-export function create(data: {
-    buffer: Buffer;
-    mimeType: string;
-    uploadedByUserId: string;
-}): string {
-    const id = randomUUID();
-    const filePath = mediaPath(id, data.mimeType);
-
-    ensureDir(filePath);
-    writeFileSync(filePath, data.buffer);
-
-    db.prepare(
-        `INSERT INTO media (id, mime_type, size, uploaded_by_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?)`
-    ).run(id, data.mimeType, data.buffer.length, data.uploadedByUserId, new Date().toISOString());
-
-    return id;
+export function findMimeById(id: string): string | null {
+    const row = db
+        .prepare("SELECT mime_type FROM media WHERE id = ?")
+        .get(id) as Pick<DbMediaMeta, "mime_type"> | undefined;
+    return row?.mime_type ?? null;
 }
 
 export function findRawById(id: string): { data: Buffer; mime_type: string } | null {

@@ -22,6 +22,12 @@ export function getAudio(src: string): HTMLAudioElement {
     return new Audio(src);
 }
 
+/** Preload a sound if it hasn't been cached yet. Safe to call with dynamic URLs. */
+export function preloadSoundIfNeeded(src: string): void {
+    if (preloadedAudio[src]) return;
+    preloadSound(src);
+}
+
 // Side-effect: preload all drama sounds on module evaluation.
 [
     "/sound/drumrollloop.mp3",

@@ -154,6 +154,9 @@ function CardDrawer({
     const [editGameTags, setEditGameTags] = useState<string[]>([]);
     const [editRequirements, setEditRequirements] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const [editSoundId, setEditSoundId] = useState<string | null>(null);
+    const [soundUploading, setSoundUploading] = useState(false);
+    const soundInputRef = useRef<HTMLInputElement>(null);
     const imgDragStartY = useRef(0);
     const imgDragStartOffset = useRef(0.5);
 
@@ -198,6 +201,7 @@ function CardDrawer({
         setEditGameTags(cv.gameTags.map((g) => g.id));
         setEditRequirements(cv.requirements.map((r) => r.id));
         setEditImageYOffset(cv.imageYOffset ?? 0.5);
+        setEditSoundId(cv.soundId ?? null);
         void loadEditData();
         setEditing(true);
     }
@@ -277,6 +281,7 @@ function CardDrawer({
                     hiddenInstructions: editHidden || null,
                     imageId: cv.imageId ?? null,
                     imageYOffset: editImageYOffset,
+                    soundId: editSoundId,
                     drinkingLevel: Number(editDrinking),
                     spiceLevel: Number(editSpice),
                     isGameChanger: editCardType === "reparations" ? false : editGameChanger,
@@ -514,6 +519,75 @@ function CardDrawer({
                     searchable
                     clearable
                 />
+                {/* ── Reveal sound ──────────────────────────────────────────── */}
+                <Stack gap={4}>
+                    <Text size="sm" fw={500}>Reveal sound</Text>
+                    <Text size="xs" c="dimmed">
+                        Optional MP3 played instead of the default cymbal. Max 1 MB / 10 s. Upload from the mobile editor or upload here.
+                    </Text>
+                    <input
+                        ref={soundInputRef}
+                        type="file"
+                        accept="audio/mpeg"
+                        style={{ display: "none" }}
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setSoundUploading(true);
+                            try {
+                                const form = new FormData();
+                                form.append("file", file);
+                                const res = await adminFetch("/api/media", { method: "POST", body: form });
+                                const data = await res.json();
+                                if (data.ok) {
+                                    setEditSoundId(data.data.mediaId as string);
+                                } else {
+                                    notifications.show({ message: data.error?.message ?? "Upload failed", color: "red" });
+                                }
+                            } finally {
+                                setSoundUploading(false);
+                                e.target.value = "";
+                            }
+                        }}
+                    />
+                    {editSoundId ? (
+                        <Stack gap={4}>
+                            <audio
+                                controls
+                                src={`${apiBaseUrl}/api/media/${editSoundId}`}
+                                style={{ width: "100%" }}
+                            />
+                            <Group gap="xs">
+                                <Button
+                                    size="xs"
+                                    variant="outline"
+                                    loading={soundUploading}
+                                    onClick={() => soundInputRef.current?.click()}
+                                >
+                                    Replace
+                                </Button>
+                                <Button
+                                    size="xs"
+                                    variant="subtle"
+                                    color="red"
+                                    onClick={() => setEditSoundId(null)}
+                                >
+                                    Remove
+                                </Button>
+                            </Group>
+                        </Stack>
+                    ) : (
+                        <Button
+                            size="xs"
+                            variant="outline"
+                            loading={soundUploading}
+                            onClick={() => soundInputRef.current?.click()}
+                        >
+                            Upload MP3
+                        </Button>
+                    )}
+                </Stack>
+
                 {cv.imageId && (
                     <Stack gap={4}>
                         <Text size="sm" fw={500}>

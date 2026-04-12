@@ -36,6 +36,8 @@ export const CardVersionSchema = z.object({
     /** True if this card version has hidden instructions. Always present regardless of auth context. */
     hasHiddenInstructions: z.boolean(),
     imageId: z.string().nullable(),
+    /** UUID of a custom MP3 media record to play instead of the default cymbal at card reveal. Null = use default. */
+    soundId: z.string().nullable().optional(),
     /**
      * Vertical crop offset for the card image. 0 = top, 0.5 = center, 1 = bottom.
      * Applied as CSS object-position: center {imageYOffset * 100}%.

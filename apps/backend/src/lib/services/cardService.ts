@@ -11,6 +11,7 @@ import type { Card, CardTransfer, CardVersion, DrawEvent, SubmitCardRequest } fr
 import { db } from "../db/db";
 import * as cardRepo from "../repos/cardRepo";
 import * as mediaRepo from "../repos/mediaRepo";
+import { findTempFile } from "../media/tempMedia";
 import * as requirementElementRepo from "../repos/requirementElementRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
 import * as cardTransferRepo from "../repos/cardTransferRepo";
@@ -35,6 +36,44 @@ export function filterDrawEvent(event: DrawEvent, requestingPlayerId: string | n
     };
 }
 
+/**
+ * Validate that a soundId refers to a legitimate audio file — either an already-promoted
+ * media record (audio/mpeg, correct ownership) or a temp file awaiting promotion (.mp3).
+ * No-op when soundId is null/undefined.
+ */
+function validateSoundId(
+    soundId: string | null | undefined,
+    requestingUserId: string,
+    isAdmin: boolean
+): void {
+    if (!soundId) return;
+
+    // Check permanent DB record first.
+    const mimeType = mediaRepo.findMimeById(soundId);
+    if (mimeType !== null) {
+        if (mimeType !== "audio/mpeg") {
+            throw new ValidationError("Sound media must be an MP3 file.");
+        }
+        if (!isAdmin) {
+            const meta = mediaRepo.findMetaById(soundId);
+            if (!meta || meta.uploaded_by_user_id !== requestingUserId) {
+                throw new AuthorizationError("You can only use your own uploaded sounds.");
+            }
+        }
+        return;
+    }
+
+    // Check temp file.
+    const tmp = findTempFile(soundId);
+    if (!tmp) {
+        throw new ValidationError("Sound media not found.");
+    }
+    if (tmp.mimeType !== "audio/mpeg") {
+        throw new ValidationError("Sound media must be an MP3 file.");
+    }
+    // Temp file ownership is implied: only the submitter's request reaches this point.
+}
+
 function validateRequirementIds(ids: string[]): void {
     if (ids.length === 0) return;
     const found = requirementElementRepo.findByIds(ids);
@@ -47,6 +86,7 @@ function validateRequirementIds(ids: string[]): void {
 
 export function submitCard(userId: string, sessionId: string | null, req: SubmitCardRequest): Card {
     validateRequirementIds(req.requirementIds);
+    validateSoundId(req.soundId, userId, false);
     const levels = applyContentFloors(
         { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
         { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
@@ -59,6 +99,7 @@ export function submitCard(userId: string, sessionId: string | null, req: Submit
         description: req.description,
         hiddenInstructions: req.hiddenInstructions,
         imageId: req.imageId,
+        soundId: req.soundId ?? null,
         drinkingLevel: levels.drinkingLevel,
         spiceLevel: levels.spiceLevel,
         isGameChanger: req.cardType === "reparations" ? false : req.isGameChanger,
@@ -99,6 +140,7 @@ export function updateCard(
     }
 
     validateRequirementIds(req.requirementIds);
+    validateSoundId(req.soundId, userId, isAdmin);
     const levels = applyContentFloors(
         { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
         { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
@@ -114,6 +156,7 @@ export function updateCard(
         req.description === cv.description &&
         req.hiddenInstructions === cv.hiddenInstructions &&
         (req.imageId ?? null) === cv.imageId &&
+        (req.soundId ?? null) === (cv.soundId ?? null) &&
         levels.drinkingLevel === cv.drinkingLevel &&
         levels.spiceLevel === cv.spiceLevel &&
         isGameChanger === cv.isGameChanger &&
@@ -127,6 +170,7 @@ export function updateCard(
             description: req.description,
             hiddenInstructions: req.hiddenInstructions,
             imageId: req.imageId,
+            soundId: req.soundId ?? null,
             drinkingLevel: levels.drinkingLevel,
             spiceLevel: levels.spiceLevel,
             isGameChanger,
