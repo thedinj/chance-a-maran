@@ -144,6 +144,8 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
 
     // Check for existing session on mount
     useEffect(() => {
+        let cancelled = false;
+
         const checkSession = async () => {
             try {
                 const storedAccessToken = localStorage.getItem(STORAGE_ACCESS_TOKEN_KEY);
@@ -171,6 +173,7 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                             userId: storedUser.id,
                             accessToken: tokenExpiry(storedAccessToken),
                         });
+                        if (cancelled) return;
                         setAccessToken(storedAccessToken);
                         setRefreshToken(storedRefreshToken);
                         setUser(storedUser);
@@ -186,6 +189,7 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                 if (storedRefreshToken) {
                     authLog("checkSession: access token expired or missing — attempting refresh with stored refresh token");
                     const newToken = await refreshAccessToken(storedRefreshToken);
+                    if (cancelled) return;
                     if (newToken) {
                         authLog("checkSession: session restored via refresh token");
                         setIsLoading(false);
@@ -196,18 +200,21 @@ const AdminSessionProvider: React.FC<AdminSessionProviderProps> = ({ children })
                     authLog("checkSession: no refresh token in storage — unauthenticated");
                 }
 
+                if (cancelled) return;
                 clearSession();
             } catch (err) {
+                if (cancelled) return;
                 authError("checkSession: unexpected error", {
                     error: err instanceof Error ? err.message : String(err),
                 });
                 clearSession();
             } finally {
-                setIsLoading(false);
+                if (!cancelled) setIsLoading(false);
             }
         };
 
         checkSession();
+        return () => { cancelled = true; };
     }, [refreshAccessToken, clearSession]);
 
     const login = useCallback(

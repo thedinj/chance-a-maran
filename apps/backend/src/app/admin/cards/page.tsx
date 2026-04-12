@@ -35,7 +35,7 @@ import { useSessionStorage } from "@mantine/hooks";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion, CardAnalysisResult } from "@chance/core";
-import { BulkAnalysisModal } from "./BulkAnalysisModal";
+import { BulkAnalysisModal, CardContentSummary, CardDiffFields } from "./BulkAnalysisModal";
 import { LevelPicker } from "./LevelPicker";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
@@ -168,6 +168,7 @@ function CardDrawer({
     const [analysisApplying, setAnalysisApplying] = useState(false);
     const [checkedFields, setCheckedFields] = useState<Set<string>>(new Set());
     const [overrideFields, setOverrideFields] = useState<Map<string, number>>(new Map());
+    const [arrayOverrideFields, setArrayOverrideFields] = useState<Map<string, string[]>>(new Map());
 
     const cv = card.currentVersion;
 
@@ -311,6 +312,7 @@ function CardDrawer({
         setAnalysisError(null);
         setCheckedFields(new Set());
         setOverrideFields(new Map());
+        setArrayOverrideFields(new Map());
         setAnalysisOpen(true);
         setAnalysisLoading(true);
         try {
@@ -360,6 +362,11 @@ function CardDrawer({
             const effectiveSpice = overrideFields.get("spiceLevel") ?? suggested.spiceLevel;
             const effectiveDrinking =
                 overrideFields.get("drinkingLevel") ?? suggested.drinkingLevel;
+            const effectiveGameTags =
+                arrayOverrideFields.get("gameTagIds") ?? suggested.gameTagIds;
+            const effectiveRequirements =
+                arrayOverrideFields.get("requirementElementIds") ??
+                suggested.requirementElementIds;
             const payload = {
                 title: cv.title,
                 description: cv.description,
@@ -373,10 +380,10 @@ function CardDrawer({
                 isGameChanger: cv.isGameChanger,
                 cardType: card.cardType,
                 gameTags: checkedFields.has("gameTagIds")
-                    ? suggested.gameTagIds
+                    ? effectiveGameTags
                     : cv.gameTags.map((g) => g.id),
                 requirementIds: checkedFields.has("requirementElementIds")
-                    ? suggested.requirementElementIds
+                    ? effectiveRequirements
                     : cv.requirements.map((r) => r.id),
             };
             const res = await adminFetch(`/api/cards/${card.id}`, {
@@ -642,13 +649,14 @@ function CardDrawer({
                             step={0.01}
                             value={editImageYOffset}
                             onChange={setEditImageYOffset}
+                            mb="xl"
                             marks={[
                                 { value: 0, label: "Top" },
                                 { value: 0.5, label: "Center" },
                                 { value: 1, label: "Bottom" },
                             ]}
                         />
-                        <Text size="xs" c="dimmed" mt={4}>
+                        <Text size="xs" c="dimmed">
                             Drag image or use slider to set crop position.
                         </Text>
                     </Stack>
@@ -683,7 +691,7 @@ function CardDrawer({
                     setAnalysisOpen(false);
                 }}
                 title={analysisResult?.changed ? `AI Recommendations` : "AI Analysis"}
-                size="md"
+                size={800}
             >
                 <Box pos="relative">
                     <LoadingOverlay
@@ -705,12 +713,13 @@ function CardDrawer({
 
                     {analysisResult && !analysisResult.error && (
                         <>
-                            <Paper withBorder p="sm" mb="md">
-                                <Text size="xs" c="dimmed" mb={4}>
-                                    AI justification
-                                </Text>
-                                <Text size="sm">{analysisResult.justification}</Text>
-                            </Paper>
+                            <CardContentSummary
+                                cv={cv}
+                                result={analysisResult}
+                                error={analysisError}
+                                apiBaseUrl={apiBaseUrl}
+                                showImage
+                            />
 
                             {analysisResult.changed && (
                                 <Text size="xs" c="dimmed" mb="sm">
@@ -726,355 +735,28 @@ function CardDrawer({
                                 </Text>
                             )}
 
-                            <Stack gap="xs">
-                                {/* Spice level */}
-                                {(() => {
-                                    const spiceChanged =
-                                        analysisResult.current.spiceLevel !==
-                                        analysisResult.suggested.spiceLevel;
-                                    const spiceSelected =
-                                        overrideFields.get("spiceLevel") ??
-                                        (spiceChanged
-                                            ? analysisResult.suggested.spiceLevel
-                                            : analysisResult.current.spiceLevel);
-                                    return (
-                                        <Paper
-                                            withBorder
-                                            p="sm"
-                                            style={{
-                                                opacity:
-                                                    spiceChanged || checkedFields.has("spiceLevel")
-                                                        ? 1
-                                                        : 0.45,
-                                            }}
-                                        >
-                                            <Stack gap={6}>
-                                                <Checkbox
-                                                    checked={checkedFields.has("spiceLevel")}
-                                                    onChange={(e) => {
-                                                        const next = new Set(checkedFields);
-                                                        if (e.currentTarget.checked)
-                                                            next.add("spiceLevel");
-                                                        else next.delete("spiceLevel");
-                                                        setCheckedFields(next);
-                                                    }}
-                                                    label={
-                                                        <Text size="sm" fw={500}>
-                                                            Spice level
-                                                        </Text>
-                                                    }
-                                                />
-                                                <LevelPicker
-                                                    levels={SPICE_LEVELS.levels}
-                                                    selected={spiceSelected}
-                                                    suggested={analysisResult.suggested.spiceLevel}
-                                                    current={analysisResult.current.spiceLevel}
-                                                    color="orange"
-                                                    onChange={(v) => {
-                                                        const next = new Map(overrideFields);
-                                                        next.set("spiceLevel", v);
-                                                        setOverrideFields(next);
-                                                        if (!spiceChanged) {
-                                                            const cf = new Set(checkedFields);
-                                                            if (
-                                                                v !==
-                                                                analysisResult.current.spiceLevel
-                                                            )
-                                                                cf.add("spiceLevel");
-                                                            else cf.delete("spiceLevel");
-                                                            setCheckedFields(cf);
-                                                        }
-                                                    }}
-                                                />
-                                            </Stack>
-                                        </Paper>
-                                    );
-                                })()}
-
-                                {/* Drinking level */}
-                                {(() => {
-                                    const drinkingChanged =
-                                        analysisResult.current.drinkingLevel !==
-                                        analysisResult.suggested.drinkingLevel;
-                                    const drinkingSelected =
-                                        overrideFields.get("drinkingLevel") ??
-                                        (drinkingChanged
-                                            ? analysisResult.suggested.drinkingLevel
-                                            : analysisResult.current.drinkingLevel);
-                                    return (
-                                        <Paper
-                                            withBorder
-                                            p="sm"
-                                            style={{
-                                                opacity:
-                                                    drinkingChanged ||
-                                                    checkedFields.has("drinkingLevel")
-                                                        ? 1
-                                                        : 0.45,
-                                            }}
-                                        >
-                                            <Stack gap={6}>
-                                                <Checkbox
-                                                    checked={checkedFields.has("drinkingLevel")}
-                                                    onChange={(e) => {
-                                                        const next = new Set(checkedFields);
-                                                        if (e.currentTarget.checked)
-                                                            next.add("drinkingLevel");
-                                                        else next.delete("drinkingLevel");
-                                                        setCheckedFields(next);
-                                                    }}
-                                                    label={
-                                                        <Text size="sm" fw={500}>
-                                                            Drinking level
-                                                        </Text>
-                                                    }
-                                                />
-                                                <LevelPicker
-                                                    levels={DRINKING_LEVELS.levels}
-                                                    selected={drinkingSelected}
-                                                    suggested={
-                                                        analysisResult.suggested.drinkingLevel
-                                                    }
-                                                    current={analysisResult.current.drinkingLevel}
-                                                    color="blue"
-                                                    onChange={(v) => {
-                                                        const next = new Map(overrideFields);
-                                                        next.set("drinkingLevel", v);
-                                                        setOverrideFields(next);
-                                                        if (!drinkingChanged) {
-                                                            const cf = new Set(checkedFields);
-                                                            if (
-                                                                v !==
-                                                                analysisResult.current.drinkingLevel
-                                                            )
-                                                                cf.add("drinkingLevel");
-                                                            else cf.delete("drinkingLevel");
-                                                            setCheckedFields(cf);
-                                                        }
-                                                    }}
-                                                />
-                                            </Stack>
-                                        </Paper>
-                                    );
-                                })()}
-
-                                {/* Game tags */}
-                                {[...analysisResult.current.gameTagIds].sort().join(",") !==
-                                [...analysisResult.suggested.gameTagIds].sort().join(",") ? (
-                                    <Paper withBorder p="sm">
-                                        <Checkbox
-                                            checked={checkedFields.has("gameTagIds")}
-                                            onChange={(e) => {
-                                                const next = new Set(checkedFields);
-                                                if (e.currentTarget.checked) next.add("gameTagIds");
-                                                else next.delete("gameTagIds");
-                                                setCheckedFields(next);
-                                            }}
-                                            label={
-                                                <Stack gap={4}>
-                                                    <Text size="sm" fw={500}>
-                                                        Game tags
-                                                    </Text>
-                                                    <Group gap={4}>
-                                                        {analysisResult.current.gameTagIds
-                                                            .length === 0 ? (
-                                                            <Text size="xs" c="dimmed">
-                                                                none
-                                                            </Text>
-                                                        ) : (
-                                                            analysisResult.current.gameTagIds.map(
-                                                                (id) => (
-                                                                    <Badge
-                                                                        key={id}
-                                                                        size="xs"
-                                                                        color="gray"
-                                                                        variant="outline"
-                                                                    >
-                                                                        {analysisResult.gameLookup[
-                                                                            id
-                                                                        ] ?? id}
-                                                                    </Badge>
-                                                                )
-                                                            )
-                                                        )}
-                                                        <Text size="xs" c="dimmed">
-                                                            →
-                                                        </Text>
-                                                        {analysisResult.suggested.gameTagIds
-                                                            .length === 0 ? (
-                                                            <Text size="xs" c="dimmed">
-                                                                none
-                                                            </Text>
-                                                        ) : (
-                                                            analysisResult.suggested.gameTagIds.map(
-                                                                (id) => (
-                                                                    <Badge
-                                                                        key={id}
-                                                                        size="xs"
-                                                                        color="violet"
-                                                                        variant="light"
-                                                                    >
-                                                                        {analysisResult.gameLookup[
-                                                                            id
-                                                                        ] ?? id}
-                                                                    </Badge>
-                                                                )
-                                                            )
-                                                        )}
-                                                    </Group>
-                                                </Stack>
-                                            }
-                                        />
-                                    </Paper>
-                                ) : (
-                                    <Paper withBorder p="sm" style={{ opacity: 0.45 }}>
-                                        <Group gap="xs" align="flex-start">
-                                            <Text size="sm" c="dimmed" w={20} mt={2}>
-                                                —
-                                            </Text>
-                                            <Stack gap={4}>
-                                                <Text size="sm" fw={500} c="dimmed">
-                                                    Game tags
-                                                </Text>
-                                                <Group gap={4}>
-                                                    {analysisResult.current.gameTagIds.length ===
-                                                    0 ? (
-                                                        <Text size="xs" c="dimmed">
-                                                            none
-                                                        </Text>
-                                                    ) : (
-                                                        analysisResult.current.gameTagIds.map(
-                                                            (id) => (
-                                                                <Badge
-                                                                    key={id}
-                                                                    size="xs"
-                                                                    color="gray"
-                                                                    variant="outline"
-                                                                >
-                                                                    {analysisResult.gameLookup[
-                                                                        id
-                                                                    ] ?? id}
-                                                                </Badge>
-                                                            )
-                                                        )
-                                                    )}
-                                                </Group>
-                                            </Stack>
-                                        </Group>
-                                    </Paper>
-                                )}
-
-                                {/* Requirements */}
-                                {[...analysisResult.current.requirementElementIds]
-                                    .sort()
-                                    .join(",") !==
-                                [...analysisResult.suggested.requirementElementIds]
-                                    .sort()
-                                    .join(",") ? (
-                                    <Paper withBorder p="sm">
-                                        <Checkbox
-                                            checked={checkedFields.has("requirementElementIds")}
-                                            onChange={(e) => {
-                                                const next = new Set(checkedFields);
-                                                if (e.currentTarget.checked)
-                                                    next.add("requirementElementIds");
-                                                else next.delete("requirementElementIds");
-                                                setCheckedFields(next);
-                                            }}
-                                            label={
-                                                <Stack gap={4}>
-                                                    <Text size="sm" fw={500}>
-                                                        Requirements
-                                                    </Text>
-                                                    <Group gap={4}>
-                                                        {analysisResult.current
-                                                            .requirementElementIds.length === 0 ? (
-                                                            <Text size="xs" c="dimmed">
-                                                                none
-                                                            </Text>
-                                                        ) : (
-                                                            analysisResult.current.requirementElementIds.map(
-                                                                (id) => (
-                                                                    <Badge
-                                                                        key={id}
-                                                                        size="xs"
-                                                                        color="gray"
-                                                                        variant="outline"
-                                                                    >
-                                                                        {analysisResult
-                                                                            .elementLookup[id] ??
-                                                                            id}
-                                                                    </Badge>
-                                                                )
-                                                            )
-                                                        )}
-                                                        <Text size="xs" c="dimmed">
-                                                            →
-                                                        </Text>
-                                                        {analysisResult.suggested
-                                                            .requirementElementIds.length === 0 ? (
-                                                            <Text size="xs" c="dimmed">
-                                                                none
-                                                            </Text>
-                                                        ) : (
-                                                            analysisResult.suggested.requirementElementIds.map(
-                                                                (id) => (
-                                                                    <Badge
-                                                                        key={id}
-                                                                        size="xs"
-                                                                        color="green"
-                                                                        variant="light"
-                                                                    >
-                                                                        {analysisResult
-                                                                            .elementLookup[id] ??
-                                                                            id}
-                                                                    </Badge>
-                                                                )
-                                                            )
-                                                        )}
-                                                    </Group>
-                                                </Stack>
-                                            }
-                                        />
-                                    </Paper>
-                                ) : (
-                                    <Paper withBorder p="sm" style={{ opacity: 0.45 }}>
-                                        <Group gap="xs" align="flex-start">
-                                            <Text size="sm" c="dimmed" w={20} mt={2}>
-                                                —
-                                            </Text>
-                                            <Stack gap={4}>
-                                                <Text size="sm" fw={500} c="dimmed">
-                                                    Requirements
-                                                </Text>
-                                                <Group gap={4}>
-                                                    {analysisResult.current.requirementElementIds
-                                                        .length === 0 ? (
-                                                        <Text size="xs" c="dimmed">
-                                                            none
-                                                        </Text>
-                                                    ) : (
-                                                        analysisResult.current.requirementElementIds.map(
-                                                            (id) => (
-                                                                <Badge
-                                                                    key={id}
-                                                                    size="xs"
-                                                                    color="gray"
-                                                                    variant="outline"
-                                                                >
-                                                                    {analysisResult.elementLookup[
-                                                                        id
-                                                                    ] ?? id}
-                                                                </Badge>
-                                                            )
-                                                        )
-                                                    )}
-                                                </Group>
-                                            </Stack>
-                                        </Group>
-                                    </Paper>
-                                )}
-                            </Stack>
+                            <CardDiffFields
+                                result={analysisResult}
+                                checked={checkedFields}
+                                overrides={overrideFields}
+                                arrayOverrides={arrayOverrideFields}
+                                onToggle={(field, value) => {
+                                    const next = new Set(checkedFields);
+                                    if (value) next.add(field);
+                                    else next.delete(field);
+                                    setCheckedFields(next);
+                                }}
+                                onOverride={(field, value) => {
+                                    const next = new Map(overrideFields);
+                                    next.set(field, value);
+                                    setOverrideFields(next);
+                                }}
+                                onArrayOverride={(field, value) => {
+                                    const next = new Map(arrayOverrideFields);
+                                    next.set(field, value);
+                                    setArrayOverrideFields(next);
+                                }}
+                            />
 
                             <Group justify="flex-end" mt="md">
                                 <Button
@@ -1827,7 +1509,10 @@ export default function CardsPage() {
 
             <BulkAnalysisModal
                 opened={bulkAnalysisOpen}
-                onClose={() => setBulkAnalysisOpen(false)}
+                onClose={() => {
+                    setBulkAnalysisOpen(false);
+                    setSelectedIds(new Set());
+                }}
                 cards={cards.filter((c) => selectedIds.has(c.id))}
                 onCardsChanged={(updated) => {
                     setCards((prev) => prev.map((c) => updated.find((u) => u.id === c.id) ?? c));

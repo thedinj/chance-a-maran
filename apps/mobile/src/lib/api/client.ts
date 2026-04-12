@@ -30,7 +30,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 function resolveBaseUrl(): string {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
-    if (import.meta.env.DEV) return "http://localhost:3000";
+    if (import.meta.env.DEV) return ""; // Vite proxy forwards /api to the backend
     // Web production: same-origin — Caddy routes /api/* to the backend.
     // Native (Capacitor) builds must set VITE_API_URL explicitly.
     return "";
@@ -45,6 +45,8 @@ export class ApiClient {
 
     private isRefreshing = false;
     private refreshPromise: Promise<boolean> | null = null;
+    // Deduplicates concurrent calls to refreshTokens() (e.g. React Strict Mode double-invoke)
+    private pendingRefreshTokens: Promise<ApiResult<Pick<AuthResponse, "accessToken" | "refreshToken">>> | null = null;
 
     // Resolved once AuthContext finishes the hydration/silent-refresh attempt.
     // Non-auth requests wait on this gate so they don't race the hydration.
@@ -219,11 +221,15 @@ export class ApiClient {
     }
 
     refreshTokens(refreshToken?: string) {
-        return this.request<Pick<AuthResponse, "accessToken" | "refreshToken">>(
+        if (this.pendingRefreshTokens) return this.pendingRefreshTokens;
+        this.pendingRefreshTokens = this.request<Pick<AuthResponse, "accessToken" | "refreshToken">>(
             "POST",
             "/api/auth/refresh",
             refreshToken ? { refreshToken } : undefined
-        );
+        ).finally(() => {
+            this.pendingRefreshTokens = null;
+        });
+        return this.pendingRefreshTokens;
     }
 
     claimAccount(guestAccessToken: string, credentials: LoginRequest | RegisterRequest) {

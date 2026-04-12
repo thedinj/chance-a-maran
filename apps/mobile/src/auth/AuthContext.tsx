@@ -23,6 +23,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     useEffect(() => {
+        let cancelled = false;
+
         async function hydrate() {
             try {
                 // Wire callbacks first so they're in place before any refresh attempt
@@ -58,8 +60,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (stored) setApiRefreshToken(stored);
                 }
 
-                // Silent refresh: browser sends cookie (web) or body token (native)
+                // Silent refresh: browser sends cookie (web) or body token (native).
+                // refreshTokens() deduplicates concurrent calls so React Strict Mode's
+                // double-invoke only sends one request to the backend.
                 const result = await apiClient.refreshTokens();
+
+                if (cancelled) return;
 
                 if (result.ok) {
                     setApiAccessToken(result.data.accessToken);
@@ -70,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     markApiAuthReady();
 
                     const me = await apiClient.getMe();
+                    if (cancelled) return;
                     setState({
                         user: me.ok ? me.data : null,
                         isGuest: false,
@@ -84,11 +91,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setState({ user: null, isGuest: false, accessToken: null, isInitializing: false });
                 }
             } catch {
+                if (cancelled) return;
                 markApiAuthReady();
                 setState({ user: null, isGuest: false, accessToken: null, isInitializing: false });
             }
         }
         hydrate();
+        return () => { cancelled = true; };
     }, []);
 
     const applyAuthResponse = useCallback((response: AuthResponse) => {

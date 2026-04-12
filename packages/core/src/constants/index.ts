@@ -58,7 +58,7 @@ export const DRINKING_LEVELS: LevelScale = {
             cardDescription: "No alcohol — a dare, challenge, or rule.",
             filterDescription: "No drinking cards at all",
             llmDescription:
-                "No drinking at all. Nobody consumes any alcohol. Pure dare, challenge, or rule. Choose this only when alcohol is entirely absent.",
+                "Use 0 only after ruling out levels 3, 2, and 1. Choose this only when the card is clearly and explicitly alcohol-free: no sipping, no shots, no drinks, and no implied drinking consequence.",
         },
         {
             value: 1,
@@ -68,7 +68,7 @@ export const DRINKING_LEVELS: LevelScale = {
             cardDescription: "A sip or small taste. Not a full serving.",
             filterDescription: "Sips only — nothing stronger than a taste",
             llmDescription:
-                "A small sip or taste — strictly a tiny amount, NOT a full drink and NOT a shot. If any card involves taking a full shot, finishing a drink, or drinking a full glass, do NOT use this value.",
+                "Use 1 only after ruling out levels 3 and 2. This level is for tiny amounts only (sip/taste). If the card can reasonably involve a full shot, full glass, full can, or more than one drink, do not use 1.",
         },
         {
             value: 2,
@@ -78,7 +78,7 @@ export const DRINKING_LEVELS: LevelScale = {
             cardDescription: "One drink — a shot, a full can, or finish your glass.",
             filterDescription: "Up to a shot or full drink per card",
             llmDescription:
-                "One full drink — a single shot, a full can, or finishing a glass. IMPORTANT: any card that puts a full shot or full drink on the line must be at least this value (2). Do not underrate a card with a shot as level 1.",
+                "Check 2 only if level 3 is clearly ruled out. Use this for one full drink (single shot, full can, finish a glass). If text could cause multiple full drinks, do not use 2.",
         },
         {
             value: 3,
@@ -88,7 +88,7 @@ export const DRINKING_LEVELS: LevelScale = {
             cardDescription: "Multiple drinks — several shots, a waterfall, or sustained drinking.",
             filterDescription: "No limit — multiple-drink cards included",
             llmDescription:
-                "Multiple full drinks — two or more shots, a waterfall, or any mechanic that causes several people to take full drinks. Choose this when the cumulative alcohol is clearly more than one drink.",
+                "Start at 3. Use this for multiple full drinks (more than one shot, waterfall, repeated rounds, chain penalties, or any mechanic likely to produce more than one full drink total). Only move down if the card clearly limits intake below this.",
         },
     ],
 };
@@ -104,9 +104,9 @@ export const SPICE_LEVELS: LevelScale = {
             emoji: "",
             tooltip: "",
             cardDescription: "No adult content — safe for all audiences.",
-            filterDescription: "Clean cards only — no mature content",
+            filterDescription: "Clean cards only — no mature content.",
             llmDescription:
-                "Completely clean — no adult themes, no sexual references, no crude language. Safe for any audience.",
+                "Use 0 only after ruling out 3, 2, and 1. Must be clearly child-appropriate: no swearing, no sexual language/innuendo, no crude references, and no adult themes.",
         },
         {
             value: 1,
@@ -114,9 +114,9 @@ export const SPICE_LEVELS: LevelScale = {
             emoji: "😉",
             tooltip: "Mild — light innuendo, mild language",
             cardDescription: "Light innuendo or mild language. Nothing explicit.",
-            filterDescription: "Up to mild innuendo and light language",
+            filterDescription: "Up to mild innuendo and light language.",
             llmDescription:
-                "Light innuendo, euphemisms, or mildly suggestive language. Nothing explicit, graphic, or overtly sexual.",
+                "Use 1 only after ruling out 3 and 2. For light innuendo, euphemisms, or mild suggestive language. Any stronger vulgarity, explicitness, racist content, or clearly mature sexual framing should not be 1.",
         },
         {
             value: 2,
@@ -124,9 +124,9 @@ export const SPICE_LEVELS: LevelScale = {
             emoji: "🌶️",
             tooltip: "Spicy — strong language, more mature themes",
             cardDescription: "Strong language and more mature themes.",
-            filterDescription: "Up to strong language and mature themes",
+            filterDescription: "Up to strong language and mature themes.",
             llmDescription:
-                "Strong or crude language, clearly sexual themes, or mature humor — but still non-explicit. Think PG-13 to mild R, not hard-R or graphic.",
+                "Check 2 only if level 3 is clearly ruled out. Use for strong/crude language and clearly mature sexual themes that are not maximally explicit, racist, or extreme.",
         },
         {
             value: 3,
@@ -134,9 +134,9 @@ export const SPICE_LEVELS: LevelScale = {
             emoji: "😈",
             tooltip: "Dark — very racy and explicit",
             cardDescription: "Very racy, explicit adult content.",
-            filterDescription: "No limit — explicit/racy cards included",
+            filterDescription: "For those who don’t mind getting genuinely offended. You will be.",
             llmDescription:
-                "Very racy and explicitly sexual content, highly graphic adult references, lots of cursing/swearing, or racist jokes/innuendo. Reserve for cards that are clearly hard-R or X-rated, not PG-13 or mild R.",
+                "Start at 3. Use this when any racial content is present (automatic 3), or for explicit sexual content, graphic adult references, slurs, or aggressively vulgar language. Only move down if these signals are clearly absent.",
         },
     ],
 };

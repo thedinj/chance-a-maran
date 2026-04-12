@@ -25,6 +25,85 @@ import { DRINKING_LEVELS, SPICE_LEVELS } from "@chance/core";
 import type { Card, CardAnalysisResult } from "@chance/core";
 import { LevelPicker } from "./LevelPicker";
 
+// ─── CardContentSummary ────────────────────────────────────────────────────────
+
+export function CardContentSummary({
+    cv,
+    result,
+    error,
+    apiBaseUrl,
+    showImage = false,
+}: {
+    cv: {
+        imageId?: string | null;
+        imageYOffset?: number | null;
+        description: string;
+        hiddenInstructions?: string | null;
+    };
+    result: CardAnalysisResult | null;
+    error?: string | null;
+    apiBaseUrl: string;
+    showImage?: boolean;
+}) {
+    return (
+        <>
+            {showImage && cv.imageId && (
+                <Box
+                    mb="sm"
+                    style={{
+                        width: 280,
+                        aspectRatio: "16 / 9",
+                        borderRadius: 4,
+                        overflow: "hidden",
+                        background: "var(--mantine-color-dark-5)",
+                    }}
+                >
+                    <img
+                        src={`${apiBaseUrl}/api/media/${cv.imageId}`}
+                        alt=""
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            objectPosition: `center ${(cv.imageYOffset ?? 0.5) * 100}%`,
+                            display: "block",
+                        }}
+                    />
+                </Box>
+            )}
+            <Paper
+                p="xs"
+                mb="sm"
+                radius="sm"
+                style={{ background: "var(--mantine-color-dark-6)" }}
+            >
+                <Text size="xs" c="dimmed" mb={4}>
+                    Content sent to AI
+                </Text>
+                <Text size="sm" lineClamp={3}>
+                    {cv.description}
+                </Text>
+                {cv.hiddenInstructions && (
+                    <Text size="xs" c="dimmed" mt={6}>
+                        <Text span fw={500} c="dimmed">
+                            Hidden:
+                        </Text>{" "}
+                        {cv.hiddenInstructions}
+                    </Text>
+                )}
+            </Paper>
+            {result && !error && !result.error && (
+                <Paper withBorder p="xs" mb="sm" radius="sm">
+                    <Text size="xs" c="dimmed" mb={4}>
+                        AI justification
+                    </Text>
+                    <Text size="sm">{result.justification}</Text>
+                </Paper>
+            )}
+        </>
+    );
+}
+
 // ─── TagPicker ─────────────────────────────────────────────────────────────────
 
 /**
@@ -175,7 +254,7 @@ function StatusBadge({ status, changed }: { status: CardStatus; changed?: boolea
 
 // ─── Diff field checkboxes ─────────────────────────────────────────────────────
 
-function CardDiffFields({
+export function CardDiffFields({
     result,
     checked,
     overrides,
@@ -664,7 +743,7 @@ export function BulkAnalysisModal({
                     ? `Bulk AI Analysis (${doneCount} of ${totalCount})`
                     : `Bulk AI Analysis — ${totalCount} card${totalCount !== 1 ? "s" : ""}`
             }
-            size="lg"
+            size={800}
         >
             <Stack gap="md">
                 <Progress value={progressValue} animated={isAnalyzing} color="teal" size="sm" />
@@ -756,40 +835,12 @@ export function BulkAnalysisModal({
                                     <Collapse expanded={isExpanded && isDone}>
                                         {result && (
                                             <Box px="sm" pb="sm">
-                                                <Paper
-                                                    p="xs"
-                                                    mb="sm"
-                                                    radius="sm"
-                                                    style={{
-                                                        background: "var(--mantine-color-dark-6)",
-                                                    }}
-                                                >
-                                                    <Text size="xs" c="dimmed" mb={4}>
-                                                        Content sent to AI
-                                                    </Text>
-                                                    <Text size="sm" lineClamp={3}>
-                                                        {cv.description}
-                                                    </Text>
-                                                    {cv.hiddenInstructions && (
-                                                        <Text size="xs" c="dimmed" mt={6}>
-                                                            <Text span fw={500} c="dimmed">
-                                                                Hidden:
-                                                            </Text>{" "}
-                                                            {cv.hiddenInstructions}
-                                                        </Text>
-                                                    )}
-                                                </Paper>
-
-                                                {!error && !result.error && (
-                                                    <Paper withBorder p="xs" mb="sm" radius="sm">
-                                                        <Text size="xs" c="dimmed" mb={4}>
-                                                            AI justification
-                                                        </Text>
-                                                        <Text size="sm">
-                                                            {result.justification}
-                                                        </Text>
-                                                    </Paper>
-                                                )}
+                                                <CardContentSummary
+                                                    cv={cv}
+                                                    result={result}
+                                                    error={error}
+                                                    apiBaseUrl={apiBaseUrl}
+                                                />
 
                                                 {error || result.error ? (
                                                     <Alert color="red" py="xs">

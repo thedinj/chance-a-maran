@@ -16,7 +16,7 @@ export async function parseApiResult<T>(response: Response): Promise<T> {
 }
 
 export function useAdminFetch() {
-    const { accessToken, tryRefreshToken } = useAdminSession();
+    const { accessToken, tryRefreshToken, logout } = useAdminSession();
 
     // Keep a ref so the initial request always reads the latest token without
     // adding accessToken to the useCallback dep array (which would recreate
@@ -35,12 +35,12 @@ export function useAdminFetch() {
 
             const response = await doFetch(tokenRef.current);
 
-            if (response.status === 401) {
-                // Extract just the path for safe logging (no query params / sensitive data)
-                const path = (() => {
-                    try { return new URL(url, "http://x").pathname; } catch { return url; }
-                })();
+            // Extract just the path for safe logging (no query params / sensitive data)
+            const path = (() => {
+                try { return new URL(url, "http://x").pathname; } catch { return url; }
+            })();
 
+            if (response.status === 401) {
                 authWarn("adminFetch: 401 — attempting token refresh before retry", {
                     path,
                     currentToken: tokenExpiry(tokenRef.current),
@@ -64,9 +64,17 @@ export function useAdminFetch() {
                 });
             }
 
+            if (response.status === 403) {
+                // 403 means the JWT is valid but admin privileges are denied — this
+                // cannot be fixed by refreshing the token. Clear the session so the
+                // user lands on the login page rather than staying on a broken admin view.
+                authWarn("adminFetch: 403 — admin privileges denied, clearing session", { path });
+                void logout();
+            }
+
             return response;
         },
-        [tryRefreshToken]
+        [tryRefreshToken, logout]
     );
 
     return adminFetch;

@@ -23,13 +23,15 @@ export interface CardAnalysisInput {
 // ─── Prompt helpers ───────────────────────────────────────────────────────────
 
 function buildLevelDescriptions(): string {
-    const drinking = DRINKING_LEVELS.levels
+    const drinking = [...DRINKING_LEVELS.levels]
+        .sort((a, b) => b.value - a.value)
         .map((l) => `  ${l.value} = ${l.label}: ${l.llmDescription}`)
         .join("\n");
-    const spice = SPICE_LEVELS.levels
+    const spice = [...SPICE_LEVELS.levels]
+        .sort((a, b) => b.value - a.value)
         .map((l) => `  ${l.value} = ${l.label}: ${l.llmDescription}`)
         .join("\n");
-    return `Drinking level (0–3):\n${drinking}\n\nSpice level (0–3):\n${spice}`;
+    return `Classification method (required): evaluate levels from 3 down to 0 and choose the FIRST level that cannot be confidently ruled out by the card text. Only move down when you can clearly prove the higher level does not apply.\n\nDrinking level rubric (check 3→0):\n${drinking}\n\nSpice level rubric (check 3→0):\n${spice}`;
 }
 
 function buildGameList(games: Game[]): string {
@@ -69,6 +71,8 @@ Rules:
 - If the card doesn't fit any available game, return an empty array for gameTagIds.
 - If the card requires no special props or player conditions, return an empty array for requirementElementIds.
 - Read ALL provided text fields (title, description, hidden instructions) before rating.
+- You MUST apply each level scale from 3 down to 0. Pick the first level that cannot be ruled out.
+- Conservative downgrade rule: do not choose a lower level unless the card text clearly disproves the higher level.
 - Profanity/innuendo rule: if any swear word, profanity, or sexually suggestive/innuendo language appears in any field (especially the title), spiceLevel MUST be at LEAST 1 (never 0/Clean). Level 0 is strictly family-friendly content. If your own justification acknowledges innuendo or suggestive language, spiceLevel CANNOT be 0.
 - Strong profanity, slurs, or aggressively vulgar language should usually be spiceLevel 3 or 2.
 - Any racial content, even innuendo, is automatically spiceLevel 3.

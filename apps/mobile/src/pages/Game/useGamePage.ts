@@ -21,7 +21,7 @@ const joinCodeShownSessions = new Set<string>();
 function makeFakeDrawEvent(
     mode: Exclude<DevDrawMode, "live">,
     sessionId: string,
-    playerId: string,
+    playerId: string
 ): DrawEvent {
     const isReparations = mode === "reparations";
     const isGameChanger = mode === "game-changer";
@@ -171,14 +171,16 @@ export function useGamePage(): UseGamePageReturn {
     const [showReparationsConfirm, setShowReparationsConfirm] = useState(false);
     const [actionSheetTarget, setActionSheetTarget] = useState<Player | null>(null);
     const [devDrawMode, setDevDrawMode] = useState<DevDrawMode>("live");
-    const { isGuest, accessToken } = useAuth();
+    const { isGuest, accessToken, isInitializing } = useAuth();
 
-    // Redirect if no session
+    // Redirect to Home if session is missing and auth has finished loading.
+    // This handles F5 refresh, leaving, and session expiry cleanly without
+    // any async recovery logic that fights with normal navigation.
     useEffect(() => {
-        if (!session) {
-            history.replace("/");
-        }
-    }, [session, history]);
+        if (session) return;
+        if (isInitializing) return;
+        history.replace("/");
+    }, [session, isInitializing, history]);
 
     // Auto-show join code only when the host creates a brand-new session
     useEffect(() => {

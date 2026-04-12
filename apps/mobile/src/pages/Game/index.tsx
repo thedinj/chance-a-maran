@@ -17,7 +17,6 @@ import { useGamePage } from "./useGamePage";
 
 export default function Game() {
     const page = useGamePage();
-    if (!page.session) return null;
 
     const {
         session,
@@ -55,6 +54,9 @@ export default function Game() {
             !selectedCard?.cardVersion.hasHiddenInstructions || !!selectedCard?.descriptionShared
         );
     }, [selectedCard?.id]);
+
+    // Session missing — redirect is in flight (handled by the useEffect in useGamePage).
+    if (!session) return null;
 
     const handleDismissDetail = () => setSelectedCard(null);
 

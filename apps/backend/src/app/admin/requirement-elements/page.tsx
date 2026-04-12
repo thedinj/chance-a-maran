@@ -110,6 +110,23 @@ export default function RequirementElementsPage() {
         });
     }
 
+    function patchGroup(el: AdminElement, groupId: string | null) {
+        startTransition(async () => {
+            const res = await adminFetch(`/api/admin/requirement-elements/${el.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ groupId: groupId || null }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                setElements((prev) =>
+                    prev.map((e) => (e.id === el.id ? (data.data as AdminElement) : e))
+                );
+            } else {
+                notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+            }
+        });
+    }
+
     function toggleDefaultAvailable(el: AdminElement) {
         startTransition(async () => {
             const res = await adminFetch(`/api/admin/requirement-elements/${el.id}`, {
@@ -251,9 +268,17 @@ export default function RequirementElementsPage() {
                                 <Table.Tr key={el.id}>
                                     <Table.Td>{el.title}</Table.Td>
                                     <Table.Td>
-                                        <Text size="sm" c={el.groupName ? undefined : "dimmed"}>
-                                            {el.groupName ?? "—"}
-                                        </Text>
+                                        <Select
+                                            data={groupDropdownData}
+                                            value={el.groupId ?? ""}
+                                            onChange={(v) => patchGroup(el, v)}
+                                            size="xs"
+                                            w={140}
+                                            variant="unstyled"
+                                            disabled={isPending}
+                                            placeholder="—"
+                                            styles={{ input: { color: el.groupId ? undefined : "var(--mantine-color-dimmed)" } }}
+                                        />
                                     </Table.Td>
                                     <Table.Td>
                                         <Switch
