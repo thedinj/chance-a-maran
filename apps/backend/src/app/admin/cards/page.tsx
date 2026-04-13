@@ -32,6 +32,7 @@ import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion } from "@chance/core";
 import { BulkAnalysisModal } from "./BulkAnalysisModal";
+import { CardStatsDashboard } from "./CardStatsDashboard";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -1179,7 +1180,7 @@ export default function CardsPage() {
                     />
                     <Select
                         placeholder="Nominated"
-                        data={[{ value: "true", label: "Nominated" }]}
+                        data={[{ value: "true", label: "Nominated" }, { value: "false", label: "Not Nominated" }]}
                         value={filters.pendingGlobal || null}
                         onChange={(v) => setFilters((f) => ({ ...f, pendingGlobal: v ?? "" }))}
                         clearable
@@ -1264,31 +1265,34 @@ export default function CardsPage() {
                         <Loader />
                     </Center>
                 ) : (
-                    <ScrollArea>
-                        <Table striped highlightOnHover withTableBorder>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th w={40} />
-                                    <Table.Th w={36} />
-                                    <Table.Th>Title</Table.Th>
-                                    <Table.Th>Type</Table.Th>
-                                    <Table.Th>Global</Table.Th>
-                                    <Table.Th>Flags</Table.Th>
-                                    <Table.Th>Levels</Table.Th>
-                                    <Table.Th>Status</Table.Th>
-                                    <Table.Th>Games</Table.Th>
-                                    <Table.Th>Owner</Table.Th>
-                                    <Table.Th>Created</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>{rows}</Table.Tbody>
-                        </Table>
-                        <Text size="xs" c="dimmed" mt="xs">
-                            {cards.length !== allCards.length
-                                ? `${cards.length} of ${allCards.length} cards`
-                                : `${allCards.length} cards`}
-                        </Text>
-                    </ScrollArea>
+                    <>
+                        <ScrollArea>
+                            <Table striped highlightOnHover withTableBorder>
+                                <Table.Thead>
+                                    <Table.Tr>
+                                        <Table.Th w={40} />
+                                        <Table.Th w={36} />
+                                        <Table.Th>Title</Table.Th>
+                                        <Table.Th>Type</Table.Th>
+                                        <Table.Th>Global</Table.Th>
+                                        <Table.Th>Flags</Table.Th>
+                                        <Table.Th>Levels</Table.Th>
+                                        <Table.Th>Status</Table.Th>
+                                        <Table.Th>Games</Table.Th>
+                                        <Table.Th>Owner</Table.Th>
+                                        <Table.Th>Created</Table.Th>
+                                    </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>{rows}</Table.Tbody>
+                            </Table>
+                            <Text size="xs" c="dimmed" mt="xs">
+                                {cards.length !== allCards.length
+                                    ? `${cards.length} of ${allCards.length} cards`
+                                    : `${allCards.length} cards`}
+                            </Text>
+                        </ScrollArea>
+                        <CardStatsDashboard cards={cards} />
+                    </>
                 )}
             </Stack>
 

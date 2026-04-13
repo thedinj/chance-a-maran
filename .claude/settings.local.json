@@ -30,7 +30,8 @@
       "Bash(xargs cat:*)",
       "Bash(npx vite:*)",
       "Bash(npx tsx:*)",
-      "Bash(bash --version)"
+      "Bash(bash --version)",
+      "Bash(wait)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"
