@@ -134,9 +134,6 @@ function CardDrawer({
     const [editSoundId, setEditSoundId] = useState<string | null>(null);
     const [soundUploading, setSoundUploading] = useState(false);
     const soundInputRef = useRef<HTMLInputElement>(null);
-    const imgDragStartY = useRef(0);
-    const imgDragStartOffset = useRef(0.5);
-
     const cv = card.currentVersion;
 
     const [editImageYOffset, setEditImageYOffset] = useState(cv.imageYOffset ?? 0.5);
@@ -518,25 +515,6 @@ function CardDrawer({
                                 aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
                                 overflow: "hidden",
                                 borderRadius: 4,
-                                cursor: "ns-resize",
-                                touchAction: "none",
-                                userSelect: "none",
-                            }}
-                            onPointerDown={(e) => {
-                                e.currentTarget.setPointerCapture(e.pointerId);
-                                imgDragStartY.current = e.clientY;
-                                imgDragStartOffset.current = editImageYOffset;
-                            }}
-                            onPointerMove={(e) => {
-                                if (e.buttons === 0) return;
-                                const containerH = e.currentTarget.getBoundingClientRect().height;
-                                const dy = e.clientY - imgDragStartY.current;
-                                const delta = dy / containerH;
-                                const next = Math.min(
-                                    1,
-                                    Math.max(0, imgDragStartOffset.current + delta)
-                                );
-                                setEditImageYOffset(next);
                             }}
                         >
                             <img
@@ -569,7 +547,7 @@ function CardDrawer({
                             ]}
                         />
                         <Text size="xs" c="dimmed">
-                            Drag image or use slider to set crop position.
+                            Use slider to set crop position.
                         </Text>
                     </Stack>
                 )}

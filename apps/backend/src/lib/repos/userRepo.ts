@@ -30,19 +30,22 @@ export interface AdminUser {
     isAdmin: boolean;
     cardCount: number;
     createdAt: string;
+    invitationCode: string | null;
 }
 
 export function findAll(): AdminUser[] {
     const rows = db
         .prepare(
             `SELECT u.id, u.email, u.display_name, u.is_admin, u.created_at,
-                    COUNT(c.id) AS card_count
+                    COUNT(c.id) AS card_count,
+                    ic.code AS invitation_code
              FROM users u
              LEFT JOIN cards c ON c.owner_user_id = u.id
+             LEFT JOIN invitation_codes ic ON ic.id = u.invitation_code_id
              GROUP BY u.id
              ORDER BY u.created_at DESC`
         )
-        .all() as Array<DbUser & { card_count: number }>;
+        .all() as Array<DbUser & { card_count: number; invitation_code: string | null }>;
 
     return rows.map((r) => ({
         id: r.id,
@@ -51,6 +54,7 @@ export function findAll(): AdminUser[] {
         isAdmin: intToBool(r.is_admin),
         cardCount: r.card_count,
         createdAt: r.created_at,
+        invitationCode: r.invitation_code ?? null,
     }));
 }
 

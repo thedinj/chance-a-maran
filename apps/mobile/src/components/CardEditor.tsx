@@ -98,8 +98,6 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     );
     const [soundUploading, setSoundUploading] = useState(false);
     const soundFileInputRef = useRef<HTMLInputElement>(null);
-    const dragStartY = useRef(0);
-    const dragStartOffset = useRef(0.5);
 
     // ── Content warning state ────────────────────────────────────────────────
     const [contentWarning, setContentWarning] = useState<{
@@ -369,22 +367,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
 
                 {imagePreview ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                        <div
-                            style={styles.imageEditor}
-                            onPointerDown={(e) => {
-                                e.currentTarget.setPointerCapture(e.pointerId);
-                                dragStartY.current = e.clientY;
-                                dragStartOffset.current = imageYOffset;
-                            }}
-                            onPointerMove={(e) => {
-                                if (e.buttons === 0) return;
-                                const containerH = e.currentTarget.getBoundingClientRect().height;
-                                const dy = e.clientY - dragStartY.current;
-                                const delta = dy / containerH;
-                                const next = Math.min(1, Math.max(0, dragStartOffset.current + delta));
-                                setValue("imageYOffset", next, { shouldDirty: true });
-                            }}
-                        >
+                        <div style={styles.imageEditor}>
                             <img
                                 src={imagePreview}
                                 alt="Card image preview"
@@ -401,8 +384,20 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                             />
                             <div style={styles.imageEditorOverlay} />
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={styles.imageEditorHint}>Drag to reposition</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                            <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={imageYOffset}
+                                onChange={(e) =>
+                                    setValue("imageYOffset", parseFloat(e.target.value), {
+                                        shouldDirty: true,
+                                    })
+                                }
+                                style={{ flex: 1 }}
+                            />
                             {imageUploading ? (
                                 <span style={styles.imageStatus}>Uploading…</span>
                             ) : pendingImageId ? (
@@ -1108,8 +1103,6 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: "hidden",
         border: "1px solid var(--color-border)",
         position: "relative" as const,
-        cursor: "ns-resize",
-        touchAction: "none",
     },
     imageEditorOverlay: {
         position: "absolute" as const,
@@ -1117,11 +1110,6 @@ const styles: Record<string, React.CSSProperties> = {
         background:
             "linear-gradient(to bottom, color-mix(in srgb, #000 12%, transparent) 0%, transparent 30%, transparent 70%, color-mix(in srgb, #000 12%, transparent) 100%)",
         pointerEvents: "none" as const,
-    },
-    imageEditorHint: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
     },
     imageStatus: {
         fontFamily: "var(--font-ui)",

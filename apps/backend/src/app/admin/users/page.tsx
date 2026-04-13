@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import {
     Title, Table, Badge, Switch, Stack, Text, Loader, Center, Group,
-    Drawer, ScrollArea, TextInput, PasswordInput, Button, Divider,
+    Drawer, ScrollArea, TextInput, PasswordInput, Button, Divider, Code,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
@@ -16,6 +16,7 @@ interface AdminUser {
     isAdmin: boolean;
     cardCount: number;
     createdAt: string;
+    invitationCode: string | null;
 }
 
 export default function UsersPage() {
@@ -155,6 +156,7 @@ export default function UsersPage() {
                                 <Table.Th>Display Name</Table.Th>
                                 <Table.Th>Admin</Table.Th>
                                 <Table.Th>Cards</Table.Th>
+                                <Table.Th>Join Code</Table.Th>
                                 <Table.Th>Joined</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
@@ -187,6 +189,13 @@ export default function UsersPage() {
                                     </Table.Td>
                                     <Table.Td>
                                         <Text size="sm">{user.cardCount}</Text>
+                                    </Table.Td>
+                                    <Table.Td>
+                                        {user.invitationCode ? (
+                                            <Code>{user.invitationCode}</Code>
+                                        ) : (
+                                            <Text size="xs" c="dimmed">—</Text>
+                                        )}
                                     </Table.Td>
                                     <Table.Td>
                                         <Text size="xs" c="dimmed">
