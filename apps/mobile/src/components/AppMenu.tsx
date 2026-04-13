@@ -33,7 +33,7 @@ const MAIN_NAV: NavItem[] = [{ label: "Home", path: "/" }];
 
 const DISCOVER_NAV: NavItem[] = [
     { label: "What is Chance?", path: "/about" },
-    { label: "Request an invite", path: "/invite-request" },
+    /*{ label: "Request an invite", path: "/invite-request" },*/
 ];
 
 const UTILITY_NAV: NavItem[] = [{ label: "Settings", path: "/settings" }];
