@@ -91,7 +91,12 @@ export default function SessionsPage() {
         adminFetch("/api/admin/sessions")
             .then((r) => r.json())
             .then((d) => {
-                if (d.ok) setSessions(d.data as AdminSession[]);
+                if (d.ok)
+                    setSessions(
+                        (d.data as AdminSession[]).sort((a, b) =>
+                            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+                        )
+                    );
                 setLoading(false);
             });
     }, [adminFetch]);

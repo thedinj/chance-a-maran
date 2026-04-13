@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+    ActionIcon,
     Alert,
     Badge,
     Box,
@@ -17,6 +18,7 @@ import {
     ScrollArea,
     Stack,
     Text,
+    TextInput,
     Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -123,6 +125,7 @@ function TagPicker({
     current,
     color,
     onChange,
+    onCreateElement,
 }: {
     allIds: string[];
     lookup: Record<string, string>;
@@ -135,16 +138,36 @@ function TagPicker({
     /** Mantine color token: "violet" for games, "green" for requirements. */
     color: string;
     onChange: (ids: string[]) => void;
+    onCreateElement?: (title: string) => Promise<{ id: string; title: string } | null>;
 }) {
-    if (allIds.length === 0) {
-        return (
-            <Text size="xs" c="dimmed">
-                No options available
-            </Text>
-        );
+    const [showCreate, setShowCreate] = useState(false);
+    const [createTitle, setCreateTitle] = useState("");
+    const [creating, setCreating] = useState(false);
+
+    async function handleCreate() {
+        if (!onCreateElement) return;
+        const title = createTitle.trim();
+        if (!title) return;
+        setCreating(true);
+        try {
+            const result = await onCreateElement(title);
+            if (result) {
+                onChange([...selected, result.id]);
+                setCreateTitle("");
+                setShowCreate(false);
+            }
+        } finally {
+            setCreating(false);
+        }
     }
+
     return (
-        <Group gap={4} wrap="wrap">
+        <Group gap={4} wrap="wrap" align="center">
+            {allIds.length === 0 && !onCreateElement && (
+                <Text size="xs" c="dimmed">
+                    No options available
+                </Text>
+            )}
             {allIds.map((id) => {
                 const isSelected = selected.includes(id);
                 const isSuggested = suggested.includes(id);
@@ -180,6 +203,60 @@ function TagPicker({
                     </Tooltip>
                 );
             })}
+            {onCreateElement && (
+                showCreate ? (
+                    <Group gap={4} align="center">
+                        <TextInput
+                            size="xs"
+                            placeholder="New element…"
+                            value={createTitle}
+                            onChange={(e) => setCreateTitle(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void handleCreate();
+                                if (e.key === "Escape") {
+                                    setShowCreate(false);
+                                    setCreateTitle("");
+                                }
+                            }}
+                            style={{ width: 140 }}
+                            autoFocus
+                        />
+                        <ActionIcon
+                            size="xs"
+                            variant="light"
+                            color="green"
+                            loading={creating}
+                            disabled={!createTitle.trim()}
+                            onClick={() => void handleCreate()}
+                            aria-label="Confirm"
+                        >
+                            ✓
+                        </ActionIcon>
+                        <ActionIcon
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            disabled={creating}
+                            onClick={() => { setShowCreate(false); setCreateTitle(""); }}
+                            aria-label="Cancel"
+                        >
+                            ✕
+                        </ActionIcon>
+                    </Group>
+                ) : (
+                    <Tooltip label="Create new element" withArrow>
+                        <ActionIcon
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => setShowCreate(true)}
+                            aria-label="Create new element"
+                        >
+                            +
+                        </ActionIcon>
+                    </Tooltip>
+                )
+            )}
         </Group>
     );
 }
@@ -262,6 +339,8 @@ export function CardDiffFields({
     onToggle,
     onOverride,
     onArrayOverride,
+    extraElementLookup,
+    onCreateElement,
 }: {
     result: CardAnalysisResult;
     checked: Set<string>;
@@ -270,6 +349,8 @@ export function CardDiffFields({
     onToggle: (field: string, value: boolean) => void;
     onOverride: (field: string, value: number) => void;
     onArrayOverride: (field: string, value: string[]) => void;
+    extraElementLookup?: Record<string, string>;
+    onCreateElement?: (title: string) => Promise<{ id: string; title: string } | null>;
 }) {
     const spiceChanged = result.current.spiceLevel !== result.suggested.spiceLevel;
     const drinkingChanged = result.current.drinkingLevel !== result.suggested.drinkingLevel;
@@ -407,8 +488,8 @@ export function CardDiffFields({
                         }
                     />
                     <TagPicker
-                        allIds={Object.keys(result.elementLookup)}
-                        lookup={result.elementLookup}
+                        allIds={Object.keys({ ...result.elementLookup, ...extraElementLookup })}
+                        lookup={{ ...result.elementLookup, ...extraElementLookup }}
                         selected={reqSelected}
                         suggested={result.suggested.requirementElementIds}
                         current={result.current.requirementElementIds}
@@ -423,6 +504,7 @@ export function CardDiffFields({
                                 onToggle("requirementElementIds", sorted !== currentSorted);
                             }
                         }}
+                        onCreateElement={onCreateElement}
                     />
                 </Stack>
             </Paper>
@@ -477,6 +559,7 @@ export function BulkAnalysisModal({
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
     const [applying, setApplying] = useState(false);
     const [applyDone, setApplyDone] = useState(0);
+    const [extraElements, setExtraElements] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (!opened) {
@@ -496,6 +579,7 @@ export function BulkAnalysisModal({
         setExpandedCards(new Set());
         setApplying(false);
         setApplyDone(0);
+        setExtraElements({});
 
         void (async () => {
             const analyzedVersionIds: string[] = [];
@@ -637,6 +721,21 @@ export function BulkAnalysisModal({
             }
             return next;
         });
+    }
+
+    async function handleCreateElement(title: string) {
+        const res = await adminFetch("/api/admin/requirement-elements", {
+            method: "POST",
+            body: JSON.stringify({ title }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            const el = data.data as { id: string; title: string };
+            setExtraElements((prev) => ({ ...prev, [el.id]: el.title }));
+            return el;
+        }
+        notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+        return null;
     }
 
     async function applyAll() {
@@ -866,6 +965,8 @@ export function BulkAnalysisModal({
                                                         onArrayOverride={(field, value) =>
                                                             setArrayOverride(card.id, field, value)
                                                         }
+                                                        extraElementLookup={extraElements}
+                                                        onCreateElement={handleCreateElement}
                                                     />
                                                 )}
                                             </Box>

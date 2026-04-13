@@ -35,7 +35,15 @@ export default function GamesPage() {
         setLoading(true);
         adminFetch("/api/admin/games")
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setGames(d.data as AdminGame[]); setLoading(false); });
+            .then((d) => {
+                if (d.ok)
+                    setGames(
+                        (d.data as AdminGame[]).sort((a, b) =>
+                            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+                        )
+                    );
+                setLoading(false);
+            });
     }, [adminFetch]);
 
     function toggleActive(game: AdminGame) {
@@ -71,7 +79,7 @@ export default function GamesPage() {
             setGames((prev) =>
                 prev
                     .map((g) => (g.id === editTarget.id ? (data.data as AdminGame) : g))
-                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
             );
             setEditTarget(null);
             notifications.show({ message: "Game updated", color: "green" });
@@ -118,7 +126,7 @@ export default function GamesPage() {
         setCreating(false);
         if (data.ok) {
             setGames((prev) =>
-                [...prev, data.data as AdminGame].sort((a, b) => a.name.localeCompare(b.name))
+                [...prev, data.data as AdminGame].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
             );
             setNewName("");
             setCreateOpen(false);

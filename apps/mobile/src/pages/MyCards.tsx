@@ -441,7 +441,16 @@ export default function MyCards() {
                                 </div>
                             )}
                             <div style={styles.tileList}>
-                                {!allLoading && allCards.map(renderTile)}
+                                {!allLoading &&
+                                    [...allCards]
+                                        .sort((a, b) =>
+                                            a.currentVersion.title.localeCompare(
+                                                b.currentVersion.title,
+                                                undefined,
+                                                { sensitivity: "base" }
+                                            )
+                                        )
+                                        .map(renderTile)}
                             </div>
                         </>
                     )}

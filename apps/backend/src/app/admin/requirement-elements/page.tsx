@@ -66,7 +66,12 @@ export default function RequirementElementsPage() {
             adminFetch("/api/admin/requirement-elements").then((r) => r.json()),
             adminFetch("/api/admin/element-groups").then((r) => r.json()),
         ]).then(([elementsData, groupsData]) => {
-            if (elementsData.ok) setElements(elementsData.data as AdminElement[]);
+            if (elementsData.ok)
+                setElements(
+                    (elementsData.data as AdminElement[]).sort((a, b) =>
+                        a.title.localeCompare(b.title, undefined, { sensitivity: "base" })
+                    )
+                );
             if (groupsData.ok) setGroups(groupsData.data as AdminGroup[]);
             setLoading(false);
         });
@@ -162,7 +167,7 @@ export default function RequirementElementsPage() {
             setElements((prev) =>
                 prev
                     .map((e) => (e.id === editTarget.id ? (data.data as AdminElement) : e))
-                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }))
             );
             setEditTarget(null);
             notifications.show({ message: "Element updated", color: "green" });

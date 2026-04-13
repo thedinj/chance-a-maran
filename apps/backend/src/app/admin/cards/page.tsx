@@ -24,6 +24,7 @@ import {
     Slider,
     Box,
     Checkbox,
+    ActionIcon,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useSessionStorage } from "@mantine/hooks";
@@ -128,6 +129,8 @@ function CardDrawer({
     const [editGameTags, setEditGameTags] = useState<string[]>([]);
     const [editRequirements, setEditRequirements] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const [newElementTitle, setNewElementTitle] = useState("");
+    const [creatingElement, setCreatingElement] = useState(false);
     const [editSoundId, setEditSoundId] = useState<string | null>(null);
     const [soundUploading, setSoundUploading] = useState(false);
     const soundInputRef = useRef<HTMLInputElement>(null);
@@ -271,6 +274,29 @@ function CardDrawer({
         }
     }
 
+    async function handleCreateElement() {
+        const title = newElementTitle.trim();
+        if (!title) return;
+        setCreatingElement(true);
+        try {
+            const res = await adminFetch("/api/admin/requirement-elements", {
+                method: "POST",
+                body: JSON.stringify({ title }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const el = data.data as ElementOption;
+                setElements((prev) => [...prev, el]);
+                setEditRequirements((prev) => [...prev, el.id]);
+                setNewElementTitle("");
+            } else {
+                notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+            }
+        } finally {
+            setCreatingElement(false);
+        }
+    }
+
     if (transferring) {
         return (
             <Stack gap="md">
@@ -390,6 +416,28 @@ function CardDrawer({
                     searchable
                     clearable
                 />
+                <Group gap="xs" align="flex-end">
+                    <TextInput
+                        size="xs"
+                        placeholder="New requirement…"
+                        value={newElementTitle}
+                        onChange={(e) => setNewElementTitle(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") void handleCreateElement();
+                        }}
+                        style={{ flex: 1 }}
+                    />
+                    <ActionIcon
+                        size="sm"
+                        variant="light"
+                        loading={creatingElement}
+                        disabled={!newElementTitle.trim()}
+                        onClick={() => void handleCreateElement()}
+                        aria-label="Create requirement"
+                    >
+                        +
+                    </ActionIcon>
+                </Group>
                 {/* ── Reveal sound ──────────────────────────────────────────── */}
                 <Stack gap={4}>
                     <Text size="sm" fw={500}>Reveal sound</Text>
@@ -893,7 +941,16 @@ export default function CardsPage() {
         adminFetch(`/api/cards?${params}`)
             .then((r) => r.json())
             .then((d) => {
-                if (d.ok) setCards(d.data as Card[]);
+                if (d.ok)
+                    setCards(
+                        (d.data as Card[]).sort((a, b) =>
+                            a.currentVersion.title.localeCompare(
+                                b.currentVersion.title,
+                                undefined,
+                                { sensitivity: "base" }
+                            )
+                        )
+                    );
                 setLoading(false);
             });
     }, [filters, adminFetch]);

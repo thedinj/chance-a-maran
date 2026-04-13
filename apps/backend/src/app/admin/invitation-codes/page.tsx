@@ -41,7 +41,15 @@ export default function InvitationCodesPage() {
     useEffect(() => {
         adminFetch("/api/admin/invitation-codes")
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setCodes(d.data as AdminCode[]); setLoading(false); });
+            .then((d) => {
+                if (d.ok)
+                    setCodes(
+                        (d.data as AdminCode[]).sort((a, b) =>
+                            a.code.localeCompare(b.code, undefined, { sensitivity: "base" })
+                        )
+                    );
+                setLoading(false);
+            });
     }, [adminFetch]);
 
     function openDrawer(c: AdminCode) {
@@ -102,7 +110,11 @@ export default function InvitationCodesPage() {
         const data = await res.json();
         setCreating(false);
         if (data.ok) {
-            setCodes((prev) => [data.data as AdminCode, ...prev]);
+            setCodes((prev) =>
+                [...prev, data.data as AdminCode].sort((a, b) =>
+                    a.code.localeCompare(b.code, undefined, { sensitivity: "base" })
+                )
+            );
             setNewCode("");
             setNewExpiresAt("");
             setNewMaxUses("");

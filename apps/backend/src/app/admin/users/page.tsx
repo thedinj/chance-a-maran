@@ -43,7 +43,17 @@ export default function UsersPage() {
     useEffect(() => {
         adminFetch("/api/admin/users")
             .then((r) => r.json())
-            .then((d) => { if (d.ok) setUsers(d.data as AdminUser[]); setLoading(false); });
+            .then((d) => {
+                if (d.ok)
+                    setUsers(
+                        (d.data as AdminUser[]).sort((a, b) =>
+                            a.displayName.localeCompare(b.displayName, undefined, {
+                                sensitivity: "base",
+                            })
+                        )
+                    );
+                setLoading(false);
+            });
     }, [adminFetch]);
 
     function openDrawer(user: AdminUser) {
