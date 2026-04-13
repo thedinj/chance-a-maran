@@ -186,7 +186,8 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     input.value = "";
                     input.onchange = () => {
                         const f = input.files?.[0];
-                        f ? resolve(f) : reject(new Error("No file selected"));
+                        if (f) resolve(f);
+                        else reject(new Error("No file selected"));
                     };
                     input.click();
                 });
@@ -855,7 +856,7 @@ export default CardEditor;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-export const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, React.CSSProperties> = {
     root: {
         display: "flex",
         flexDirection: "column",

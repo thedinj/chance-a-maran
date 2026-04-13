@@ -1,5 +1,5 @@
 import React from "react";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 export function JoinCodeModal() {

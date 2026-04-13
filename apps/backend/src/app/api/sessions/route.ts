@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { AuthorizationError, CreateSessionRequestSchema, ValidationError } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";

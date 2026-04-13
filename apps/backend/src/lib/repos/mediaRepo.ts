@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, readdirSync } from "fs";
+import { existsSync, readFileSync, rmSync, unlinkSync, readdirSync } from "fs";
 import { join, dirname } from "path";
 import { mediaRelativePath } from "@chance/core";
 import { db } from "../db/db";
@@ -16,13 +16,6 @@ interface DbMediaMeta {
 
 function mediaPath(id: string, mimeType: string): string {
     return join(DATA_ROOT, mediaRelativePath(id, mimeType));
-}
-
-function ensureDir(filePath: string): void {
-    const dir = dirname(filePath);
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-    }
 }
 
 export function findMimeById(id: string): string | null {

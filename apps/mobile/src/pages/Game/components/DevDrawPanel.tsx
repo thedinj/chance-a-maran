@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import type { DevDrawMode } from "../types";
 
 const MODES: { value: DevDrawMode; label: string }[] = [

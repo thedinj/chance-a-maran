@@ -1,15 +1,15 @@
 import { IonContent, IonFooter, IonPage } from "@ionic/react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CardCarousel } from "../../components/CardCarousel";
 import { CardReveal } from "../../components/CardReveal";
 import { AddPlayerModal } from "./components/AddPlayerModal";
 import { CardActions } from "./components/CardActions";
 import { ClaimAccountModal } from "./components/ClaimAccountModal";
+import { DevDrawPanel } from "./components/DevDrawPanel";
 import { DrawButton } from "./components/DrawButton";
 import { GameHeader } from "./components/GameHeader";
 import { JoinCodeModal } from "./components/JoinCodeModal";
 import { PlayerActionSheet } from "./components/PlayerActionSheet";
-import { DevDrawPanel } from "./components/DevDrawPanel";
 import { ReparationsButton } from "./components/ReparationsButton";
 import { GamePageProvider } from "./GamePageContext";
 import { styles } from "./styles";
@@ -47,12 +47,19 @@ export default function Game() {
         return isLeft || isRemote ? p.displayName : null;
     }, [players, activePlayerId, devicePlayerIds]);
 
+    // Snapshot of the selected card — updated on every render, but the effect
+    // below reads it only when the card ID changes (i.e. a new card is selected).
+    // This lets us initialize detailHasRevealed from the card's current values
+    // at selection time without re-firing when descriptionShared changes via polling
+    // (which would otherwise stomp on the user's manual "Tap to reveal" action).
+    const selectedCardRef = useRef(selectedCard);
+    selectedCardRef.current = selectedCard;
+
     // Track whether the drawer has tapped "Tap to reveal" in the detail overlay
     const [detailHasRevealed, setDetailHasRevealed] = useState(false);
     useEffect(() => {
-        setDetailHasRevealed(
-            !selectedCard?.cardVersion.hasHiddenInstructions || !!selectedCard?.descriptionShared
-        );
+        const card = selectedCardRef.current;
+        setDetailHasRevealed(!card?.cardVersion.hasHiddenInstructions || !!card?.descriptionShared);
     }, [selectedCard?.id]);
 
     // Session missing — redirect is in flight (handled by the useEffect in useGamePage).

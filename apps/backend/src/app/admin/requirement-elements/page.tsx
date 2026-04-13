@@ -60,7 +60,7 @@ export default function RequirementElementsPage() {
     } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    function loadData() {
+    useEffect(() => {
         setLoading(true);
         Promise.all([
             adminFetch("/api/admin/requirement-elements").then((r) => r.json()),
@@ -70,11 +70,7 @@ export default function RequirementElementsPage() {
             if (groupsData.ok) setGroups(groupsData.data as AdminGroup[]);
             setLoading(false);
         });
-    }
-
-    useEffect(() => {
-        loadData();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [adminFetch]);
 
     const filteredElements = elements.filter((el) => {
         if (groupFilter === "__all__") return true;

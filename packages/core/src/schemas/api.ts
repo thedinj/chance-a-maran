@@ -3,7 +3,6 @@ import { ErrorCodeSchema } from "../errors/codes";
 import { UserSchema } from "./user";
 import { PlayerSchema } from "./player";
 import { SessionSchema, FilterSettingsSchema } from "./session";
-import { CardSchema } from "./card";
 import { DrawEventSchema } from "./draw-event";
 import { CardTransferSchema } from "./card-transfer";
 import {

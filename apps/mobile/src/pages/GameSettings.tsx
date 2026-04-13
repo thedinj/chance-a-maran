@@ -109,6 +109,10 @@ export default function GameSettings() {
         },
     });
 
+    // Capture the session at mount time — the effect reads it once for initialization
+    // and should not re-run on subsequent poll updates.
+    const initialSessionRef = useRef(session);
+
     useEffect(() => {
         apiClient.getGames().then((result) => {
             if (result.ok) setAvailableGames(result.data);
@@ -121,7 +125,7 @@ export default function GameSettings() {
                 setAvailableElements(elResult.data);
 
                 // In edit mode, use the session's existing selection
-                if (isEditMode && session?.filterSettings.availableElementIds) {
+                if (isEditMode && initialSessionRef.current?.filterSettings.availableElementIds) {
                     setElementsLoading(false);
                     return;
                 }
@@ -146,7 +150,8 @@ export default function GameSettings() {
                 setElementsLoading(false);
             }
         });
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // isEditMode is derived from URL params (constant); setValue is stable (react-hook-form guarantee)
+    }, [isEditMode, setValue]);
 
     // Registered-only page
     if (!user) {

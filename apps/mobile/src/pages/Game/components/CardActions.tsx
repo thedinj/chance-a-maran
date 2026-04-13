@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AppDialog } from "../../../components/AppDialog";
 import { hapticLight } from "../../../lib/haptics";
 import type { DrawEvent } from "../../../lib/api";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 interface CardActionsProps {

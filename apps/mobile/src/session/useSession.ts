@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { FilterSettings, Player, Session, SessionState } from "../lib/api";
+import type { Player, Session, SessionState } from "../lib/api";
 
 export interface SessionContextValue {
     session: Session | null;

@@ -40,6 +40,7 @@ pi-app-install ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 ```
 
 **Interactive prompts:**
+
 - Edit `.env` — confirm `PORT=3001`, set `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD`
 - Enable HTTPS? → `y`, enter `chanceamaran.ddns.net`
 - Install Samba? → existing shares will be reused, safe to say `y` or `n`
@@ -55,8 +56,7 @@ pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 To update both apps at once (basket-bot first so hoisted scripts stay current):
 
 ```bash
-cd ~/basket-bot/apps/backend/scripts && ./update.sh && \
-pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
+cd ~/basket-bot/apps/backend/scripts && ./update.sh && pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 ```
 
 ### Skip flags
@@ -107,11 +107,11 @@ cd ~/basket-bot && git pull && apps/backend/scripts/bootstrap.sh
 
 ## Config summary
 
-| Setting        | Value                          |
-|----------------|-------------------------------|
-| Backend port   | 3001 (localhost only)         |
-| Frontend       | Vite SPA — static files at `apps/mobile/www`, served by Caddy |
-| Domain         | chanceamaran.ddns.net         |
-| Service name   | `chance-a-maran-backend`      |
-| Caddy config   | `/etc/caddy/conf.d/chance-a-maran.caddy` |
-| Database       | `apps/backend/database.db`    |
+| Setting      | Value                                                         |
+| ------------ | ------------------------------------------------------------- |
+| Backend port | 3001 (localhost only)                                         |
+| Frontend     | Vite SPA — static files at `apps/mobile/www`, served by Caddy |
+| Domain       | chanceamaran.ddns.net                                         |
+| Service name | `chance-a-maran-backend`                                      |
+| Caddy config | `/etc/caddy/conf.d/chance-a-maran.caddy`                      |
+| Database     | `apps/backend/database.db`                                    |

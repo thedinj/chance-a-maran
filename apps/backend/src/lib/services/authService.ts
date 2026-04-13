@@ -130,7 +130,7 @@ export async function claimAccount(
 
     if ("invitationCode" in credentials) {
         // Registration path
-        const result = await register(credentials as RegisterRequest);
+        await register(credentials as RegisterRequest);
         registeredUser = userRepo.findByEmail((credentials as RegisterRequest).email)!;
         // Already issued tokens from register(), but we'll issue new ones below
     } else {

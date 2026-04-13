@@ -1,6 +1,6 @@
 import { IonActionSheet } from "@ionic/react";
 import React from "react";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 
 export function PlayerActionSheet() {
     const {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 const HOLD_DURATION_MS = 600;

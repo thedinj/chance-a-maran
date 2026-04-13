@@ -76,7 +76,6 @@ export default function Join() {
         register: nameRegister,
         handleSubmit,
         control,
-        setError,
         formState: { errors: nameErrors },
     } = useForm<JoinNameValues>({
         resolver: zodResolver(JoinNameSchema),

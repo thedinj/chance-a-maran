@@ -1,6 +1,6 @@
 import React from "react";
 import { AppDialog } from "../../../components/AppDialog";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 export function ReparationsButton() {

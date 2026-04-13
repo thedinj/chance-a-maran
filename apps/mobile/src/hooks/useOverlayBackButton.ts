@@ -63,5 +63,5 @@ export function useOverlayBackButton(onDismiss: (() => void) | undefined) {
                 }
             }
         };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 }

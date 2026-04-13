@@ -4,7 +4,7 @@ import type { Player } from "../../../lib/api";
 import { hapticLight } from "../../../lib/haptics";
 import { SCROLLBAR_CLASS, SCROLLBAR_CSS, SCROLLBAR_FIREFOX_STYLES } from "../../../lib/scrollbars";
 import { useTransfers } from "../../../transfers/useTransfers";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 // ── DevicePlayerPill ──────────────────────────────────────────────────────────

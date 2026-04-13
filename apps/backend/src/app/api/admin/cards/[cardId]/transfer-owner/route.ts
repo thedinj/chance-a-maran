@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError } from "@chance/core";
+import { ValidationError } from "@chance/core";
 import { fail, handleError, ok } from "@/lib/auth/response";
 import { withAdmin } from "@/lib/auth/withAuth";
 import * as cardService from "@/lib/services/cardService";

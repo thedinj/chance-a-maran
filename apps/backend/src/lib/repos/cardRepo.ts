@@ -3,7 +3,7 @@ import { db } from "../db/db";
 import { boolToInt, intToBool } from "../db/boolBridge";
 import * as mediaRepo from "./mediaRepo";
 import { promoteMedia } from "../media/tempMedia";
-import type { Card, CardVersion, Game, RequirementElement } from "@chance/core";
+import type { Card, CardVersion, Game } from "@chance/core";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
 

@@ -11,7 +11,6 @@ import {
     Stack,
     Text,
     Drawer,
-    Image,
     Button,
     Divider,
     Select,
@@ -24,19 +23,14 @@ import {
     Tooltip,
     Slider,
     Box,
-    Modal,
     Checkbox,
-    Paper,
-    Alert,
-    LoadingOverlay,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useSessionStorage } from "@mantine/hooks";
 import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
-import type { Card, CardVersion, CardAnalysisResult } from "@chance/core";
-import { BulkAnalysisModal, CardContentSummary, CardDiffFields } from "./BulkAnalysisModal";
-import { LevelPicker } from "./LevelPicker";
+import type { Card, CardVersion } from "@chance/core";
+import { BulkAnalysisModal } from "./BulkAnalysisModal";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -64,18 +58,6 @@ interface ElementOption {
 
 function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString();
-}
-
-function LevelBadge({ label, value, tooltip }: { label: string; value: number; tooltip: string }) {
-    if (value === 0) return null;
-    const colors = ["gray", "yellow", "orange", "red"] as const;
-    return (
-        <Tooltip label={tooltip} withArrow>
-            <Badge size="xs" color={colors[value]}>
-                {label} {value}
-            </Badge>
-        </Tooltip>
-    );
 }
 
 // ─── Lazy thumbnail ────────────────────────────────────────────────────────────
@@ -115,21 +97,13 @@ interface UserOption {
 
 function CardDrawer({
     card,
-    onClose,
     onChanged,
-    onAnalyzed,
-    onAccepted,
-    onDismissed,
-    onNoChange,
+    onAnalyzeWithAI,
     apiBaseUrl,
 }: {
     card: Card;
-    onClose: () => void;
     onChanged: (updated: Card) => void;
-    onAnalyzed: (versionIds: string[]) => void;
-    onAccepted: (versionId: string) => void;
-    onDismissed: (versionId: string) => void;
-    onNoChange: (versionId: string) => void;
+    onAnalyzeWithAI: () => void;
     apiBaseUrl: string;
 }) {
     const adminFetch = useAdminFetch();
@@ -159,16 +133,6 @@ function CardDrawer({
     const soundInputRef = useRef<HTMLInputElement>(null);
     const imgDragStartY = useRef(0);
     const imgDragStartOffset = useRef(0.5);
-
-    // Analysis modal state
-    const [analysisOpen, setAnalysisOpen] = useState(false);
-    const [analysisLoading, setAnalysisLoading] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<CardAnalysisResult | null>(null);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
-    const [analysisApplying, setAnalysisApplying] = useState(false);
-    const [checkedFields, setCheckedFields] = useState<Set<string>>(new Set());
-    const [overrideFields, setOverrideFields] = useState<Map<string, number>>(new Map());
-    const [arrayOverrideFields, setArrayOverrideFields] = useState<Map<string, string[]>>(new Map());
 
     const cv = card.currentVersion;
 
@@ -304,106 +268,6 @@ function CardDrawer({
             }
         } finally {
             setSaving(false);
-        }
-    }
-
-    async function openAnalysis() {
-        setAnalysisResult(null);
-        setAnalysisError(null);
-        setCheckedFields(new Set());
-        setOverrideFields(new Map());
-        setArrayOverrideFields(new Map());
-        setAnalysisOpen(true);
-        setAnalysisLoading(true);
-        try {
-            const res = await adminFetch("/api/admin/cards/analyze", {
-                method: "POST",
-                body: JSON.stringify({ cardIds: [card.id] }),
-            });
-            const data = await res.json();
-            if (data.ok) {
-                const response = data.data as { results: CardAnalysisResult[] };
-                const result = response.results[0] ?? null;
-                setAnalysisResult(result);
-                onAnalyzed([card.id]);
-                if (!result.changed) {
-                    onNoChange(card.id);
-                }
-                // Pre-check all changed fields
-                if (result.changed) {
-                    const changed = new Set<string>();
-                    if (result.current.spiceLevel !== result.suggested.spiceLevel)
-                        changed.add("spiceLevel");
-                    if (result.current.drinkingLevel !== result.suggested.drinkingLevel)
-                        changed.add("drinkingLevel");
-                    const sortedCG = [...result.current.gameTagIds].sort().join(",");
-                    const sortedSG = [...result.suggested.gameTagIds].sort().join(",");
-                    if (sortedCG !== sortedSG) changed.add("gameTagIds");
-                    const sortedCE = [...result.current.requirementElementIds].sort().join(",");
-                    const sortedSE = [...result.suggested.requirementElementIds].sort().join(",");
-                    if (sortedCE !== sortedSE) changed.add("requirementElementIds");
-                    setCheckedFields(changed);
-                }
-            } else {
-                setAnalysisError(data.error?.message ?? "Analysis failed");
-            }
-        } catch {
-            setAnalysisError("Network error — could not reach the server");
-        } finally {
-            setAnalysisLoading(false);
-        }
-    }
-
-    async function applyAnalysis() {
-        if (!analysisResult) return;
-        setAnalysisApplying(true);
-        try {
-            const suggested = analysisResult.suggested;
-            const effectiveSpice = overrideFields.get("spiceLevel") ?? suggested.spiceLevel;
-            const effectiveDrinking =
-                overrideFields.get("drinkingLevel") ?? suggested.drinkingLevel;
-            const effectiveGameTags =
-                arrayOverrideFields.get("gameTagIds") ?? suggested.gameTagIds;
-            const effectiveRequirements =
-                arrayOverrideFields.get("requirementElementIds") ??
-                suggested.requirementElementIds;
-            const payload = {
-                title: cv.title,
-                description: cv.description,
-                hiddenInstructions: cv.hiddenInstructions ?? null,
-                imageId: cv.imageId ?? null,
-                imageYOffset: cv.imageYOffset ?? 0.5,
-                drinkingLevel: checkedFields.has("drinkingLevel")
-                    ? effectiveDrinking
-                    : cv.drinkingLevel,
-                spiceLevel: checkedFields.has("spiceLevel") ? effectiveSpice : cv.spiceLevel,
-                isGameChanger: cv.isGameChanger,
-                cardType: card.cardType,
-                gameTags: checkedFields.has("gameTagIds")
-                    ? effectiveGameTags
-                    : cv.gameTags.map((g) => g.id),
-                requirementIds: checkedFields.has("requirementElementIds")
-                    ? effectiveRequirements
-                    : cv.requirements.map((r) => r.id),
-            };
-            const res = await adminFetch(`/api/cards/${card.id}`, {
-                method: "PATCH",
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json();
-            if (data.ok) {
-                onChanged(data.data as Card);
-                onAccepted(card.id);
-                setAnalysisOpen(false);
-                notifications.show({ message: "AI recommendations applied", color: "teal" });
-            } else {
-                notifications.show({
-                    message: data.error?.message ?? "Apply failed",
-                    color: "red",
-                });
-            }
-        } finally {
-            setAnalysisApplying(false);
         }
     }
 
@@ -682,127 +546,6 @@ function CardDrawer({
 
     return (
         <>
-            {/* ── Analysis Modal ─────────────────────────────────────── */}
-            <Modal
-                opened={analysisOpen}
-                onClose={() => {
-                    if (analysisLoading || analysisApplying) return;
-                    if (analysisResult?.changed) onDismissed(card.id);
-                    setAnalysisOpen(false);
-                }}
-                title={analysisResult?.changed ? `AI Recommendations` : "AI Analysis"}
-                size={800}
-            >
-                <Box pos="relative">
-                    <LoadingOverlay
-                        visible={analysisLoading || analysisApplying}
-                        overlayProps={{ blur: 2 }}
-                    />
-
-                    {analysisError && (
-                        <Alert color="red" mb="md">
-                            {analysisError}
-                        </Alert>
-                    )}
-
-                    {analysisResult?.error && (
-                        <Alert color="red" mb="md">
-                            {analysisResult.error}
-                        </Alert>
-                    )}
-
-                    {analysisResult && !analysisResult.error && (
-                        <>
-                            <CardContentSummary
-                                cv={cv}
-                                result={analysisResult}
-                                error={analysisError}
-                                apiBaseUrl={apiBaseUrl}
-                                showImage
-                            />
-
-                            {analysisResult.changed && (
-                                <Text size="xs" c="dimmed" mb="sm">
-                                    Select the recommendations you want to apply to &ldquo;
-                                    {analysisResult.title}&rdquo;.
-                                </Text>
-                            )}
-
-                            {!analysisResult.changed && (
-                                <Text size="xs" c="dimmed" mb="sm">
-                                    No changes recommended — all fields look correct. Current values
-                                    shown below.
-                                </Text>
-                            )}
-
-                            <CardDiffFields
-                                result={analysisResult}
-                                checked={checkedFields}
-                                overrides={overrideFields}
-                                arrayOverrides={arrayOverrideFields}
-                                onToggle={(field, value) => {
-                                    const next = new Set(checkedFields);
-                                    if (value) next.add(field);
-                                    else next.delete(field);
-                                    setCheckedFields(next);
-                                }}
-                                onOverride={(field, value) => {
-                                    const next = new Map(overrideFields);
-                                    next.set(field, value);
-                                    setOverrideFields(next);
-                                }}
-                                onArrayOverride={(field, value) => {
-                                    const next = new Map(arrayOverrideFields);
-                                    next.set(field, value);
-                                    setArrayOverrideFields(next);
-                                }}
-                            />
-
-                            <Group justify="flex-end" mt="md">
-                                <Button
-                                    variant="subtle"
-                                    color="gray"
-                                    onClick={() => {
-                                        if (analysisResult?.changed) onDismissed(card.id);
-                                        setAnalysisOpen(false);
-                                    }}
-                                >
-                                    {analysisResult.changed ? "Cancel" : "Close"}
-                                </Button>
-                                {analysisResult.changed && (
-                                    <Button
-                                        color="teal"
-                                        onClick={() => void applyAnalysis()}
-                                        loading={analysisApplying}
-                                        disabled={checkedFields.size === 0}
-                                    >
-                                        Apply selected
-                                    </Button>
-                                )}
-                            </Group>
-                        </>
-                    )}
-
-                    {!analysisLoading && !analysisResult && !analysisError && (
-                        <Center py="xl">
-                            <Loader size="sm" />
-                        </Center>
-                    )}
-
-                    {analysisError && (
-                        <Group justify="flex-end" mt="md">
-                            <Button
-                                variant="subtle"
-                                color="gray"
-                                onClick={() => setAnalysisOpen(false)}
-                            >
-                                Close
-                            </Button>
-                        </Group>
-                    )}
-                </Box>
-            </Modal>
-
             {/* ── Card View ──────────────────────────────────────────── */}
             <Stack gap="md">
                 {cv.imageId && (
@@ -1002,7 +745,7 @@ function CardDrawer({
                         size="xs"
                         variant="outline"
                         color="teal"
-                        onClick={() => void openAnalysis()}
+                        onClick={onAnalyzeWithAI}
                     >
                         Analyze with AI
                     </Button>
@@ -1103,6 +846,7 @@ export default function CardsPage() {
     const [selected, setSelected] = useState<Card | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
+    const [singleAnalyzeCard, setSingleAnalyzeCard] = useState<Card | null>(null);
     const [analyzedCardIdsArr, setAnalyzedCardIdsArr] = useSessionStorage<string[]>({
         key: "admin-analyzed-card-ids",
         defaultValue: [],
@@ -1133,10 +877,9 @@ export default function CardsPage() {
             .then((d) => {
                 if (d.ok) setFilterGames(d.data as GameOption[]);
             });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [adminFetch]);
 
-    function loadCards() {
+    useEffect(() => {
         setLoading(true);
         const params = new URLSearchParams();
         if (filters.search) params.set("search", filters.search);
@@ -1153,12 +896,7 @@ export default function CardsPage() {
                 if (d.ok) setCards(d.data as Card[]);
                 setLoading(false);
             });
-    }
-
-    useEffect(() => {
-        loadCards();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters]);
+    }, [filters, adminFetch]);
 
     function toggleGlobal(card: Card) {
         startTransition(async () => {
@@ -1488,20 +1226,8 @@ export default function CardsPage() {
                 {selected && (
                     <CardDrawer
                         card={selected}
-                        onClose={() => setSelected(null)}
                         onChanged={handleCardChanged}
-                        onAnalyzed={(ids) =>
-                            setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
-                        }
-                        onAccepted={(id) =>
-                            setAcceptedCardIdsArr((prev) => [...new Set([...prev, id])])
-                        }
-                        onDismissed={(id) =>
-                            setDismissedCardIdsArr((prev) => [...new Set([...prev, id])])
-                        }
-                        onNoChange={(id) =>
-                            setNoChangeCardIdsArr((prev) => [...new Set([...prev, id])])
-                        }
+                        onAnalyzeWithAI={() => setSingleAnalyzeCard(selected)}
                         apiBaseUrl={apiBaseUrl}
                     />
                 )}
@@ -1532,6 +1258,35 @@ export default function CardsPage() {
                     setDismissedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
                 }
             />
+
+            {singleAnalyzeCard && (
+                <BulkAnalysisModal
+                    opened={!!singleAnalyzeCard}
+                    onClose={() => setSingleAnalyzeCard(null)}
+                    cards={[singleAnalyzeCard]}
+                    onCardsChanged={(updated) => {
+                        setCards((prev) =>
+                            prev.map((c) => updated.find((u) => u.id === c.id) ?? c)
+                        );
+                        if (selected && updated.find((u) => u.id === selected.id)) {
+                            setSelected(updated.find((u) => u.id === selected.id) ?? selected);
+                        }
+                        setSingleAnalyzeCard(null);
+                    }}
+                    onAnalyzed={(ids) =>
+                        setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                    }
+                    onNoChange={(ids) =>
+                        setNoChangeCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                    }
+                    onAccepted={(ids) =>
+                        setAcceptedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                    }
+                    onDismissed={(ids) =>
+                        setDismissedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
+                    }
+                />
+            )}
         </>
     );
 }

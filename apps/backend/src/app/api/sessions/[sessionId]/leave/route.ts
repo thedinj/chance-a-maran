@@ -1,5 +1,5 @@
 import { AuthorizationError, LeaveSessionRequestSchema, NotFoundError, ValidationError } from "@chance/core";
-import { fail, handleError, ok } from "@/lib/auth/response";
+import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as sessionRepo from "@/lib/repos/sessionRepo";
 import * as playerRepo from "@/lib/repos/playerRepo";

@@ -23,21 +23,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setActivePlayerId(myPlayerId);
     }, []);
 
+    // Ref so the session-restore effect always reads the current player list
+    // without adding `players` as a dep (which changes on every poll).
+    const playersRef = useRef(players);
+    playersRef.current = players;
+
     // Restore any additional device players that were persisted from a prior session.
     // Keyed on session ID so it fires once per session, not on every poll.
     useEffect(() => {
-        if (!session) return;
-        const sessionId = session.id;
+        const sessionId = session?.id;
+        if (!sessionId) return;
         void (async () => {
             const stored = await devicePlayersStore.get(sessionId);
             if (stored.length === 0) return;
-            const activeIds = new Set(players.filter((p) => p.active).map((p) => p.id));
+            const activeIds = new Set(playersRef.current.filter((p) => p.active).map((p) => p.id));
             const valid = stored.filter((id) => activeIds.has(id));
             if (valid.length > 0) {
                 setDevicePlayerIds((prev) => [...new Set([...prev, ...valid])]);
             }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.id]);
 
     const addDevicePlayer = useCallback((playerId: string) => {

@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as sessionService from "@/lib/services/sessionService";

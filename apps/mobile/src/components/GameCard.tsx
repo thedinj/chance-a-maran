@@ -296,7 +296,6 @@ export function FlippingCard({
     flipHeld,
     onReveal,
 }: FlippingCardProps): React.JSX.Element {
-    const isGameChanger = Boolean(cardVersion.isGameChanger);
     const prefersReducedMotion =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;

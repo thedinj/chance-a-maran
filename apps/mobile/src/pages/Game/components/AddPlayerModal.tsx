@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { apiClient } from "../../../lib/api";
 import { playerTokenStore } from "../../../lib/playerTokenStore";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 const AddPlayerSchema = JoinByCodeRequestSchema.pick({ displayName: true }).extend({

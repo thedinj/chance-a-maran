@@ -1,6 +1,5 @@
-import { NextRequest } from "next/server";
 import { clearRefreshCookie, readRefreshToken } from "@/lib/auth/cookies";
-import { fail, handleError, ok } from "@/lib/auth/response";
+import { handleError, ok } from "@/lib/auth/response";
 import { withAuth } from "@/lib/auth/withAuth";
 import * as authService from "@/lib/services/authService";
 

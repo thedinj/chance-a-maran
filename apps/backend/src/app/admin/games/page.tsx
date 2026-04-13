@@ -31,14 +31,12 @@ export default function GamesPage() {
     const [deleteImpact, setDeleteImpact] = useState<{ cardVersionCount: number; sessionCount: number } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    function loadGames() {
+    useEffect(() => {
         setLoading(true);
         adminFetch("/api/admin/games")
             .then((r) => r.json())
             .then((d) => { if (d.ok) setGames(d.data as AdminGame[]); setLoading(false); });
-    }
-
-    useEffect(() => { loadGames(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [adminFetch]);
 
     function toggleActive(game: AdminGame) {
         startTransition(async () => {

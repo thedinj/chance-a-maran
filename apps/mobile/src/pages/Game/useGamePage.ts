@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { useCards } from "../../cards/useCards";
 import type { Card, CardTransfer, CardVersion, DrawEvent, Player, Session } from "../../lib/api";
 import { apiClient } from "../../lib/api";
 import { hapticMedium } from "../../lib/haptics";
+import { preloadSoundIfNeeded } from "../../lib/sounds";
 import { useExitSession } from "../../session/useExitSession";
 import { useSession } from "../../session/useSession";
 import { useTransfers } from "../../transfers/useTransfers";
 import type { DevDrawMode } from "./types";
-import { preloadSoundIfNeeded } from "../../lib/sounds";
 
 // Tracks which session IDs have already auto-shown the join code so navigation
 // away and back does not trigger it again.
@@ -182,26 +182,38 @@ export function useGamePage(): UseGamePageReturn {
         history.replace("/");
     }, [session, isInitializing, history]);
 
-    // Auto-show join code only when the host creates a brand-new session
+    // Refs for values that change on polls but should not restart these effects.
+    const localPlayerRef = useRef(localPlayer);
+    localPlayerRef.current = localPlayer;
+    const locationStateRef = useRef(location.state);
+    locationStateRef.current = location.state;
+    const devicePlayerIdsRef = useRef(devicePlayerIds);
+    devicePlayerIdsRef.current = devicePlayerIds;
+
+    // Auto-show join code only when the host creates a brand-new session.
+    // Extracted as primitives so the effect only re-runs when they actually
+    // change, not on every poll that returns a new session object reference.
+    const sessionId = session?.id ?? null;
+    const hostPlayerId = session?.hostPlayerId ?? null;
     useEffect(() => {
         if (
-            session &&
-            localPlayer?.id === session.hostPlayerId &&
-            location.state?.newSession === true &&
-            !joinCodeShownSessions.has(session.id)
+            sessionId &&
+            localPlayerRef.current?.id === hostPlayerId &&
+            locationStateRef.current?.newSession === true &&
+            !joinCodeShownSessions.has(sessionId)
         ) {
-            joinCodeShownSessions.add(session.id);
+            joinCodeShownSessions.add(sessionId);
             setShowJoinCode(true);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session?.id]);
+    }, [sessionId, hostPlayerId]);
 
-    // Session polling — fires immediately on mount, then every 5s
+    // Session polling — fires immediately on mount, then every 5s.
+    // devicePlayerIds is read via ref so joining/leaving players don't restart the interval.
     useEffect(() => {
-        if (!session) return;
+        if (!sessionId) return;
 
         async function poll() {
-            const result = await apiClient.getSessionState(session!.id);
+            const result = await apiClient.getSessionState(sessionId!);
             if (!result.ok) return;
             setSession(result.data);
             for (const event of result.data.drawEvents ?? []) {
@@ -210,8 +222,8 @@ export function useGamePage(): UseGamePageReturn {
             // Sync pending transfers — filter to transfers involving this device's players
             const relevant = (result.data.pendingTransfers ?? []).filter(
                 (t) =>
-                    devicePlayerIds.includes(t.fromPlayerId) ||
-                    devicePlayerIds.includes(t.toPlayerId)
+                    devicePlayerIdsRef.current.includes(t.fromPlayerId) ||
+                    devicePlayerIdsRef.current.includes(t.toPlayerId)
             );
             setPendingTransfers(relevant);
         }
@@ -219,8 +231,7 @@ export function useGamePage(): UseGamePageReturn {
         poll();
         const intervalId = setInterval(poll, 5000);
         return () => clearInterval(intervalId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session?.id]);
+    }, [sessionId, setSession, addDrawEvent, setPendingTransfers]);
 
     // Reset dev draw mode when leaving the page
     useEffect(() => {

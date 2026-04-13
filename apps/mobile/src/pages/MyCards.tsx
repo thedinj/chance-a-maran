@@ -1,5 +1,5 @@
 import { IonButton, IonContent, IonFooter, IonModal, IonPage, useIonViewWillEnter } from "@ionic/react";
-import React, { useEffect, useRef, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
@@ -53,18 +53,18 @@ export default function MyCards() {
     const [newPreviewCard, setNewPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
 
     // ── Load my cards on mount and every time the view re-enters ─────────────
-    function fetchMyCards() {
+    const fetchMyCards = useCallback(() => {
         if (!user) return;
         apiClient.getMyCards().then((result) => {
             if (result.ok) setMyCards(result.data);
             else setLoadError(result.error.message);
             setIsLoading(false);
         });
-    }
+    }, [user]);
 
     useEffect(() => {
         fetchMyCards();
-    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [fetchMyCards]);
 
     useIonViewWillEnter(() => {
         fetchMyCards();
@@ -77,7 +77,7 @@ export default function MyCards() {
             newModalRef.current?.present();
             history.replace(location.pathname, {});
         }
-    }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [location.state, history, location.pathname]);
 
     // ── Load all cards when admin tab is active ───────────────────────────────
     useEffect(() => {

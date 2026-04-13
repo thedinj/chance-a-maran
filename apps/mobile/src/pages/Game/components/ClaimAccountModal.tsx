@@ -1,6 +1,6 @@
 import React from "react";
 import { LoginForm } from "../../../components/LoginForm";
-import { useGamePageContext } from "../GamePageContext";
+import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
 export function ClaimAccountModal() {

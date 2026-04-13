@@ -458,6 +458,11 @@ export function BulkAnalysisModal({
     const cancelledRef = useRef(false);
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+    // Ref so the analysis effect always reads the latest cards array without
+    // subscribing to it — cards are snapshotted when the modal opens.
+    const cardsRef = useRef(cards);
+    cardsRef.current = cards;
+
     const [statuses, setStatuses] = useState<Map<string, CardStatus>>(new Map());
     const [results, setResults] = useState<Map<string, CardAnalysisResult>>(new Map());
     const [errors, setErrors] = useState<Map<string, string>>(new Map());
@@ -480,7 +485,8 @@ export function BulkAnalysisModal({
         }
 
         cancelledRef.current = false;
-        const initialStatuses = new Map<string, CardStatus>(cards.map((c) => [c.id, "queued"]));
+        const snapshot = [...cardsRef.current];
+        const initialStatuses = new Map<string, CardStatus>(snapshot.map((c) => [c.id, "queued"]));
         setStatuses(initialStatuses);
         setResults(new Map());
         setErrors(new Map());
@@ -490,8 +496,6 @@ export function BulkAnalysisModal({
         setExpandedCards(new Set());
         setApplying(false);
         setApplyDone(0);
-
-        const snapshot = [...cards];
 
         void (async () => {
             const analyzedVersionIds: string[] = [];
@@ -552,7 +556,7 @@ export function BulkAnalysisModal({
         return () => {
             cancelledRef.current = true;
         };
-    }, [opened]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [opened]);
 
     // ── Derived values ──────────────────────────────────────────────────────────
 
@@ -679,6 +683,7 @@ export function BulkAnalysisModal({
                     hiddenInstructions: cv.hiddenInstructions ?? null,
                     imageId: cv.imageId ?? null,
                     imageYOffset: cv.imageYOffset ?? 0.5,
+                    soundId: cv.soundId ?? null,
                     drinkingLevel: fields.has("drinkingLevel")
                         ? effectiveDrinking
                         : cv.drinkingLevel,
