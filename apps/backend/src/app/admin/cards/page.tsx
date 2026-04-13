@@ -40,8 +40,7 @@ import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/
 type FilterState = {
     search: string;
     active: string;
-    isGlobal: string;
-    pendingGlobal: string;
+    globalStatus: string;
     gameId: string;
     drinkingLevel: string;
     spiceLevel: string;
@@ -49,8 +48,9 @@ type FilterState = {
 
 function cardMatchesFilters(card: Card, filters: FilterState): boolean {
     if (filters.active && card.active !== (filters.active === "true")) return false;
-    if (filters.isGlobal && card.isGlobal !== (filters.isGlobal === "true")) return false;
-    if (filters.pendingGlobal && card.pendingGlobal !== (filters.pendingGlobal === "true")) return false;
+    if (filters.globalStatus === "global" && !card.isGlobal) return false;
+    if (filters.globalStatus === "nominated" && !card.pendingGlobal) return false;
+    if (filters.globalStatus === "not_global" && (card.isGlobal || card.pendingGlobal)) return false;
     if (
         filters.search &&
         !card.currentVersion.title.toLowerCase().includes(filters.search.toLowerCase())
@@ -892,8 +892,7 @@ export default function CardsPage() {
     const [filters, setFilters] = useState<FilterState>({
         search: "",
         active: "",
-        isGlobal: "",
-        pendingGlobal: "",
+        globalStatus: "",
         gameId: "",
         drinkingLevel: "",
         spiceLevel: "",
@@ -1168,23 +1167,16 @@ export default function CardsPage() {
                         w={130}
                     />
                     <Select
-                        placeholder="Global"
+                        placeholder="Pool status"
                         data={[
-                            { value: "true", label: "Global" },
-                            { value: "false", label: "Not global" },
+                            { value: "global", label: "Global" },
+                            { value: "nominated", label: "Nominated" },
+                            { value: "not_global", label: "Neither" },
                         ]}
-                        value={filters.isGlobal || null}
-                        onChange={(v) => setFilters((f) => ({ ...f, isGlobal: v ?? "" }))}
+                        value={filters.globalStatus || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, globalStatus: v ?? "" }))}
                         clearable
-                        w={140}
-                    />
-                    <Select
-                        placeholder="Nominated"
-                        data={[{ value: "true", label: "Nominated" }, { value: "false", label: "Not Nominated" }]}
-                        value={filters.pendingGlobal || null}
-                        onChange={(v) => setFilters((f) => ({ ...f, pendingGlobal: v ?? "" }))}
-                        clearable
-                        w={140}
+                        w={150}
                     />
                     <Select
                         placeholder="Game"
