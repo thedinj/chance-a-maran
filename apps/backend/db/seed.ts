@@ -72,14 +72,14 @@ async function main() {
     }
 
     // Seed initial games
-    const existingGame = db.prepare("SELECT id FROM games WHERE name = ?").get("Catan");
+    const existingGame = db.prepare("SELECT id FROM games WHERE name = ?").get("Settlers of Catan");
     if (!existingGame) {
         db.prepare(
             `INSERT INTO games (id, name, active, created_at) VALUES (?, ?, 1, datetime('now'))`
-        ).run(randomUUID(), "Catan");
-        console.log("Created game: Catan");
+        ).run(randomUUID(), "Settlers of Catan");
+        console.log("Created game: Settlers of Catan");
     } else {
-        console.log("Game 'Catan' already exists. Skipping.");
+        console.log("Game 'Settlers of Catan' already exists. Skipping.");
     }
 
     await upsertUser(adminEmail, adminPassword, adminName, true, inviteCode);

@@ -2,8 +2,19 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-    Title, Table, Switch, Button, TextInput, Stack, Group,
-    Modal, Text, Loader, Center, ActionIcon, Tooltip,
+    Title,
+    Table,
+    Switch,
+    Button,
+    TextInput,
+    Stack,
+    Group,
+    Modal,
+    Text,
+    Loader,
+    Center,
+    ActionIcon,
+    Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
@@ -28,7 +39,10 @@ export default function GamesPage() {
     const [editName, setEditName] = useState("");
     const [saving, setSaving] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<AdminGame | null>(null);
-    const [deleteImpact, setDeleteImpact] = useState<{ cardVersionCount: number; sessionCount: number } | null>(null);
+    const [deleteImpact, setDeleteImpact] = useState<{
+        cardVersionCount: number;
+        sessionCount: number;
+    } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
@@ -54,7 +68,9 @@ export default function GamesPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                setGames((prev) => prev.map((g) => g.id === game.id ? data.data as AdminGame : g));
+                setGames((prev) =>
+                    prev.map((g) => (g.id === game.id ? (data.data as AdminGame) : g))
+                );
             } else {
                 notifications.show({ message: data.error?.message ?? "Error", color: "red" });
             }
@@ -79,7 +95,9 @@ export default function GamesPage() {
             setGames((prev) =>
                 prev
                     .map((g) => (g.id === editTarget.id ? (data.data as AdminGame) : g))
-                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+                    .sort((a, b) =>
+                        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+                    )
             );
             setEditTarget(null);
             notifications.show({ message: "Game updated", color: "green" });
@@ -89,7 +107,9 @@ export default function GamesPage() {
     }
 
     async function confirmDelete(game: AdminGame) {
-        const res = await adminFetch(`/api/admin/games/${game.id}?dryRun=true`, { method: "DELETE" });
+        const res = await adminFetch(`/api/admin/games/${game.id}?dryRun=true`, {
+            method: "DELETE",
+        });
         const data = await res.json();
         if (data.ok) {
             setDeleteImpact(data.data);
@@ -126,7 +146,9 @@ export default function GamesPage() {
         setCreating(false);
         if (data.ok) {
             setGames((prev) =>
-                [...prev, data.data as AdminGame].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+                [...prev, data.data as AdminGame].sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+                )
             );
             setNewName("");
             setCreateOpen(false);
@@ -141,11 +163,15 @@ export default function GamesPage() {
             <Stack gap="md">
                 <Group justify="space-between">
                     <Title order={3}>Games</Title>
-                    <Button size="sm" onClick={() => setCreateOpen(true)}>New Game</Button>
+                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                        New Game
+                    </Button>
                 </Group>
 
                 {loading ? (
-                    <Center py="xl"><Loader /></Center>
+                    <Center py="xl">
+                        <Loader />
+                    </Center>
                 ) : (
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
@@ -205,7 +231,7 @@ export default function GamesPage() {
                 <Stack gap="md">
                     <TextInput
                         label="Name"
-                        placeholder="e.g. Catan"
+                        placeholder="e.g. Settlers of Catan"
                         value={newName}
                         onChange={(e) => setNewName(e.currentTarget.value)}
                         autoFocus
@@ -216,11 +242,7 @@ export default function GamesPage() {
                 </Stack>
             </Modal>
 
-            <Modal
-                opened={!!editTarget}
-                onClose={() => setEditTarget(null)}
-                title="Edit Game"
-            >
+            <Modal opened={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Game">
                 <Stack gap="md">
                     <TextInput
                         label="Name"
@@ -240,29 +262,34 @@ export default function GamesPage() {
             </Modal>
             <Modal
                 opened={!!deleteTarget}
-                onClose={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                onClose={() => {
+                    setDeleteTarget(null);
+                    setDeleteImpact(null);
+                }}
                 title="Delete Game"
             >
                 <Stack gap="md">
                     <Text size="sm">
                         Permanently delete &ldquo;{deleteTarget?.name}&rdquo;?
                         {deleteImpact && (
-                            <> This will untag {deleteImpact.cardVersionCount} card version(s) and
-                            remove it from {deleteImpact.sessionCount} session filter(s).</>
+                            <>
+                                {" "}
+                                This will untag {deleteImpact.cardVersionCount} card version(s) and
+                                remove it from {deleteImpact.sessionCount} session filter(s).
+                            </>
                         )}
                     </Text>
                     <Group justify="flex-end">
                         <Button
                             variant="default"
-                            onClick={() => { setDeleteTarget(null); setDeleteImpact(null); }}
+                            onClick={() => {
+                                setDeleteTarget(null);
+                                setDeleteImpact(null);
+                            }}
                         >
                             Cancel
                         </Button>
-                        <Button
-                            color="red"
-                            onClick={() => void executeDelete()}
-                            loading={deleting}
-                        >
+                        <Button color="red" onClick={() => void executeDelete()} loading={deleting}>
                             Delete
                         </Button>
                     </Group>

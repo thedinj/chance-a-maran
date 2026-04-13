@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
     Title,
     Table,
@@ -45,6 +45,35 @@ type FilterState = {
     drinkingLevel: string;
     spiceLevel: string;
 };
+
+function cardMatchesFilters(card: Card, filters: FilterState): boolean {
+    if (filters.active && card.active !== (filters.active === "true")) return false;
+    if (filters.isGlobal && card.isGlobal !== (filters.isGlobal === "true")) return false;
+    if (filters.pendingGlobal && card.pendingGlobal !== (filters.pendingGlobal === "true")) return false;
+    if (
+        filters.search &&
+        !card.currentVersion.title.toLowerCase().includes(filters.search.toLowerCase())
+    )
+        return false;
+    if (filters.gameId === "__none__" && card.currentVersion.gameTags.length > 0) return false;
+    if (
+        filters.gameId &&
+        filters.gameId !== "__none__" &&
+        !card.currentVersion.gameTags.some((t) => t.id === filters.gameId)
+    )
+        return false;
+    if (
+        filters.drinkingLevel !== "" &&
+        card.currentVersion.drinkingLevel !== parseInt(filters.drinkingLevel)
+    )
+        return false;
+    if (
+        filters.spiceLevel !== "" &&
+        card.currentVersion.spiceLevel !== parseInt(filters.spiceLevel)
+    )
+        return false;
+    return true;
+}
 
 interface GameOption {
     id: string;
@@ -857,7 +886,7 @@ function CardDrawer({
 
 export default function CardsPage() {
     const adminFetch = useAdminFetch();
-    const [cards, setCards] = useState<Card[]>([]);
+    const [allCards, setAllCards] = useState<Card[]>([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState<FilterState>({
         search: "",
@@ -895,6 +924,18 @@ export default function CardsPage() {
     const noChangeCardIds = new Set(noChangeCardIdsArr);
     const [isPending, startTransition] = useTransition();
 
+    const cards = useMemo(
+        () =>
+            allCards
+                .filter((c) => cardMatchesFilters(c, filters))
+                .sort((a, b) =>
+                    a.currentVersion.title.localeCompare(b.currentVersion.title, undefined, {
+                        sensitivity: "base",
+                    })
+                ),
+        [allCards, filters]
+    );
+
     const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
     useEffect(() => {
@@ -907,31 +948,22 @@ export default function CardsPage() {
 
     useEffect(() => {
         setLoading(true);
-        const params = new URLSearchParams();
-        if (filters.search) params.set("search", filters.search);
-        if (filters.active) params.set("active", filters.active);
-        if (filters.isGlobal) params.set("isGlobal", filters.isGlobal);
-        if (filters.pendingGlobal) params.set("pendingGlobal", filters.pendingGlobal);
-        if (filters.gameId) params.set("gameId", filters.gameId);
-        if (filters.drinkingLevel) params.set("drinkingLevel", filters.drinkingLevel);
-        if (filters.spiceLevel) params.set("spiceLevel", filters.spiceLevel);
-
-        adminFetch(`/api/cards?${params}`)
+        adminFetch("/api/cards")
             .then((r) => r.json())
             .then((d) => {
-                if (d.ok)
-                    setCards(
-                        (d.data as Card[]).sort((a, b) =>
-                            a.currentVersion.title.localeCompare(
-                                b.currentVersion.title,
-                                undefined,
-                                { sensitivity: "base" }
-                            )
-                        )
-                    );
+                if (d.ok) setAllCards(d.data as Card[]);
                 setLoading(false);
             });
-    }, [filters, adminFetch]);
+    }, [adminFetch]);
+
+    useEffect(() => {
+        setSelectedIds((prev) => {
+            if (prev.size === 0) return prev;
+            const visibleIds = new Set(cards.map((c) => c.id));
+            const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [cards]);
 
     function toggleGlobal(card: Card) {
         startTransition(async () => {
@@ -941,8 +973,11 @@ export default function CardsPage() {
             const res = await adminFetch(url, { method: "POST" });
             const data = await res.json();
             if (data.ok) {
-                setCards((prev) => prev.map((c) => (c.id === card.id ? (data.data as Card) : c)));
-                if (selected?.id === card.id) setSelected(data.data as Card);
+                const updated = data.data as Card;
+                setAllCards((prev) => prev.map((c) => (c.id === card.id ? updated : c)));
+                if (selected?.id === card.id) {
+                    setSelected(cardMatchesFilters(updated, filters) ? updated : null);
+                }
             } else {
                 notifications.show({ message: data.error?.message ?? "Error", color: "red" });
             }
@@ -950,8 +985,8 @@ export default function CardsPage() {
     }
 
     function handleCardChanged(updated: Card) {
-        setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-        setSelected(updated);
+        setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        setSelected(cardMatchesFilters(updated, filters) ? updated : null);
     }
 
     const rows = cards.map((card) => (
@@ -1099,10 +1134,12 @@ export default function CardsPage() {
                     {!loading && (
                         <Group gap="md">
                             <Text size="sm" c="dimmed">
-                                {cards.length} cards
+                                {cards.length !== allCards.length
+                                    ? `${cards.length} of ${allCards.length} cards`
+                                    : `${allCards.length} cards`}
                             </Text>
                             <Text size="sm" c="dimmed">
-                                {cards.filter((c) => c.isGlobal).length} global
+                                {allCards.filter((c) => c.isGlobal).length} global
                             </Text>
                         </Group>
                     )}
@@ -1150,7 +1187,10 @@ export default function CardsPage() {
                     />
                     <Select
                         placeholder="Game"
-                        data={filterGames.map((g) => ({ value: g.id, label: g.name }))}
+                        data={[
+                            { value: "__none__", label: "None" },
+                            ...filterGames.map((g) => ({ value: g.id, label: g.name })),
+                        ]}
                         value={filters.gameId || null}
                         onChange={(v) => setFilters((f) => ({ ...f, gameId: v ?? "" }))}
                         clearable
@@ -1181,43 +1221,43 @@ export default function CardsPage() {
                     />
                 </Group>
 
-                {selectedIds.size > 0 && (
-                    <Group
-                        justify="space-between"
-                        px="sm"
-                        py="xs"
-                        style={{
-                            background: "var(--mantine-color-dark-7)",
-                            borderRadius: 6,
-                        }}
-                    >
-                        <Group gap="sm">
-                            <Text size="sm" fw={500}>
-                                {selectedIds.size} selected
-                            </Text>
-                            <Text size="xs" c="dimmed">
-                                (max 20)
-                            </Text>
-                        </Group>
-                        <Group gap="sm">
-                            <Button
-                                variant="subtle"
-                                size="xs"
-                                color="gray"
-                                onClick={() => setSelectedIds(new Set())}
-                            >
-                                Clear
-                            </Button>
-                            <Button
-                                size="xs"
-                                color="teal"
-                                onClick={() => setBulkAnalysisOpen(true)}
-                            >
-                                Analyze {selectedIds.size} card{selectedIds.size !== 1 ? "s" : ""}
-                            </Button>
-                        </Group>
+                <Group
+                    justify="space-between"
+                    px="sm"
+                    py="xs"
+                    style={{
+                        background: "var(--mantine-color-dark-7)",
+                        borderRadius: 6,
+                    }}
+                >
+                    <Group gap="sm">
+                        <Text size="sm" fw={500} c={selectedIds.size === 0 ? "dimmed" : undefined}>
+                            {selectedIds.size} selected
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                            (max 20)
+                        </Text>
                     </Group>
-                )}
+                    <Group gap="sm">
+                        <Button
+                            variant="subtle"
+                            size="xs"
+                            color="gray"
+                            disabled={selectedIds.size === 0}
+                            onClick={() => setSelectedIds(new Set())}
+                        >
+                            Clear
+                        </Button>
+                        <Button
+                            size="xs"
+                            color="teal"
+                            disabled={selectedIds.size === 0}
+                            onClick={() => setBulkAnalysisOpen(true)}
+                        >
+                            Analyze{selectedIds.size > 0 ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}` : ""}
+                        </Button>
+                    </Group>
+                </Group>
 
                 {loading ? (
                     <Center py="xl">
@@ -1244,7 +1284,9 @@ export default function CardsPage() {
                             <Table.Tbody>{rows}</Table.Tbody>
                         </Table>
                         <Text size="xs" c="dimmed" mt="xs">
-                            {cards.length} cards
+                            {cards.length !== allCards.length
+                                ? `${cards.length} of ${allCards.length} cards`
+                                : `${allCards.length} cards`}
                         </Text>
                     </ScrollArea>
                 )}
@@ -1276,7 +1318,7 @@ export default function CardsPage() {
                 }}
                 cards={cards.filter((c) => selectedIds.has(c.id))}
                 onCardsChanged={(updated) => {
-                    setCards((prev) => prev.map((c) => updated.find((u) => u.id === c.id) ?? c));
+                    setAllCards((prev) => prev.map((c) => updated.find((u) => u.id === c.id) ?? c));
                     setSelectedIds(new Set());
                     setBulkAnalysisOpen(false);
                 }}
@@ -1300,11 +1342,18 @@ export default function CardsPage() {
                     onClose={() => setSingleAnalyzeCard(null)}
                     cards={[singleAnalyzeCard]}
                     onCardsChanged={(updated) => {
-                        setCards((prev) =>
+                        setAllCards((prev) =>
                             prev.map((c) => updated.find((u) => u.id === c.id) ?? c)
                         );
-                        if (selected && updated.find((u) => u.id === selected.id)) {
-                            setSelected(updated.find((u) => u.id === selected.id) ?? selected);
+                        if (selected) {
+                            const updatedSelected = updated.find((u) => u.id === selected.id);
+                            if (updatedSelected) {
+                                setSelected(
+                                    cardMatchesFilters(updatedSelected, filters)
+                                        ? updatedSelected
+                                        : null
+                                );
+                            }
                         }
                         setSingleAnalyzeCard(null);
                     }}

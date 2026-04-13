@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
     title: "Chance Admin",
     description: "Admin panel for Chance-a-Maran",
+    icons: {
+        icon: "/admin/assets/icons/icon.png",
+    },
 };
 
 export default function RootLayout({

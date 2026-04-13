@@ -61,3 +61,6 @@ ios/
 *.swp
 *.swo
 *~
+
+# Claude
+.claude/settings.local.json

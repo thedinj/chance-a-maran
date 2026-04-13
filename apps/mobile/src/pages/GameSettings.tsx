@@ -102,10 +102,9 @@ export default function GameSettings() {
                 includeGlobalCards: session?.filterSettings.includeGlobalCards ?? true,
                 availableElementIds: session?.filterSettings.availableElementIds,
             },
-            cardSharing:
-                (players.find((p) => p.userId === user?.id)?.cardSharing ?? "mine") as
-                    | "mine"
-                    | "none",
+            cardSharing: (players.find((p) => p.userId === user?.id)?.cardSharing ?? "mine") as
+                | "mine"
+                | "none",
         },
     });
 
@@ -150,7 +149,7 @@ export default function GameSettings() {
                 setElementsLoading(false);
             }
         });
-    // isEditMode is derived from URL params (constant); setValue is stable (react-hook-form guarantee)
+        // isEditMode is derived from URL params (constant); setValue is stable (react-hook-form guarantee)
     }, [isEditMode, setValue]);
 
     // Registered-only page
@@ -255,7 +254,7 @@ export default function GameSettings() {
                         <p style={styles.sectionLabel}>SESSION NAME</p>
                         <input
                             style={styles.textInput}
-                            placeholder="e.g. Friday Night Catan"
+                            placeholder="e.g. Friday Night Settlers of Catan"
                             maxLength={MAX_SESSION_NAME_LENGTH}
                             autoComplete="off"
                             disabled={isPending}
@@ -416,9 +415,7 @@ export default function GameSettings() {
                                         });
                                     }
                                 }
-                                const ungrouped = availableElements.filter(
-                                    (el) => !el.groupId
-                                );
+                                const ungrouped = availableElements.filter((el) => !el.groupId);
 
                                 const drinkingLevel = watch("filterSettings.maxDrinkingLevel");
 
@@ -670,7 +667,9 @@ export default function GameSettings() {
                                             {player.userId === null ? (
                                                 <button
                                                     style={styles.dangerLink as React.CSSProperties}
-                                                    disabled={isPending || resetPendingId === player.id}
+                                                    disabled={
+                                                        isPending || resetPendingId === player.id
+                                                    }
                                                     onClick={() => void handleResetToken(player.id)}
                                                 >
                                                     {resetPendingId === player.id

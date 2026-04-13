@@ -171,12 +171,12 @@ export default function About() {
                         </div>
                     </div>
 
-                    {/* Catan Banner */}
+                    {/* Settlers of Catan Banner */}
                     <div style={styles.gameBanner}>
                         <div style={styles.gameBannerEyebrow}>How to play</div>
                         <h2 style={styles.gameBannerTitle}>Settlers of Catan</h2>
                         <p style={styles.gameBannerSubtitle}>
-                            Catan is already chaotic. Chance makes it worse.
+                            Settlers of Catan is already chaotic. Chance makes it worse.
                         </p>
                     </div>
 
@@ -185,16 +185,16 @@ export default function About() {
                         <h3 style={styles.subheading}>The Boot Bomb</h3>
                         <div style={{ ...styles.cardPanel, ...styles.bootBombPanel }}>
                             <p style={styles.cardPanelBody}>
-                                Start every game of Catan with a boot bomb — a glass boot filled
-                                with a jagerbomb, or an acceptable substitute. Whoever finishes it
-                                first wins the opening.
+                                Start every game of Settlers of Catan with a boot bomb — a glass
+                                boot filled with a jagerbomb, or an acceptable substitute. Whoever
+                                finishes it first wins the opening.
                             </p>
                             <p style={styles.cardPanelBody}>The Boot Bomb winner gets to:</p>
                             <ul style={styles.unorderedList}>
                                 <li style={styles.listItem}>Decide where everyone sits</li>
                                 <li style={styles.listItem}>Choose which direction play goes</li>
                                 <li style={styles.listItem}>
-                                    Place the Catan tiles{" "}
+                                    Place the Settlers of Catan tiles{" "}
                                     <strong style={styles.strong}>face down</strong> on the board
                                 </li>
                             </ul>
@@ -248,9 +248,7 @@ export default function About() {
 
                     {/* Conclusion */}
                     <div style={styles.section}>
-                        <p style={styles.lead}>
-                            Have fun and don't overimbibe.
-                        </p>
+                        <p style={styles.lead}>Have fun and don't overimbibe.</p>
                     </div>
                 </div>
             </IonContent>
@@ -456,7 +454,7 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: 1.6,
     },
 
-    // Catan banner
+    // Settlers of Catan banner
     gameBanner: {
         background: "var(--color-surface-elevated)",
         borderTop: "1px solid var(--color-border)",
