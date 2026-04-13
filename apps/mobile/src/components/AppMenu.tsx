@@ -29,11 +29,9 @@ interface NavItem {
     onClick?: () => void;
 }
 
-const MAIN_NAV: NavItem[] = [{ label: "Home", path: "/" }];
-
-const DISCOVER_NAV: NavItem[] = [
+const MAIN_NAV: NavItem[] = [
+    { label: "Home", path: "/" },
     { label: "What is Chance?", path: "/about" },
-    /*{ label: "Request an invite", path: "/invite-request" },*/
 ];
 
 const UTILITY_NAV: NavItem[] = [{ label: "Settings", path: "/settings" }];
@@ -174,18 +172,6 @@ export function AppMenu() {
                         </IonMenuToggle>
                     )}
                 </IonList>
-
-                {/* ── Discover — new users who don't have an account yet ───── */}
-                {!user && !isGuest && (
-                    <IonList lines="none" style={styles.list}>
-                        <IonListHeader style={styles.sectionLabel}>Discover</IonListHeader>
-                        {DISCOVER_NAV.map((item) => (
-                            <IonMenuToggle key={item.path} autoHide={false}>
-                                <NavRow item={item} active={isActive(item.path)} />
-                            </IonMenuToggle>
-                        ))}
-                    </IonList>
-                )}
 
                 {/* ── Utility ─────────────────────────────────────────────── */}
                 <IonList lines="none" style={styles.list}>
