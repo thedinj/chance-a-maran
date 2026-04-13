@@ -270,6 +270,7 @@ interface BulkAnalysisModalProps {
     onClose: () => void;
     cards: Card[];
     onCardsChanged: (updated: Card[]) => void;
+    onCardUpdated?: (card: Card) => void;
     onAnalyzed: (versionIds: string[]) => void;
     onNoChange: (versionIds: string[]) => void;
     onAccepted: (versionIds: string[]) => void;
@@ -519,6 +520,7 @@ export function BulkAnalysisModal({
     onClose,
     cards,
     onCardsChanged,
+    onCardUpdated,
     onAnalyzed,
     onNoChange,
     onAccepted,
@@ -560,6 +562,12 @@ export function BulkAnalysisModal({
     const [applying, setApplying] = useState(false);
     const [applyDone, setApplyDone] = useState(0);
     const [extraElements, setExtraElements] = useState<Record<string, string>>({});
+    const [nominationChoices, setNominationChoices] = useState<Map<string, "approve" | "reject">>(
+        new Map()
+    );
+    const [nominationResults, setNominationResults] = useState<
+        Map<string, "approved" | "rejected">
+    >(new Map());
 
     useEffect(() => {
         if (!opened) {
@@ -580,6 +588,8 @@ export function BulkAnalysisModal({
         setApplying(false);
         setApplyDone(0);
         setExtraElements({});
+        setNominationChoices(new Map());
+        setNominationResults(new Map());
 
         void (async () => {
             const analyzedVersionIds: string[] = [];
@@ -617,7 +627,7 @@ export function BulkAnalysisModal({
 
                         const changed = computeChangedFields(result);
                         setCheckedFields((prev) => new Map(prev).set(card.id, changed));
-                        if (result.changed) {
+                        if (result.changed || card.pendingGlobal) {
                             setExpandedCards((prev) => new Set(prev).add(card.id));
                         }
                     } else {
@@ -655,6 +665,8 @@ export function BulkAnalysisModal({
         (sum, fields) => sum + fields.size,
         0
     );
+    const nominationChoiceCount = nominationChoices.size;
+    const hasAnythingToApply = totalCheckedFieldCount > 0 || nominationChoiceCount > 0;
 
     const cardsToApply = cards.filter((c) => (checkedFields.get(c.id)?.size ?? 0) > 0);
 
@@ -810,6 +822,41 @@ export function BulkAnalysisModal({
             })
         );
 
+        // Nomination actions run after AI field PATCHes so their responses are the
+        // freshest version of each card. Collect them and merge into updatedCards so
+        // that onCardsChanged carries all changes in one shot — this prevents the
+        // AI-patched card (which still has the old pendingGlobal/isGlobal values)
+        // from overwriting the nomination update when both happen to the same card.
+        for (const [cardId, choice] of nominationChoices) {
+            const url =
+                choice === "approve"
+                    ? `/api/cards/${cardId}/promote`
+                    : `/api/cards/${cardId}/unnominate`;
+            try {
+                const res = await adminFetch(url, { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    setNominationResults((prev) =>
+                        new Map(prev).set(cardId, choice === "approve" ? "approved" : "rejected")
+                    );
+                    const nominationUpdatedCard = data.data as Card;
+                    const existing = updatedCards.findIndex((c) => c.id === cardId);
+                    if (existing >= 0) {
+                        updatedCards[existing] = nominationUpdatedCard;
+                    } else {
+                        updatedCards.push(nominationUpdatedCard);
+                    }
+                } else {
+                    notifications.show({
+                        message: data.error?.message ?? "Nomination action failed",
+                        color: "red",
+                    });
+                }
+            } catch {
+                notifications.show({ message: "Network error", color: "red" });
+            }
+        }
+
         setApplying(false);
         notifications.show({
             message: `${updatedCards.length} card${updatedCards.length !== 1 ? "s" : ""} updated`,
@@ -933,7 +980,18 @@ export function BulkAnalysisModal({
                                                 {cv.title}
                                             </Text>
                                         </Group>
-                                        <StatusBadge status={status} changed={result?.changed} />
+                                        <Group gap="xs">
+                                            {card.pendingGlobal &&
+                                                !nominationResults.has(card.id) && (
+                                                    <Badge size="xs" color="orange" variant="light">
+                                                        nominated
+                                                    </Badge>
+                                                )}
+                                            <StatusBadge
+                                                status={status}
+                                                changed={result?.changed}
+                                            />
+                                        </Group>
                                     </Group>
 
                                     <Collapse expanded={isExpanded && isDone}>
@@ -969,6 +1027,115 @@ export function BulkAnalysisModal({
                                                         onCreateElement={handleCreateElement}
                                                     />
                                                 )}
+
+                                                {card.pendingGlobal && (
+                                                    <>
+                                                        <Divider
+                                                            my="sm"
+                                                            label="Nomination"
+                                                            labelPosition="left"
+                                                        />
+                                                        {nominationResults.has(card.id) ? (
+                                                            <Badge
+                                                                color={
+                                                                    nominationResults.get(
+                                                                        card.id
+                                                                    ) === "approved"
+                                                                        ? "teal"
+                                                                        : "gray"
+                                                                }
+                                                                variant="light"
+                                                                size="sm"
+                                                            >
+                                                                {nominationResults.get(
+                                                                    card.id
+                                                                ) === "approved"
+                                                                    ? "Promoted to global"
+                                                                    : "Nomination removed"}
+                                                            </Badge>
+                                                        ) : (
+                                                            <Group gap="xs">
+                                                                <Text
+                                                                    size="xs"
+                                                                    c="dimmed"
+                                                                    style={{ flex: 1 }}
+                                                                >
+                                                                    Nominated for global pool
+                                                                </Text>
+                                                                <Button
+                                                                    size="xs"
+                                                                    color="teal"
+                                                                    variant={
+                                                                        nominationChoices.get(
+                                                                            card.id
+                                                                        ) === "approve"
+                                                                            ? "filled"
+                                                                            : "light"
+                                                                    }
+                                                                    onClick={() =>
+                                                                        setNominationChoices(
+                                                                            (prev) => {
+                                                                                const next =
+                                                                                    new Map(prev);
+                                                                                if (
+                                                                                    next.get(
+                                                                                        card.id
+                                                                                    ) === "approve"
+                                                                                )
+                                                                                    next.delete(
+                                                                                        card.id
+                                                                                    );
+                                                                                else
+                                                                                    next.set(
+                                                                                        card.id,
+                                                                                        "approve"
+                                                                                    );
+                                                                                return next;
+                                                                            }
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Approve
+                                                                </Button>
+                                                                <Button
+                                                                    size="xs"
+                                                                    color="red"
+                                                                    variant={
+                                                                        nominationChoices.get(
+                                                                            card.id
+                                                                        ) === "reject"
+                                                                            ? "filled"
+                                                                            : "light"
+                                                                    }
+                                                                    onClick={() =>
+                                                                        setNominationChoices(
+                                                                            (prev) => {
+                                                                                const next =
+                                                                                    new Map(prev);
+                                                                                if (
+                                                                                    next.get(
+                                                                                        card.id
+                                                                                    ) === "reject"
+                                                                                )
+                                                                                    next.delete(
+                                                                                        card.id
+                                                                                    );
+                                                                                else
+                                                                                    next.set(
+                                                                                        card.id,
+                                                                                        "reject"
+                                                                                    );
+                                                                                return next;
+                                                                            }
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Reject
+                                                                </Button>
+                                                            </Group>
+                                                        )}
+                                                    </>
+                                                )}
                                             </Box>
                                         )}
                                     </Collapse>
@@ -990,18 +1157,21 @@ export function BulkAnalysisModal({
                         </Text>
                     ) : (
                         <Tooltip
-                            label="No fields selected"
-                            disabled={totalCheckedFieldCount > 0}
+                            label="Nothing selected"
+                            disabled={hasAnythingToApply}
                             withArrow
                         >
                             <Button
                                 color="teal"
-                                disabled={totalCheckedFieldCount === 0}
+                                disabled={!hasAnythingToApply}
                                 loading={applying}
                                 onClick={() => void applyAll()}
                             >
-                                Apply selected ({totalCheckedFieldCount} field
-                                {totalCheckedFieldCount !== 1 ? "s" : ""})
+                                {totalCheckedFieldCount > 0 && nominationChoiceCount > 0
+                                    ? `Apply (${totalCheckedFieldCount} field${totalCheckedFieldCount !== 1 ? "s" : ""}, ${nominationChoiceCount} nomination${nominationChoiceCount !== 1 ? "s" : ""})`
+                                    : nominationChoiceCount > 0
+                                      ? `Apply (${nominationChoiceCount} nomination${nominationChoiceCount !== 1 ? "s" : ""})`
+                                      : `Apply selected (${totalCheckedFieldCount} field${totalCheckedFieldCount !== 1 ? "s" : ""})`}
                             </Button>
                         </Tooltip>
                     )}

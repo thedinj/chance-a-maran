@@ -1318,6 +1318,9 @@ export default function CardsPage() {
                     setSelectedIds(new Set());
                     setBulkAnalysisOpen(false);
                 }}
+                onCardUpdated={(updated) =>
+                    setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+                }
                 onAnalyzed={(ids) =>
                     setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
                 }
@@ -1353,6 +1356,9 @@ export default function CardsPage() {
                         }
                         setSingleAnalyzeCard(null);
                     }}
+                    onCardUpdated={(updated) =>
+                        setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+                    }
                     onAnalyzed={(ids) =>
                         setAnalyzedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
                     }
