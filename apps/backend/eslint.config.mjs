@@ -1,4 +1,8 @@
 import nextConfig from "eslint-config-next";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // nextConfig is a flat config array. The second entry already defines the
 // @typescript-eslint plugin. We patch entries in-place so we can override
@@ -7,6 +11,13 @@ const config = [...nextConfig];
 
 const tsEntry = config.find((c) => c.plugins?.["@typescript-eslint"]);
 if (tsEntry) {
+    tsEntry.languageOptions = {
+        ...tsEntry.languageOptions,
+        parserOptions: {
+            ...tsEntry.languageOptions?.parserOptions,
+            tsconfigRootDir: __dirname,
+        },
+    };
     tsEntry.rules = {
         ...tsEntry.rules,
         "@typescript-eslint/no-unused-vars": [

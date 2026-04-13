@@ -106,7 +106,7 @@ export const SPICE_LEVELS: LevelScale = {
             cardDescription: "No adult content — safe for all audiences.",
             filterDescription: "Clean cards only — no mature content.",
             llmDescription:
-                "Use 0 only after ruling out 3, 2, and 1. Must be clearly child-appropriate: no swearing, no sexual language/innuendo, no crude references, and no adult themes.",
+                "Use 0 only after ruling out 3, 2, and 1. Must be clearly child-appropriate: no swearing, no sexual language/innuendo, no crude references, and no adult themes. Note: a card can be spice 0 even if it has a high drinkingLevel — alcohol content is scored separately and never disqualifies a card from spice 0.",
         },
         {
             value: 1,
@@ -116,7 +116,7 @@ export const SPICE_LEVELS: LevelScale = {
             cardDescription: "Light innuendo or mild language. Nothing explicit.",
             filterDescription: "Up to mild innuendo and light language.",
             llmDescription:
-                "Use 1 only after ruling out 3 and 2. For light innuendo, euphemisms, or mild suggestive language. Any stronger vulgarity, explicitness, racist content, or clearly mature sexual framing should not be 1.",
+                "Use 1 only after ruling out 3 and 2. For light innuendo, euphemisms, or mild suggestive language. Any stronger vulgarity, explicitness, racist content, or clearly mature sexual framing should not be 1. (Drinking/alcohol references are not innuendo or suggestive language — they are irrelevant to spice scoring.)",
         },
         {
             value: 2,
@@ -126,7 +126,7 @@ export const SPICE_LEVELS: LevelScale = {
             cardDescription: "Strong language and more mature themes.",
             filterDescription: "Up to strong language and mature themes.",
             llmDescription:
-                "Check 2 only if level 3 is clearly ruled out. Use for strong/crude language and clearly mature sexual themes that are not maximally explicit, racist, or extreme.",
+                "Check 2 only if level 3 is clearly ruled out. Use for strong/crude language and clearly mature sexual themes that are not maximally explicit, racist, or extreme. (Alcohol references alone are not crude language or mature sexual themes — do not let drinking content influence this rating.)",
         },
         {
             value: 3,
@@ -136,7 +136,7 @@ export const SPICE_LEVELS: LevelScale = {
             cardDescription: "Very racy, explicit adult content.",
             filterDescription: "For those who don’t mind getting genuinely offended. You will be.",
             llmDescription:
-                "Start at 3. Use this when any racial content is present (automatic 3), or for explicit sexual content, graphic adult references, slurs, or aggressively vulgar language. Only move down if these signals are clearly absent.",
+                "Start at 3. Use this when any racial content is present (automatic 3), or for explicit sexual content, graphic adult references, slurs, or aggressively vulgar language. Only move down if these signals are clearly absent. (Drinking content does not count toward spice — a card that only mentions alcohol has no spice signal at this level.)",
         },
     ],
 };

@@ -74,6 +74,7 @@ Rules:
 - You MUST apply each level scale from 3 down to 0. Pick the first level that cannot be ruled out.
 - Conservative downgrade rule: do not choose a lower level unless the card text clearly disproves the higher level.
 - Profanity/innuendo rule: if any swear word, profanity, or sexually suggestive/innuendo language appears in any field (especially the title), spiceLevel MUST be at LEAST 1 (never 0/Clean). Level 0 is strictly family-friendly content. If your own justification acknowledges innuendo or suggestive language, spiceLevel CANNOT be 0.
+- Orthogonality rule: drinkingLevel and spiceLevel are completely independent. Drinking content (alcohol, shots, sips, drinking consequences) has NO effect on spiceLevel. A card about drinking is not automatically adult, suggestive, or crude — it may be spice 0. Only sexual language, profanity, crude references, or racial content raise spiceLevel. Never let the presence of alcohol or a high drinkingLevel push spiceLevel above what the sexual/language content alone would warrant.
 - Strong profanity, slurs, or aggressively vulgar language should usually be spiceLevel 3 or 2.
 - Any racial content, even innuendo, is automatically spiceLevel 3.
 - justification must be short, plain-language, and reference the card content that drove your choices.
