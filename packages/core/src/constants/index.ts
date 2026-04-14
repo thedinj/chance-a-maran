@@ -21,14 +21,32 @@ export const CARD_ASPECT_RATIO = { width: 412, height: 581 } as const;
 // ─── Card draw weight multipliers ────────────────────────────────────────────
 
 export const BASE_WEIGHT = 1.0;
-/** Cards created in this session get a 3× draw boost. */
-export const SESSION_CARD_BOOST = 3.0;
-/** +0.2 per net upvote. */
-export const UPVOTE_BONUS = 0.2;
-/** Maximum total upvote bonus that can be applied to a card's weight. */
-export const UPVOTE_BONUS_CAP = 2.0;
-/** Net-downvoted cards have their weight multiplied by 0.5. */
-export const DOWNVOTE_MULTIPLIER = 0.5;
+
+/**
+ * Fraction of draws pulled from the session-born card bucket when it is non-empty.
+ * Guarantees session cards appear in ~40% of draws regardless of global pool size.
+ * Falls back to the global bucket when the session bucket is exhausted.
+ */
+export const SESSION_BUCKET_RATIO = 0.4;
+
+/**
+ * Per-vote step applied to the vote multiplier in both directions.
+ * +1 vote → multiplier rises from 1.0 to 1.15; −1 vote → drops to 0.85.
+ * The cap is reached at ~7 upvotes; the floor is reached at ~5 downvotes.
+ */
+export const VOTE_SCALE_RATIO = 0.15;
+
+/**
+ * Maximum additive bonus above 1.0 that the vote multiplier can reach.
+ * voteMultiplier is capped at (1 + VOTE_SCALE_CAP) = 2.0×.
+ */
+export const VOTE_SCALE_CAP = 1.0;
+
+/**
+ * Minimum value the vote multiplier can reach for heavily downvoted cards.
+ * Prevents total suppression while still reflecting community dislike.
+ */
+export const DOWNVOTE_FLOOR = 0.25;
 
 // ─── Level scale types ───────────────────────────────────────────────────────
 

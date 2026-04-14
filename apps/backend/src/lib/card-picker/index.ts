@@ -1,11 +1,11 @@
 import type { FilterSettings } from "@chance/core";
 import {
     BASE_WEIGHT,
-    DOWNVOTE_MULTIPLIER,
+    DOWNVOTE_FLOOR,
     ElementGroupId,
-    SESSION_CARD_BOOST,
-    UPVOTE_BONUS,
-    UPVOTE_BONUS_CAP,
+    SESSION_BUCKET_RATIO,
+    VOTE_SCALE_CAP,
+    VOTE_SCALE_RATIO,
 } from "@chance/core";
 import * as cardRepo from "../repos/cardRepo";
 import * as drawEventRepo from "../repos/drawEventRepo";
@@ -23,24 +23,26 @@ function weightedRandom(weights: number[]): number {
     return weights.length - 1;
 }
 
+// ─── Vote multiplier ──────────────────────────────────────────────────────────
+
+/**
+ * Maps netVotes to a multiplicative weight factor.
+ * - 0 votes → 1.0 (neutral, no change)
+ * - Positive: linear growth capped at (1 + VOTE_SCALE_CAP) = 2.0×
+ * - Negative: linear decay floored at DOWNVOTE_FLOOR = 0.25×
+ *
+ * The same VOTE_SCALE_RATIO governs both directions — the model is symmetric.
+ */
+function voteMultiplier(netVotes: number): number {
+    if (netVotes > 0) return 1 + Math.min(netVotes * VOTE_SCALE_RATIO, VOTE_SCALE_CAP);
+    if (netVotes < 0) return Math.max(1 + netVotes * VOTE_SCALE_RATIO, DOWNVOTE_FLOOR);
+    return 1;
+}
+
 // ─── Weight calculator ────────────────────────────────────────────────────────
 
-function calculateWeight(entry: cardRepo.DrawPoolEntry, sessionId: string): number {
-    let weight = BASE_WEIGHT;
-
-    // Session-born cards get a draw boost
-    if (entry.createdInSessionId === sessionId) {
-        weight *= SESSION_CARD_BOOST;
-    }
-
-    // Vote modifier
-    if (entry.netVotes > 0) {
-        weight += Math.min(entry.netVotes * UPVOTE_BONUS, UPVOTE_BONUS_CAP);
-    } else if (entry.netVotes < 0) {
-        weight *= DOWNVOTE_MULTIPLIER;
-    }
-
-    return Math.max(weight, 0);
+function calculateWeight(entry: cardRepo.DrawPoolEntry): number {
+    return BASE_WEIGHT * voteMultiplier(entry.netVotes);
 }
 
 // ─── Game tag filter ──────────────────────────────────────────────────────────
@@ -115,26 +117,37 @@ export function pick(
 
     if (eligible.length === 0) return null;
 
-    // 4. Get set of already-drawn card IDs and exclude them entirely
+    // 4. Split into session-born bucket and global bucket, then select a bucket.
+    //    Session cards are guaranteed ~SESSION_BUCKET_RATIO (40%) of draws regardless
+    //    of how large the global pool is. Cards never repeat within a session.
     const drawnCardIds = drawEventRepo.getDrawnCardIds(sessionId);
-    let undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
 
-    if (undrawn.length === 0) {
-        if (process.env.NODE_ENV === "development") {
-            // Dev: all cards exhausted — reset draw history and start over
-            drawEventRepo.clearDrawEvents(sessionId);
-            undrawn = eligible;
-        } else {
-            return null;
-        }
+    const sessionUndrawn = eligible.filter(
+        (c) => c.createdInSessionId === sessionId && !drawnCardIds.has(c.cardId)
+    );
+    const otherUndrawn = eligible.filter(
+        (c) => c.createdInSessionId !== sessionId && !drawnCardIds.has(c.cardId)
+    );
+
+    let pool: cardRepo.DrawPoolEntry[];
+    if (sessionUndrawn.length === 0 && otherUndrawn.length === 0) {
+        return null;
+    } else if (sessionUndrawn.length === 0) {
+        pool = otherUndrawn;
+    } else if (otherUndrawn.length === 0) {
+        pool = sessionUndrawn;
+    } else if (Math.random() < SESSION_BUCKET_RATIO) {
+        pool = sessionUndrawn;
+    } else {
+        pool = otherUndrawn;
     }
 
-    // 5. Calculate weights
-    const weights = undrawn.map((entry) => calculateWeight(entry, sessionId));
+    // 5. Calculate weights within the chosen bucket
+    const weights = pool.map((entry) => calculateWeight(entry));
 
     // 6. Weighted random selection
     const idx = weightedRandom(weights);
-    const selected = undrawn[idx]!;
+    const selected = pool[idx]!;
 
     return { cardId: selected.cardId, cardVersionId: selected.cardVersionId };
 }
