@@ -1,4 +1,5 @@
 Clear refresh tokens? Which other tables grow infinitely?
+Are requirements "AND" or "OR"?
 
 ====
 

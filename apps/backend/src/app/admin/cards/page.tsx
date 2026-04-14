@@ -50,7 +50,8 @@ function cardMatchesFilters(card: Card, filters: FilterState): boolean {
     if (filters.active && card.active !== (filters.active === "true")) return false;
     if (filters.globalStatus === "global" && !card.isGlobal) return false;
     if (filters.globalStatus === "nominated" && !card.pendingGlobal) return false;
-    if (filters.globalStatus === "not_global" && (card.isGlobal || card.pendingGlobal)) return false;
+    if (filters.globalStatus === "not_global" && (card.isGlobal || card.pendingGlobal))
+        return false;
     if (
         filters.search &&
         !card.currentVersion.title.toLowerCase().includes(filters.search.toLowerCase())
@@ -467,9 +468,12 @@ function CardDrawer({
                 </Group>
                 {/* ── Reveal sound ──────────────────────────────────────────── */}
                 <Stack gap={4}>
-                    <Text size="sm" fw={500}>Reveal sound</Text>
+                    <Text size="sm" fw={500}>
+                        Reveal sound
+                    </Text>
                     <Text size="xs" c="dimmed">
-                        Optional MP3 played instead of the default cymbal. Max 1 MB / 10 s. Upload from the mobile editor or upload here.
+                        Optional MP3 played instead of the default cymbal. Max 1 MB / 10 s. Upload
+                        from the mobile editor or upload here.
                     </Text>
                     <input
                         ref={soundInputRef}
@@ -483,12 +487,18 @@ function CardDrawer({
                             try {
                                 const form = new FormData();
                                 form.append("file", file);
-                                const res = await adminFetch("/api/media", { method: "POST", body: form });
+                                const res = await adminFetch("/api/media", {
+                                    method: "POST",
+                                    body: form,
+                                });
                                 const data = await res.json();
                                 if (data.ok) {
                                     setEditSoundId(data.data.mediaId as string);
                                 } else {
-                                    notifications.show({ message: data.error?.message ?? "Upload failed", color: "red" });
+                                    notifications.show({
+                                        message: data.error?.message ?? "Upload failed",
+                                        color: "red",
+                                    });
                                 }
                             } finally {
                                 setSoundUploading(false);
@@ -797,12 +807,7 @@ function CardDrawer({
                     <Button size="xs" variant="outline" onClick={startEdit}>
                         Edit
                     </Button>
-                    <Button
-                        size="xs"
-                        variant="outline"
-                        color="teal"
-                        onClick={onAnalyzeWithAI}
-                    >
+                    <Button size="xs" variant="outline" color="teal" onClick={onAnalyzeWithAI}>
                         Analyze with AI
                     </Button>
                 </Group>
@@ -1248,7 +1253,10 @@ export default function CardsPage() {
                             disabled={selectedIds.size === 0}
                             onClick={() => setBulkAnalysisOpen(true)}
                         >
-                            Analyze{selectedIds.size > 0 ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}` : ""}
+                            Analyze
+                            {selectedIds.size > 0
+                                ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`
+                                : ""}
                         </Button>
                     </Group>
                 </Group>
