@@ -15,6 +15,9 @@ export const ADMIN_SCOPE = "admin";
 /** Canonical aspect ratio for the card image slot. */
 export const CARD_IMAGE_ASPECT_RATIO = { width: 16, height: 9 } as const;
 
+/** Canonical aspect ratio for the full card face. */
+export const CARD_ASPECT_RATIO = { width: 412, height: 581 } as const;
+
 // ─── Card draw weight multipliers ────────────────────────────────────────────
 
 export const BASE_WEIGHT = 1.0;

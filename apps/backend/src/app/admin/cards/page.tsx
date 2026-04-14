@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
     Title,
-    Table,
     Badge,
     Switch,
     TextInput,
@@ -23,16 +22,16 @@ import {
     Tooltip,
     Slider,
     Box,
-    Checkbox,
     ActionIcon,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useSessionStorage } from "@mantine/hooks";
-import { useInView } from "react-intersection-observer";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
 import type { Card, CardVersion } from "@chance/core";
 import { BulkAnalysisModal } from "./BulkAnalysisModal";
 import { CardStatsDashboard } from "./CardStatsDashboard";
+import { CardTable } from "./CardTable";
+import { CardPreviewGrid } from "./CardPreviewGrid";
 import { DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -86,37 +85,8 @@ interface ElementOption {
     title: string;
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
 function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString();
-}
-
-// ─── Lazy thumbnail ────────────────────────────────────────────────────────────
-
-function LazyThumbnail({ imageId, apiBaseUrl }: { imageId: string; apiBaseUrl: string }) {
-    const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
-    return (
-        <div
-            ref={ref}
-            style={{
-                width: 28,
-                height: 28,
-                flexShrink: 0,
-                borderRadius: 3,
-                overflow: "hidden",
-                background: "var(--mantine-color-dark-5)",
-            }}
-        >
-            {inView && (
-                <img
-                    src={`${apiBaseUrl}/api/media/${imageId}`}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                />
-            )}
-        </div>
-    );
 }
 
 // ─── Card Detail Drawer ────────────────────────────────────────────────────────
@@ -968,6 +938,7 @@ export default function CardsPage() {
         spiceLevel: "",
     });
     const [filterGames, setFilterGames] = useState<GameOption[]>([]);
+    const [viewMode, setViewMode] = useState<"table" | "grid">("table");
     const [selected, setSelected] = useState<Card | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
@@ -1059,143 +1030,6 @@ export default function CardsPage() {
         setSelected(cardMatchesFilters(updated, filters) ? updated : null);
     }
 
-    const rows = cards.map((card) => (
-        <Table.Tr
-            key={card.id}
-            style={{ cursor: "pointer" }}
-            bg={selected?.id === card.id ? "var(--mantine-color-dark-6)" : undefined}
-            onClick={() => setSelected(card)}
-        >
-            <Table.Td onClick={(e) => e.stopPropagation()}>
-                <Tooltip
-                    label="Maximum 20 cards selected"
-                    disabled={selectedIds.has(card.id) || selectedIds.size < 20}
-                    withArrow
-                >
-                    <Checkbox
-                        checked={selectedIds.has(card.id)}
-                        disabled={!selectedIds.has(card.id) && selectedIds.size >= 20}
-                        onChange={(e) => {
-                            const next = new Set(selectedIds);
-                            if (e.currentTarget.checked) next.add(card.id);
-                            else next.delete(card.id);
-                            setSelectedIds(next);
-                        }}
-                    />
-                </Tooltip>
-            </Table.Td>
-            <Table.Td>
-                {card.currentVersion.imageId ? (
-                    <LazyThumbnail imageId={card.currentVersion.imageId} apiBaseUrl={apiBaseUrl} />
-                ) : (
-                    <div style={{ width: 28, height: 28 }} />
-                )}
-            </Table.Td>
-            <Table.Td>
-                <Text size="sm" truncate maw={280}>
-                    {card.currentVersion.title}
-                </Text>
-            </Table.Td>
-            <Table.Td>
-                <Badge size="xs" color={card.cardType === "reparations" ? "red" : "blue"}>
-                    {card.cardType}
-                </Badge>
-            </Table.Td>
-            <Table.Td onClick={(e) => e.stopPropagation()}>
-                <Switch
-                    checked={card.isGlobal}
-                    size="xs"
-                    disabled={isPending}
-                    onChange={() => toggleGlobal(card)}
-                />
-            </Table.Td>
-            <Table.Td>
-                <Group gap={4} wrap="nowrap">
-                    {card.currentVersion.isGameChanger && (
-                        <Badge size="xs" color="yellow">
-                            game changer
-                        </Badge>
-                    )}
-                    {card.pendingGlobal && (
-                        <Badge size="xs" color="orange">
-                            nominated
-                        </Badge>
-                    )}
-                    {analyzedCardIds.has(card.id) &&
-                        (acceptedCardIds.has(card.id) ? (
-                            <Tooltip label="AI changes applied" withArrow>
-                                <Badge size="xs" color="green">
-                                    AI ✓
-                                </Badge>
-                            </Tooltip>
-                        ) : dismissedCardIds.has(card.id) ? (
-                            <Tooltip label="AI changes not applied" withArrow>
-                                <Badge size="xs" color="gray" variant="outline">
-                                    AI ✗
-                                </Badge>
-                            </Tooltip>
-                        ) : noChangeCardIds.has(card.id) ? (
-                            <Tooltip label="AI found no changes needed" withArrow>
-                                <Badge size="xs" color="teal" variant="light">
-                                    AI ✓
-                                </Badge>
-                            </Tooltip>
-                        ) : (
-                            <Tooltip label="AI analysis run — decision pending" withArrow>
-                                <Badge size="xs" color="yellow" variant="light">
-                                    AI
-                                </Badge>
-                            </Tooltip>
-                        ))}
-                </Group>
-            </Table.Td>
-            <Table.Td>
-                <Group gap={4} wrap="nowrap">
-                    {card.currentVersion.drinkingLevel > 0 && (
-                        <Text size="xs" c="dimmed">
-                            🍺{card.currentVersion.drinkingLevel}
-                        </Text>
-                    )}
-                    {card.currentVersion.spiceLevel > 0 && (
-                        <Text size="xs" c="dimmed">
-                            🌶️{card.currentVersion.spiceLevel}
-                        </Text>
-                    )}
-                </Group>
-            </Table.Td>
-            <Table.Td>
-                <Badge size="xs" color={card.active ? "green" : "gray"} variant="dot">
-                    {card.active ? "active" : "inactive"}
-                </Badge>
-            </Table.Td>
-            <Table.Td>
-                {card.currentVersion.gameTags.length > 0 ? (
-                    <Group gap={4} wrap="wrap" maw={160}>
-                        {card.currentVersion.gameTags.map((g) => (
-                            <Badge key={g.id} size="xs" variant="outline" color="teal">
-                                {g.name}
-                            </Badge>
-                        ))}
-                    </Group>
-                ) : (
-                    <Text size="xs" c="dimmed" fs="italic">
-                        all
-                    </Text>
-                )}
-            </Table.Td>
-            <Table.Td>
-                <Text size="xs" c="dimmed">
-                    {card.ownerDisplayName}
-                </Text>
-            </Table.Td>
-            <Table.Td>
-                <Text size="xs" c="dimmed">
-                    {formatDate(card.createdAt)}
-                </Text>
-            </Table.Td>
-        </Table.Tr>
-    ));
-
     return (
         <>
             <Stack gap="md">
@@ -1282,48 +1116,63 @@ export default function CardsPage() {
                         clearable
                         w={120}
                     />
+                    <SegmentedControl
+                        value={viewMode}
+                        onChange={(v) => setViewMode(v as "table" | "grid")}
+                        data={[
+                            { label: "Table", value: "table" },
+                            { label: "Grid", value: "grid" },
+                        ]}
+                        size="xs"
+                    />
                 </Group>
 
-                <Group
-                    justify="space-between"
-                    px="sm"
-                    py="xs"
-                    style={{
-                        background: "var(--mantine-color-dark-7)",
-                        borderRadius: 6,
-                    }}
-                >
-                    <Group gap="sm">
-                        <Text size="sm" fw={500} c={selectedIds.size === 0 ? "dimmed" : undefined}>
-                            {selectedIds.size} selected
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            (max 20)
-                        </Text>
+                {viewMode === "table" && (
+                    <Group
+                        justify="space-between"
+                        px="sm"
+                        py="xs"
+                        style={{
+                            background: "var(--mantine-color-dark-7)",
+                            borderRadius: 6,
+                        }}
+                    >
+                        <Group gap="sm">
+                            <Text
+                                size="sm"
+                                fw={500}
+                                c={selectedIds.size === 0 ? "dimmed" : undefined}
+                            >
+                                {selectedIds.size} selected
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                                (max 20)
+                            </Text>
+                        </Group>
+                        <Group gap="sm">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                color="gray"
+                                disabled={selectedIds.size === 0}
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Clear
+                            </Button>
+                            <Button
+                                size="xs"
+                                color="teal"
+                                disabled={selectedIds.size === 0}
+                                onClick={() => setBulkAnalysisOpen(true)}
+                            >
+                                Analyze
+                                {selectedIds.size > 0
+                                    ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`
+                                    : ""}
+                            </Button>
+                        </Group>
                     </Group>
-                    <Group gap="sm">
-                        <Button
-                            variant="subtle"
-                            size="xs"
-                            color="gray"
-                            disabled={selectedIds.size === 0}
-                            onClick={() => setSelectedIds(new Set())}
-                        >
-                            Clear
-                        </Button>
-                        <Button
-                            size="xs"
-                            color="teal"
-                            disabled={selectedIds.size === 0}
-                            onClick={() => setBulkAnalysisOpen(true)}
-                        >
-                            Analyze
-                            {selectedIds.size > 0
-                                ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`
-                                : ""}
-                        </Button>
-                    </Group>
-                </Group>
+                )}
 
                 {loading ? (
                     <Center py="xl">
@@ -1331,31 +1180,30 @@ export default function CardsPage() {
                     </Center>
                 ) : (
                     <>
-                        <ScrollArea>
-                            <Table striped highlightOnHover withTableBorder>
-                                <Table.Thead>
-                                    <Table.Tr>
-                                        <Table.Th w={40} />
-                                        <Table.Th w={36} />
-                                        <Table.Th>Title</Table.Th>
-                                        <Table.Th>Type</Table.Th>
-                                        <Table.Th>Global</Table.Th>
-                                        <Table.Th>Flags</Table.Th>
-                                        <Table.Th>Levels</Table.Th>
-                                        <Table.Th>Status</Table.Th>
-                                        <Table.Th>Games</Table.Th>
-                                        <Table.Th>Owner</Table.Th>
-                                        <Table.Th>Created</Table.Th>
-                                    </Table.Tr>
-                                </Table.Thead>
-                                <Table.Tbody>{rows}</Table.Tbody>
-                            </Table>
-                            <Text size="xs" c="dimmed" mt="xs">
-                                {cards.length !== allCards.length
-                                    ? `${cards.length} of ${allCards.length} cards`
-                                    : `${allCards.length} cards`}
-                            </Text>
-                        </ScrollArea>
+                        {viewMode === "table" ? (
+                            <CardTable
+                                cards={cards}
+                                totalCount={allCards.length}
+                                selectedCardId={selected?.id ?? null}
+                                selectedIds={selectedIds}
+                                isPending={isPending}
+                                apiBaseUrl={apiBaseUrl}
+                                analyzedCardIds={analyzedCardIds}
+                                acceptedCardIds={acceptedCardIds}
+                                dismissedCardIds={dismissedCardIds}
+                                noChangeCardIds={noChangeCardIds}
+                                onCardClick={setSelected}
+                                onSelectedIdsChange={setSelectedIds}
+                                onToggleGlobal={toggleGlobal}
+                            />
+                        ) : (
+                            <CardPreviewGrid
+                                cards={cards}
+                                selectedCardId={selected?.id ?? null}
+                                apiBaseUrl={apiBaseUrl}
+                                onCardClick={setSelected}
+                            />
+                        )}
                         <CardStatsDashboard cards={cards} />
                     </>
                 )}

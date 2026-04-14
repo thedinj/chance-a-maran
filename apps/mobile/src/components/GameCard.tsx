@@ -3,11 +3,9 @@ import { apiClient } from "../lib/api";
 import type { Card, CardVersion } from "../lib/api";
 import { useSession } from "../session/useSession";
 import { SCROLLBAR_CSS, SCROLLBAR_CLASS } from "../lib/scrollbars";
-import { CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
+import { CARD_ASPECT_RATIO, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ── CardBack ──────────────────────────────────────────────────────────────────
-// Static card back face. Size the container; this fills it at 412:581 aspect ratio (or 433:609 for reparations cards).
-
 interface CardBackProps {
     card: Card;
     cardVersion: CardVersion;
@@ -15,9 +13,7 @@ interface CardBackProps {
 
 export function CardBack({ card, cardVersion }: CardBackProps): React.JSX.Element {
     const isReparations = card.cardType === "reparations";
-    const imageUrl = cardVersion.imageId
-        ? apiClient.resolveMediaUrl(cardVersion.imageId)
-        : null;
+    const imageUrl = cardVersion.imageId ? apiClient.resolveMediaUrl(cardVersion.imageId) : null;
 
     return (
         <div
@@ -32,10 +28,46 @@ export function CardBack({ card, cardVersion }: CardBackProps): React.JSX.Elemen
                     ...(isReparations ? styles.revealBackFrameReparations : undefined),
                 }}
             />
-            <span style={{ ...styles.cornerDiamond, top: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, top: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
-            <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
+            <span
+                style={{
+                    ...styles.cornerDiamond,
+                    top: "2.9cqi",
+                    left: "2.9cqi",
+                    fontSize: "3.9cqi",
+                }}
+            >
+                ◆
+            </span>
+            <span
+                style={{
+                    ...styles.cornerDiamond,
+                    top: "2.9cqi",
+                    right: "2.9cqi",
+                    fontSize: "3.9cqi",
+                }}
+            >
+                ◆
+            </span>
+            <span
+                style={{
+                    ...styles.cornerDiamond,
+                    bottom: "2.9cqi",
+                    left: "2.9cqi",
+                    fontSize: "3.9cqi",
+                }}
+            >
+                ◆
+            </span>
+            <span
+                style={{
+                    ...styles.cornerDiamond,
+                    bottom: "2.9cqi",
+                    right: "2.9cqi",
+                    fontSize: "3.9cqi",
+                }}
+            >
+                ◆
+            </span>
             <div style={styles.revealBackLogo}>C</div>
             <p style={styles.revealBackSub}>CHANCE</p>
             {imageUrl && (
@@ -109,7 +141,6 @@ export function CardFront({
         isDrawer &&
         !descrRevealed;
 
-
     function handleReveal() {
         setDescrRevealed(true);
         onReveal?.();
@@ -136,12 +167,44 @@ export function CardFront({
                         ...(isReparations ? styles.revealFrontTopRuleReparations : undefined),
                     }}
                 />
-                <span style={{ ...styles.cornerDiamond, top: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, top: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>◆</span>
-                <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", left: "2.9cqi", fontSize: "3.9cqi" }}>
+                <span
+                    style={{
+                        ...styles.cornerDiamond,
+                        top: "2.9cqi",
+                        left: "2.9cqi",
+                        fontSize: "3.9cqi",
+                    }}
+                >
                     ◆
                 </span>
-                <span style={{ ...styles.cornerDiamond, bottom: "2.9cqi", right: "2.9cqi", fontSize: "3.9cqi" }}>
+                <span
+                    style={{
+                        ...styles.cornerDiamond,
+                        top: "2.9cqi",
+                        right: "2.9cqi",
+                        fontSize: "3.9cqi",
+                    }}
+                >
+                    ◆
+                </span>
+                <span
+                    style={{
+                        ...styles.cornerDiamond,
+                        bottom: "2.9cqi",
+                        left: "2.9cqi",
+                        fontSize: "3.9cqi",
+                    }}
+                >
+                    ◆
+                </span>
+                <span
+                    style={{
+                        ...styles.cornerDiamond,
+                        bottom: "2.9cqi",
+                        right: "2.9cqi",
+                        fontSize: "3.9cqi",
+                    }}
+                >
                     ◆
                 </span>
 
@@ -158,9 +221,7 @@ export function CardFront({
                         <div
                             style={{
                                 ...styles.revealImageSlot,
-                                ...(isReparations
-                                    ? styles.revealImageSlotReparations
-                                    : undefined),
+                                ...(isReparations ? styles.revealImageSlotReparations : undefined),
                             }}
                         >
                             {cv.imageId ? (
@@ -198,8 +259,8 @@ export function CardFront({
                                 >
                                     {cv.description}
                                 </p>
-                                {cv.hasHiddenInstructions && (
-                                    descriptionShared ? (
+                                {cv.hasHiddenInstructions &&
+                                    (descriptionShared ? (
                                         // Shared — everyone sees the text
                                         <div style={styles.hiddenInstrSection}>
                                             <HiddenInstrDivider />
@@ -217,15 +278,11 @@ export function CardFront({
                                         <div style={styles.hiddenDescArea}>
                                             <span style={styles.hiddenDescLabel}>HIDDEN</span>
                                         </div>
-                                    )
-                                )}
+                                    ))}
                             </>
                         ) : (
                             // ── Detail view: single scrollable container ──
-                            <div
-                                style={styles.revealScrollArea}
-                                className={SCROLLBAR_CLASS}
-                            >
+                            <div style={styles.revealScrollArea} className={SCROLLBAR_CLASS}>
                                 <p style={styles.revealDescription}>{cv.description}</p>
 
                                 {cv.hasHiddenInstructions && (
@@ -417,7 +474,7 @@ const styles: Record<string, React.CSSProperties> = {
     } as React.CSSProperties,
     revealBackFaceReparations: {
         backgroundImage: "url(/img/reparations.png)",
-        aspectRatio: "433 / 609",
+        aspectRatio: `${CARD_ASPECT_RATIO.width} / ${CARD_ASPECT_RATIO.height}`,
         boxShadow:
             "inset 0 0 0 1px color-mix(in srgb, var(--color-accent-reparations) 68%, var(--color-border) 32%), 0 28px 64px -28px color-mix(in srgb, var(--color-accent-reparations) 58%, transparent)",
     },
@@ -705,5 +762,4 @@ const styles: Record<string, React.CSSProperties> = {
         backfaceVisibility: "hidden",
         WebkitBackfaceVisibility: "hidden",
     },
-
 };
