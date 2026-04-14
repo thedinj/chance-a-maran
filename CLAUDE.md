@@ -203,6 +203,8 @@ onIonInput={(e) => register("field").onChange({ target: { value: String(e.detail
 
 `CardEditor` (`src/components/CardEditor.tsx`) is `forwardRef` exposing `{ submitForm(), reset() }`. Manages `imagePreview` + `pendingImageId` for server-side cleanup on image replace. Uses Capacitor Camera + `browser-image-compression` for image capture.
 
+**Card editability rules (MyCards page):** A card is read-only when `card.isGlobal === true` — only admins can edit global cards. The `MyCards` page surfaces this at two levels: a blue `GLOBAL` badge on the list tile, and inside the modal a banner + all form inputs disabled (`disabled={card.isGlobal || isPending}`) + no "Save changes" button. Inactive cards remain editable. `card.active` does not affect editability.
+
 ### ApiClient (`src/lib/api/client.ts`)
 
 Singleton exported from `src/lib/api/index.ts`. 15s timeout via `AbortController`. All non-`/api/auth/` and non-`/api/config` requests wait on `authReadyPromise` (resolved by `AuthProvider` after hydration). Auto-refreshes on `401 + X-Token-Status: invalid`, replays once; concurrent refreshes are deduplicated. Returns `ApiResult<T>` — never throws.
@@ -230,6 +232,121 @@ Base URL: `VITE_API_URL` env var → `http://localhost:3000` in DEV → `""` (sa
 **Draw modes:** `"live"` (normal), `"standard"`, `"game-changer"` (intro sound + "GAME CHANGER" pre-flip label + 3 s flip), `"reparations"` (separate drama: intro sound + 5 s hold + 2 s flip). `DevDrawPanel` (dev-only) forces draw mode without hitting the API.
 
 **`descriptionShared`:** drawing player can reveal their hidden card description to all others via `POST /api/draw-events/:id/share-description`. Reflected in `DrawEvent.descriptionShared`.
+
+## Browser Testing with openbrowser
+
+Use the `mcp__plugin_openbrowser_openbrowser__execute_code` tool. Always extract functions from `__ns__` at the top of each code block — they don't persist between calls:
+
+```python
+navigate = __ns__['navigate']
+click = __ns__['click']
+input_text = __ns__['input_text']
+wait = __ns__['wait']
+evaluate = __ns__['evaluate']
+browser = __ns__['browser']
+send_keys = __ns__['send_keys']
+scroll = __ns__['scroll']
+```
+
+**Always run against the local dev server** (`http://localhost:8100`), never production.
+
+### Logging In
+
+Standard form automation doesn't work with the login page — Ionic shadow DOM prevents `input_text` and `send_keys` from reaching React Hook Form. Instead, invoke the `login` function directly via the React fiber:
+
+```python
+result = await evaluate("""
+    (async () => {
+        function findFiberByType(node, name, depth=0) {
+            if (!node || depth > 200) return null;
+            const n = node.type?.displayName || node.type?.name || '';
+            if (n.includes(name)) return node;
+            let r = null;
+            if (node.child) r = findFiberByType(node.child, name, depth+1);
+            if (!r && node.sibling) r = findFiberByType(node.sibling, name, depth+1);
+            return r;
+        }
+        const container = document.getElementById('root');
+        const fiberKey = Object.keys(container).find(k => k.startsWith('__reactContainer'));
+        const fiber = container[fiberKey];
+        const authFiber = findFiberByType(fiber, 'Auth');
+        // Hook index 3, memoizedState[0] is the login fn (useCallback)
+        let hook = authFiber.memoizedState;
+        for (let i = 0; i < 3; i++) hook = hook.next;
+        const loginFn = hook.memoizedState[0];
+        return await loginFn('EMAIL', 'PASSWORD');
+    })()
+""")
+```
+
+After login, navigate directly to the target route — no redirect happens automatically:
+```python
+await navigate("http://localhost:8100/cards")
+await wait(3)
+```
+
+### Interacting with Forms
+
+**Ionic `IonInput` elements** (used on login, register, etc.): standard `input_text` and `send_keys` don't register with RHF. Use the fiber-based `login` call above instead of trying to type into these forms.
+
+**Plain `<input>` elements** (used in `CardEditor` and most non-Ionic forms): `send_keys` fires key events but NOT the `input` event React's RHF watches. Use the native value setter trick to trigger React's onChange:
+
+```python
+result = await evaluate("""
+    function findByPlaceholder(placeholder) {
+        function walk(root) {
+            if (!root) return null;
+            if (root.tagName === 'INPUT' && root.placeholder === placeholder) return root;
+            if (root.shadowRoot) { const f = walk(root.shadowRoot); if (f) return f; }
+            for (const c of (root.children || [])) { const f = walk(c); if (f) return f; }
+            return null;
+        }
+        return walk(document.body);
+    }
+    const inp = findByPlaceholder('Title');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, 'New value');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    return inp.value;
+""")
+```
+
+### Scrolling in Modals
+
+Ionic modals have an inner scroll container. Find its index in `browser.get_state_as_text()` — it appears as `|SCROLL[NNNN]<div />`. Pass that index as the third argument to `scroll()`:
+
+```python
+state = await browser.get_state_as_text()
+# Look for: SCROLL[2339]<div /> (X pages above, Y pages below)
+await scroll(True, 5, 2339)  # scroll down 5 pages inside modal
+```
+
+### Intercepting Network Requests
+
+To verify what API calls fire on a user action:
+
+```python
+await evaluate("""
+    const orig = window.fetch;
+    window.__fetchLog__ = [];
+    window.fetch = async function(...args) {
+        const url = String(args[0]).substring(0, 100);
+        const method = (args[1] || {}).method || 'GET';
+        const resp = await orig.apply(this, args);
+        const clone = resp.clone();
+        const text = await clone.text();
+        window.__fetchLog__.push({ url, method, status: resp.status, body: text.substring(0, 300) });
+        return resp;
+    };
+""")
+# ... perform the action ...
+result = await evaluate("return JSON.stringify(window.__fetchLog__ || [])")
+print(result)
+```
+
+### Global Cards
+
+Cards with `isGlobal = true` return 403 on PATCH for non-admin users. When testing card save on `/cards`, pick an INACTIVE or non-global card. The MyCards UI surfaces this at the list level (blue GLOBAL badge on tiles) and modal level (banner + disabled form + no Save button), so only editable cards ever reach the save flow.
 
 ## API Design Conventions
 

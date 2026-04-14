@@ -2,6 +2,7 @@ import { IonButton, IonContent, IonFooter, IonModal, IonPage, useIonViewWillEnte
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { AppDialog } from "../components/AppDialog";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
 import { CardReveal } from "../components/CardReveal";
@@ -44,6 +45,9 @@ export default function MyCards() {
     const [showVersionHistory, setShowVersionHistory] = useState(false);
     const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
     const [editError, setEditError] = useState<string | null>(null);
+    const [showNominateConfirm, setShowNominateConfirm] = useState(false);
+    const [showDeactivateBlocked, setShowDeactivateBlocked] = useState(false);
+    const [nominationError, setNominationError] = useState<string | null>(null);
 
     // ── New card modal state ──────────────────────────────────────────────────
     const newModalRef = useRef<HTMLIonModalElement>(null);
@@ -109,6 +113,7 @@ export default function MyCards() {
     function openCard(card: Card) {
         setSelectedCard(card);
         setEditError(null);
+        setNominationError(null);
         setShowVersionHistory(false);
         setVersions([]);
         modalRef.current?.present();
@@ -151,6 +156,10 @@ export default function MyCards() {
 
     function handleDeactivate() {
         if (!selectedCard) return;
+        if (selectedCard.pendingGlobal) {
+            setShowDeactivateBlocked(true);
+            return;
+        }
         startTransition(async () => {
             const result = await apiClient.deactivateCard(selectedCard.id);
             if (result.ok) {
@@ -175,6 +184,36 @@ export default function MyCards() {
                 closeModal();
             } else {
                 setEditError(result.error.message);
+            }
+        });
+    }
+
+    function handleNominate() {
+        if (!selectedCard) return;
+        startTransition(async () => {
+            const result = await apiClient.nominateCard(selectedCard.id);
+            if (result.ok) {
+                const updated = result.data;
+                setMyCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+                setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+                setSelectedCard(updated);
+            } else {
+                setNominationError(result.error.message);
+            }
+        });
+    }
+
+    function handleRetractNomination() {
+        if (!selectedCard) return;
+        startTransition(async () => {
+            const result = await apiClient.unnominateCard(selectedCard.id);
+            if (result.ok) {
+                const updated = result.data;
+                setMyCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+                setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+                setSelectedCard(updated);
+            } else {
+                setNominationError(result.error.message);
             }
         });
     }
@@ -289,6 +328,12 @@ export default function MyCards() {
                 <div style={styles.tileHeader}>
                     <span style={styles.tileTitle}>{v.title}</span>
                     <div style={styles.tileBadges}>
+                        {card.isGlobal && (
+                            <span style={styles.badgeGlobal}>GLOBAL</span>
+                        )}
+                        {card.pendingGlobal && !card.isGlobal && (
+                            <span style={styles.badgePending}>PENDING</span>
+                        )}
                         {v.versionNumber > 1 && (
                             <span style={styles.badgeVersion}>V{v.versionNumber}</span>
                         )}
@@ -497,6 +542,12 @@ export default function MyCards() {
                                         V{selectedCard.currentVersion.versionNumber}
                                     </span>
                                 )}
+                                {selectedCard.isGlobal && (
+                                    <span style={styles.badgeGlobal}>GLOBAL</span>
+                                )}
+                                {selectedCard.pendingGlobal && !selectedCard.isGlobal && (
+                                    <span style={styles.badgePending}>PENDING</span>
+                                )}
                             </div>
 
                             {/* ── Authorship ───────────────────────────────── */}
@@ -510,6 +561,12 @@ export default function MyCards() {
                                     </span>
                                 )}
                             </div>
+
+                            {selectedCard.isGlobal && (
+                                <div style={styles.readOnlyBanner}>
+                                    This card is in the global pool and can only be edited by admins.
+                                </div>
+                            )}
 
                             {/* ── Card form ─────────────────────────────────── */}
                             <CardEditor
@@ -541,6 +598,7 @@ export default function MyCards() {
                                 }}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}
+                                readOnly={selectedCard.isGlobal}
                                 disabled={isPending}
                             />
 
@@ -612,6 +670,39 @@ export default function MyCards() {
                             </div>
 
 
+                            {!selectedCard.isGlobal && selectedCard.active && (
+                                <>
+                                    <div style={styles.divider} />
+                                    <div style={styles.modalSection}>
+                                        {selectedCard.pendingGlobal ? (
+                                            <>
+                                                <p style={styles.nominationStatus}>
+                                                    Submitted for global pool review. An admin will approve or decline.
+                                                </p>
+                                                <button
+                                                    style={styles.retractLink}
+                                                    onClick={handleRetractNomination}
+                                                    disabled={isPending}
+                                                >
+                                                    Retract nomination
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                style={styles.nominateLink}
+                                                onClick={() => setShowNominateConfirm(true)}
+                                                disabled={isPending}
+                                            >
+                                                Submit for global pool →
+                                            </button>
+                                        )}
+                                        {nominationError && (
+                                            <p style={styles.errorInline}>{nominationError}</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
                             {editError && <p style={styles.errorInline}>{editError}</p>}
 
                             {/* Spacer so footer doesn't obscure last section */}
@@ -622,7 +713,7 @@ export default function MyCards() {
 
                 <IonFooter>
                     <div style={styles.modalFooter}>
-                        {selectedCard?.active && (
+                        {selectedCard?.active && !selectedCard?.isGlobal && (
                             <button
                                 style={styles.deactivateButton}
                                 onClick={handleDeactivate}
@@ -640,16 +731,18 @@ export default function MyCards() {
                                 Reactivate card
                             </button>
                         )}
-                        <IonButton
-                            expand="block"
-                            style={styles.saveButton as React.CSSProperties}
-                            onClick={() => editorRef.current?.submitForm()}
-                            disabled={isPending}
-                        >
-                            Save changes
-                        </IonButton>
+                        {!selectedCard?.isGlobal && (
+                            <IonButton
+                                expand="block"
+                                style={styles.saveButton as React.CSSProperties}
+                                onClick={() => editorRef.current?.submitForm()}
+                                disabled={isPending}
+                            >
+                                Save changes
+                            </IonButton>
+                        )}
                         <button style={styles.cancelLink} onClick={closeModal} disabled={isPending}>
-                            Cancel
+                            {selectedCard?.isGlobal ? "Close" : "Cancel"}
                         </button>
                     </div>
                 </IonFooter>
@@ -724,6 +817,30 @@ export default function MyCards() {
                     card={newPreviewCard.card}
                     cardVersion={newPreviewCard.cardVersion}
                     onDismiss={() => setNewPreviewCard(null)}
+                />
+            )}
+
+            {showNominateConfirm && (
+                <AppDialog
+                    title="Submit for global pool?"
+                    message="If approved, this card will be available to all players. Global cards can no longer be edited once approved. You can retract this submission at any time before an admin reviews it."
+                    onDismiss={() => setShowNominateConfirm(false)}
+                    buttons={[
+                        { label: "Cancel", onClick: () => setShowNominateConfirm(false) },
+                        { label: "Submit", variant: "accent", onClick: () => { setShowNominateConfirm(false); handleNominate(); } },
+                    ]}
+                />
+            )}
+
+            {showDeactivateBlocked && (
+                <AppDialog
+                    title="Retract nomination first"
+                    message="This card is submitted for global pool review and cannot be deactivated while the nomination is pending. Retract the nomination to deactivate it."
+                    accent="danger"
+                    onDismiss={() => setShowDeactivateBlocked(false)}
+                    buttons={[
+                        { label: "OK", onClick: () => setShowDeactivateBlocked(false) },
+                    ]}
                 />
             )}
         </IonPage>
@@ -1036,6 +1153,59 @@ const styles: Record<string, React.CSSProperties> = {
         border: "1px solid var(--color-accent-amber)",
         padding: "1px var(--space-2)",
         flexShrink: 0,
+    },
+    badgeGlobal: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        color: "var(--color-accent-blue, #5b9bd5)",
+        border: "1px solid var(--color-accent-blue, #5b9bd5)",
+        padding: "1px var(--space-2)",
+        flexShrink: 0,
+    },
+    badgePending: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        color: "var(--color-accent-amber)",
+        border: "1px solid var(--color-accent-amber)",
+        padding: "1px var(--space-2)",
+        flexShrink: 0,
+    },
+    nominationStatus: {
+        margin: "0 0 8px",
+        fontSize: "13px",
+        color: "var(--color-text-secondary)",
+        lineHeight: "1.4",
+    },
+    nominateLink: {
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        fontSize: "14px",
+        color: "var(--color-accent-amber)",
+    },
+    retractLink: {
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        fontSize: "13px",
+        color: "var(--color-text-secondary)",
+        textDecoration: "underline",
+    },
+    readOnlyBanner: {
+        margin: "12px 0 4px",
+        padding: "10px 14px",
+        borderRadius: "8px",
+        background: "rgba(91, 155, 213, 0.08)",
+        border: "1px solid rgba(91, 155, 213, 0.3)",
+        color: "var(--color-accent-blue, #5b9bd5)",
+        fontSize: "13px",
+        lineHeight: "1.4",
     },
     // ── Modal ─────────────────────────────────────────────────────────────────
     modalRoot: {

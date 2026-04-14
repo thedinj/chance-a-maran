@@ -35,12 +35,14 @@ export interface CardEditorProps {
     onValidSubmit(data: SubmitCardRequest): Promise<string | null>;
     /** Parent's isPending from useTransition (e.g. during deactivate/reactivate). */
     disabled?: boolean;
+    /** True when the card is permanently locked (e.g. global). Hides empty/action-only UI; shows data-carrying fields as static. */
+    readOnly?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEditor(
-    { defaultValues, showCardTypeSelector = true, onValidSubmit, disabled = false },
+    { defaultValues, showCardTypeSelector = true, onValidSubmit, disabled = false, readOnly = false },
     ref
 ) {
     // ── RHF ───────────────────────────────────────────────────────────────────
@@ -60,7 +62,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             title: "",
             description: "",
             hiddenInstructions: null,
-            imageId: "",
+            imageId: null,
             imageYOffset: 0.5,
             soundId: null,
             drinkingLevel: 0,
@@ -113,7 +115,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    const isDisabled = disabled || isSaving;
+    const isDisabled = disabled || isSaving || readOnly;
 
     useEffect(() => {
         void apiClient.getGames().then((result) => {
@@ -232,7 +234,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             setPendingImageId(null);
         }
         setImagePreview(null);
-        setValue("imageId", "", { shouldValidate: true });
+        setValue("imageId", null, { shouldValidate: true });
     }
 
     // ── Sound handlers ────────────────────────────────────────────────────────
@@ -325,34 +327,38 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     name="hiddenInstructions"
                     control={control}
                     render={({ field }) => (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                            <div style={styles.toggleRow}>
-                                <div style={styles.toggleText}>
-                                    <span style={styles.toggleTitle}>Hidden instructions</span>
-                                    <span style={styles.toggleSub}>
-                                        Revealed only to the drawing player initially
-                                    </span>
+                        <>
+                            {(!readOnly || field.value !== null) && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                                    <div style={styles.toggleRow}>
+                                        <div style={styles.toggleText}>
+                                            <span style={styles.toggleTitle}>Hidden instructions</span>
+                                            <span style={styles.toggleSub}>
+                                                Revealed only to the drawing player initially
+                                            </span>
+                                        </div>
+                                        <button
+                                            style={field.value !== null ? styles.toggleOn : styles.toggleOff}
+                                            onClick={() => field.onChange(field.value !== null ? null : "")}
+                                            disabled={isDisabled}
+                                        >
+                                            {field.value !== null ? "ON" : "OFF"}
+                                        </button>
+                                    </div>
+                                    {field.value !== null && (
+                                        <textarea
+                                            style={styles.textArea}
+                                            placeholder="Hidden instructions text…"
+                                            maxLength={MAX_CARD_DESCRIPTION_LENGTH}
+                                            disabled={isDisabled}
+                                            rows={3}
+                                            value={field.value}
+                                            onChange={(e) => field.onChange(e.target.value || null)}
+                                        />
+                                    )}
                                 </div>
-                                <button
-                                    style={field.value !== null ? styles.toggleOn : styles.toggleOff}
-                                    onClick={() => field.onChange(field.value !== null ? null : "")}
-                                    disabled={isDisabled}
-                                >
-                                    {field.value !== null ? "ON" : "OFF"}
-                                </button>
-                            </div>
-                            {field.value !== null && (
-                                <textarea
-                                    style={styles.textArea}
-                                    placeholder="Hidden instructions text…"
-                                    maxLength={MAX_CARD_DESCRIPTION_LENGTH}
-                                    disabled={isDisabled}
-                                    rows={3}
-                                    value={field.value}
-                                    onChange={(e) => field.onChange(e.target.value || null)}
-                                />
                             )}
-                        </div>
+                        </>
                     )}
                 />
             </div>
@@ -384,41 +390,46 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                             />
                             <div style={styles.imageEditorOverlay} />
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                            <input
-                                type="range"
-                                min={0}
-                                max={1}
-                                step={0.01}
-                                value={imageYOffset}
-                                onChange={(e) =>
-                                    setValue("imageYOffset", parseFloat(e.target.value), {
-                                        shouldDirty: true,
-                                    })
-                                }
-                                style={{ flex: 1 }}
-                            />
-                            {imageUploading ? (
-                                <span style={styles.imageStatus}>Uploading…</span>
-                            ) : pendingImageId ? (
-                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
-                                    ✓ Ready
-                                </span>
-                            ) : (
-                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
-                                    ✓ Saved
-                                </span>
-                            )}
-                        </div>
-                        <button
-                            style={styles.imageClearBtn}
-                            onClick={handleRemoveImage}
-                            disabled={isDisabled}
-                        >
-                            Remove image
-                        </button>
+                        {!readOnly && (
+                            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={imageYOffset}
+                                    disabled={isDisabled}
+                                    onChange={(e) =>
+                                        setValue("imageYOffset", parseFloat(e.target.value), {
+                                            shouldDirty: true,
+                                        })
+                                    }
+                                    style={{ flex: 1 }}
+                                />
+                                {imageUploading ? (
+                                    <span style={styles.imageStatus}>Uploading…</span>
+                                ) : pendingImageId ? (
+                                    <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                        ✓ Ready
+                                    </span>
+                                ) : (
+                                    <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                        ✓ Saved
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                        {!readOnly && (
+                            <button
+                                style={styles.imageClearBtn}
+                                onClick={handleRemoveImage}
+                                disabled={isDisabled}
+                            >
+                                Remove image
+                            </button>
+                        )}
                     </div>
-                ) : (
+                ) : !readOnly ? (
                     <button
                         style={styles.toggleOff}
                         onClick={() => void handlePickImage()}
@@ -426,7 +437,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     >
                         Add image
                     </button>
-                )}
+                ) : null}
                 {errors.imageId && (
                     <p style={styles.fieldError}>{errors.imageId.message}</p>
                 )}
@@ -435,62 +446,68 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             <div style={styles.divider} />
 
             {/* ── Reveal sound ──────────────────────────────────────────────── */}
-            <div style={styles.section}>
-                <Controller
-                    name="soundId"
-                    control={control}
-                    render={({ field }) => (
-                        <>
-                            <p style={styles.sectionLabel}>REVEAL SOUND</p>
-                            {soundFileName ? (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <span style={styles.hint}>{soundFileName}</span>
-                                        {soundUploading ? (
-                                            <span style={styles.imageStatus}>Uploading…</span>
-                                        ) : field.value ? (
-                                            <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
-                                                ✓ Ready
-                                            </span>
-                                        ) : (
-                                            <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
-                                                ✓ Saved
-                                            </span>
+            {(!readOnly || soundFileName) && (
+                <div style={styles.section}>
+                    <Controller
+                        name="soundId"
+                        control={control}
+                        render={({ field }) => (
+                            <>
+                                <p style={styles.sectionLabel}>REVEAL SOUND</p>
+                                {soundFileName ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <span style={styles.hint}>{soundFileName}</span>
+                                            {soundUploading ? (
+                                                <span style={styles.imageStatus}>Uploading…</span>
+                                            ) : field.value ? (
+                                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                                    ✓ Ready
+                                                </span>
+                                            ) : (
+                                                <span style={{ ...styles.imageStatus, color: "var(--color-accent-primary)" }}>
+                                                    ✓ Saved
+                                                </span>
+                                            )}
+                                        </div>
+                                        {!readOnly && (
+                                            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                                                <button
+                                                    style={styles.toggleOff}
+                                                    onClick={() => void handlePickSound()}
+                                                    disabled={isDisabled || soundUploading}
+                                                >
+                                                    Replace
+                                                </button>
+                                                <button
+                                                    style={styles.imageClearBtn}
+                                                    onClick={handleRemoveSound}
+                                                    disabled={isDisabled}
+                                                >
+                                                    Remove sound
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
-                                    <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                        <button
-                                            style={styles.toggleOff}
-                                            onClick={() => void handlePickSound()}
-                                            disabled={isDisabled || soundUploading}
-                                        >
-                                            Replace
-                                        </button>
-                                        <button
-                                            style={styles.imageClearBtn}
-                                            onClick={handleRemoveSound}
-                                            disabled={isDisabled}
-                                        >
-                                            Remove sound
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <button
-                                    style={styles.toggleOff}
-                                    onClick={() => void handlePickSound()}
-                                    disabled={isDisabled || soundUploading}
-                                >
-                                    {soundUploading ? "Uploading…" : "Add reveal sound"}
-                                </button>
-                            )}
-                            <p style={styles.hint}>
-                                Optional MP3 played instead of the default cymbal when this card is revealed. Max 1 MB / 10 s.
-                            </p>
-                        </>
-                    )}
-                />
-            </div>
+                                ) : (
+                                    <button
+                                        style={styles.toggleOff}
+                                        onClick={() => void handlePickSound()}
+                                        disabled={isDisabled || soundUploading}
+                                    >
+                                        {soundUploading ? "Uploading…" : "Add reveal sound"}
+                                    </button>
+                                )}
+                                {!readOnly && (
+                                    <p style={styles.hint}>
+                                        Optional MP3 played instead of the default cymbal when this card is revealed. Max 1 MB / 10 s.
+                                    </p>
+                                )}
+                            </>
+                        )}
+                    />
+                </div>
+            )}
 
             <div style={styles.divider} />
 

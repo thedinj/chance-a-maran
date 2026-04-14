@@ -31,7 +31,9 @@
       "Bash(npx vite:*)",
       "Bash(npx tsx:*)",
       "Bash(bash --version)",
-      "Bash(wait)"
+      "Bash(wait)",
+      "mcp__plugin_openbrowser_openbrowser__execute_code",
+      "Bash(curl:*)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

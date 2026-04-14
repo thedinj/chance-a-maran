@@ -438,6 +438,14 @@ export class ApiClient {
         return this.request<Card>("PATCH", `/api/cards/${cardId}/reactivate`);
     }
 
+    nominateCard(cardId: string) {
+        return this.request<Card>("POST", `/api/cards/${cardId}/nominate`);
+    }
+
+    unnominateCard(cardId: string) {
+        return this.request<Card>("POST", `/api/cards/${cardId}/unnominate`);
+    }
+
     getCardVersions(cardId: string) {
         return this.request<CardVersion[]>("GET", `/api/cards/${cardId}/versions`);
     }
