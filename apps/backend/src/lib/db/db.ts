@@ -11,6 +11,7 @@ const dbPath = path.join(process.cwd(), "database.db");
 export const db =
     globalForDb.db ??
     new Database(dbPath, {
+        // eslint-disable-next-line no-console
         verbose: process.env.NODE_ENV === "development" ? console.log : undefined,
     });
 

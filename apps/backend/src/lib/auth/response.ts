@@ -29,6 +29,7 @@ export function ok<T>(data: T, status = 200): NextResponse {
 /** Catches AppErrors cleanly; logs and wraps anything else as 500. */
 export function handleError(err: unknown): NextResponse {
     if (err instanceof AppError) return fail(err);
+    // eslint-disable-next-line no-console
     console.error("[API error]", err);
     return fail(new InternalError());
 }

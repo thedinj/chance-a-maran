@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Import legacy card data from the original MySQL dump into the current SQLite schema.
  *

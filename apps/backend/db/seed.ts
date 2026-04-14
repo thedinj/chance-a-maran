@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { hash } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { config } from "dotenv";

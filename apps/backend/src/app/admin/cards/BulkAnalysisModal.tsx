@@ -520,7 +520,6 @@ export function BulkAnalysisModal({
     onClose,
     cards,
     onCardsChanged,
-    onCardUpdated,
     onAnalyzed,
     onNoChange,
     onAccepted,

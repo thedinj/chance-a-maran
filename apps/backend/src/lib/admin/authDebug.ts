@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Toggle to false to silence admin auth diagnostics in the browser console.
 export const ADMIN_AUTH_DEBUG = true;
 

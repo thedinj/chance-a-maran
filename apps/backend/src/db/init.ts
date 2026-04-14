@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { db } from "../lib/db/db";
 import { cleanupStaleTempFiles } from "../lib/media/tempMedia";
 
