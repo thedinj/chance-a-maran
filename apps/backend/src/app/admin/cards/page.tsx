@@ -847,7 +847,8 @@ function CardDrawer({
                             action(
                                 card.active
                                     ? `/api/cards/${card.id}/deactivate`
-                                    : `/api/cards/${card.id}/reactivate`
+                                    : `/api/cards/${card.id}/reactivate`,
+                                "PATCH"
                             )
                         }
                     >
