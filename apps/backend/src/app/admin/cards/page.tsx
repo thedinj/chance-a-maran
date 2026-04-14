@@ -165,6 +165,9 @@ function CardDrawer({
     const [editSoundId, setEditSoundId] = useState<string | null>(null);
     const [soundUploading, setSoundUploading] = useState(false);
     const soundInputRef = useRef<HTMLInputElement>(null);
+    const [editImageId, setEditImageId] = useState<string | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const cv = card.currentVersion;
 
     const [editImageYOffset, setEditImageYOffset] = useState(cv.imageYOffset ?? 0.5);
@@ -197,6 +200,7 @@ function CardDrawer({
         setEditGameTags(cv.gameTags.map((g) => g.id));
         setEditRequirements(cv.requirements.map((r) => r.id));
         setEditImageYOffset(cv.imageYOffset ?? 0.5);
+        setEditImageId(cv.imageId ?? null);
         setEditSoundId(cv.soundId ?? null);
         void loadEditData();
         setEditing(true);
@@ -275,7 +279,7 @@ function CardDrawer({
                     title: editTitle,
                     description: editDescription,
                     hiddenInstructions: editHidden || null,
-                    imageId: cv.imageId ?? null,
+                    imageId: editImageId,
                     imageYOffset: editImageYOffset,
                     soundId: editSoundId,
                     drinkingLevel: Number(editDrinking),
@@ -544,53 +548,113 @@ function CardDrawer({
                     )}
                 </Stack>
 
-                {cv.imageId && (
-                    <Stack gap={4}>
-                        <Text size="sm" fw={500}>
-                            Image position
-                        </Text>
-                        <Box
-                            style={{
-                                width: "100%",
-                                aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
-                                overflow: "hidden",
-                                borderRadius: 4,
-                            }}
-                        >
-                            <img
-                                src={`${apiBaseUrl}/api/media/${cv.imageId}`}
-                                alt={cv.title}
-                                style={
-                                    {
-                                        width: "100%",
-                                        height: "100%",
-                                        objectFit: "cover",
-                                        objectPosition: `center ${editImageYOffset * 100}%`,
-                                        display: "block",
-                                        pointerEvents: "none",
-                                        draggable: false,
-                                    } as React.CSSProperties
+                <Stack gap={4}>
+                    <Text size="sm" fw={500}>
+                        Image
+                    </Text>
+                    <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif"
+                        style={{ display: "none" }}
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setImageUploading(true);
+                            try {
+                                const form = new FormData();
+                                form.append("file", file);
+                                const res = await adminFetch("/api/media", {
+                                    method: "POST",
+                                    body: form,
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                    setEditImageId(data.data.mediaId as string);
+                                } else {
+                                    notifications.show({
+                                        message: data.error?.message ?? "Upload failed",
+                                        color: "red",
+                                    });
                                 }
+                            } finally {
+                                setImageUploading(false);
+                                e.target.value = "";
+                            }
+                        }}
+                    />
+                    {editImageId ? (
+                        <>
+                            <Box
+                                style={{
+                                    width: "100%",
+                                    aspectRatio: `${CARD_IMAGE_ASPECT_RATIO.width} / ${CARD_IMAGE_ASPECT_RATIO.height}`,
+                                    overflow: "hidden",
+                                    borderRadius: 4,
+                                }}
+                            >
+                                <img
+                                    src={`${apiBaseUrl}/api/media/${editImageId}`}
+                                    alt={cv.title}
+                                    style={
+                                        {
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "cover",
+                                            objectPosition: `center ${editImageYOffset * 100}%`,
+                                            display: "block",
+                                            pointerEvents: "none",
+                                            draggable: false,
+                                        } as React.CSSProperties
+                                    }
+                                />
+                            </Box>
+                            <Slider
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={editImageYOffset}
+                                onChange={setEditImageYOffset}
+                                mb="xl"
+                                marks={[
+                                    { value: 0, label: "Top" },
+                                    { value: 0.5, label: "Center" },
+                                    { value: 1, label: "Bottom" },
+                                ]}
                             />
-                        </Box>
-                        <Slider
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={editImageYOffset}
-                            onChange={setEditImageYOffset}
-                            mb="xl"
-                            marks={[
-                                { value: 0, label: "Top" },
-                                { value: 0.5, label: "Center" },
-                                { value: 1, label: "Bottom" },
-                            ]}
-                        />
-                        <Text size="xs" c="dimmed">
-                            Use slider to set crop position.
-                        </Text>
-                    </Stack>
-                )}
+                            <Text size="xs" c="dimmed">
+                                Use slider to set crop position.
+                            </Text>
+                            <Group gap="xs">
+                                <Button
+                                    size="xs"
+                                    variant="outline"
+                                    loading={imageUploading}
+                                    onClick={() => imageInputRef.current?.click()}
+                                >
+                                    Replace
+                                </Button>
+                                <Button
+                                    size="xs"
+                                    variant="subtle"
+                                    color="red"
+                                    onClick={() => setEditImageId(null)}
+                                >
+                                    Remove
+                                </Button>
+                            </Group>
+                        </>
+                    ) : (
+                        <Button
+                            size="xs"
+                            variant="outline"
+                            loading={imageUploading}
+                            onClick={() => imageInputRef.current?.click()}
+                        >
+                            Upload image
+                        </Button>
+                    )}
+                </Stack>
                 <Group>
                     <Button
                         onClick={() => void saveEdit()}

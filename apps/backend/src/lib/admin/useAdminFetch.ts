@@ -28,7 +28,11 @@ export function useAdminFetch() {
         async (url: string, options: RequestInit = {}): Promise<Response> => {
             const doFetch = (token: string | null) => {
                 const headers = new Headers(options.headers);
-                headers.set("Content-Type", "application/json");
+                // Don't set Content-Type for FormData — the browser must set it
+                // automatically so it includes the multipart boundary.
+                if (!(options.body instanceof FormData)) {
+                    headers.set("Content-Type", "application/json");
+                }
                 if (token) headers.set("Authorization", `Bearer ${token}`);
                 return fetch(url, { ...options, headers });
             };
