@@ -1,6 +1,7 @@
-import { IonButton, IonContent, IonFooter, IonPage, useIonViewWillEnter } from "@ionic/react";
+import { IonButton, IonContent, IonFooter, IonPage, IonToast, useIonViewWillEnter } from "@ionic/react";
 import React, { useRef, useState } from "react";
 import { useHistory } from "react-router-dom";
+import { SPICE_LEVELS } from "@chance/core";
 import { useAuth } from "../auth/useAuth";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
@@ -20,6 +21,7 @@ export default function SubmitCard() {
     const contentRef = useRef<HTMLIonContentElement>(null);
     const goToHomeBase = useGoToHomeBase();
     const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
+    const [spiceRaisedLabel, setSpiceRaisedLabel] = useState<string | null>(null);
 
     useIonViewWillEnter(() => {
         editorRef.current?.reset();
@@ -81,13 +83,29 @@ export default function SubmitCard() {
             ? await apiClient.submitCard(session.id, data)
             : await apiClient.submitCardOutsideSession(data);
         if (!result.ok) return { error: result.error.message };
-        goToHomeBase();
-        return { savedSpiceLevel: result.data.currentVersion.spiceLevel };
+        const savedLevel = result.data.currentVersion.spiceLevel;
+        if (savedLevel > data.spiceLevel) {
+            // Content floor raised the spice level — show toast, then navigate on dismiss.
+            setSpiceRaisedLabel(SPICE_LEVELS.levels[savedLevel].label);
+        } else {
+            goToHomeBase();
+        }
+        return { savedSpiceLevel: savedLevel };
     }
 
     return (
         <IonPage>
             <AppHeader />
+            <IonToast
+                isOpen={!!spiceRaisedLabel}
+                message={`Spice level automatically raised to ${spiceRaisedLabel ?? ""} based on card content.`}
+                duration={4000}
+                onDidDismiss={() => {
+                    setSpiceRaisedLabel(null);
+                    goToHomeBase();
+                }}
+                position="bottom"
+            />
             <IonContent ref={contentRef}>
                 <div style={styles.pageHeader}>
                     <button style={styles.backLink} onClick={goToHomeBase}>

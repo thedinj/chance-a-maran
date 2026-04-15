@@ -85,6 +85,9 @@ function validateRequirementIds(ids: string[]): void {
 // ─── Card submission ──────────────────────────────────────────────────────────
 
 export function submitCard(userId: string, sessionId: string | null, req: SubmitCardRequest): Card {
+    if (req.cardType === "reparations" && req.isGameChanger) {
+        throw new ValidationError("Reparations cards cannot be game changers");
+    }
     validateRequirementIds(req.requirementIds);
     validateSoundId(req.soundId, userId, false);
     const levels = applyContentFloors(
@@ -102,7 +105,7 @@ export function submitCard(userId: string, sessionId: string | null, req: Submit
         soundId: req.soundId ?? null,
         drinkingLevel: levels.drinkingLevel,
         spiceLevel: levels.spiceLevel,
-        isGameChanger: req.cardType === "reparations" ? false : req.isGameChanger,
+        isGameChanger: req.isGameChanger,
         gameTags: req.gameTags,
         requirementIds: req.requirementIds,
     });
@@ -139,6 +142,9 @@ export function updateCard(
         throw new AuthorizationError("Global cards can only be edited by admins");
     }
 
+    if (card.cardType === "reparations" && req.isGameChanger) {
+        throw new ValidationError("Reparations cards cannot be game changers");
+    }
     validateRequirementIds(req.requirementIds);
     validateSoundId(req.soundId, userId, isAdmin);
     // Admins can set levels freely; content floors only apply to regular user submissions.
@@ -150,7 +156,7 @@ export function updateCard(
           );
 
     const cv = card.currentVersion;
-    const isGameChanger = card.cardType === "reparations" ? false : req.isGameChanger;
+    const isGameChanger = req.isGameChanger;
 
     // Determine whether any card content actually changed.
     // imageYOffset is intentionally excluded — it lives on the media row, not the version.

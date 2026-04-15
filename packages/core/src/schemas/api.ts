@@ -162,7 +162,7 @@ export const SubmitCardRequestSchema = z.object({
     drinkingLevel: z.number().int().min(0).max(3),
     spiceLevel: z.number().int().min(0).max(3),
     /**
-     * Forced to false server-side when cardType === 'reparations'.
+     * Must be false when cardType === 'reparations' — the server rejects the request otherwise.
      * The form hides this toggle for reparations cards.
      */
     isGameChanger: z.boolean(),
