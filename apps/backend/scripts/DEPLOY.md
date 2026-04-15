@@ -59,10 +59,10 @@ To update both apps at once (basket-bot first so hoisted scripts stay current):
 cd ~/basket-bot/apps/backend/scripts && ./update.sh && pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh
 ```
 
-### Skip flags
+### Build flags
 
-The update script uses incremental builds — it skips packages whose source hasn't
-changed since the last successful build. You can also force-skip builds manually:
+The update script tracks the last successfully built commit and skips packages
+that haven't changed. Use these flags to override that behaviour:
 
 ```bash
 # Skip only the backend build (e.g. frontend-only change)
@@ -73,11 +73,19 @@ pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --skip-fron
 
 # Skip all builds — just pull, migrate, and restart the service
 pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --skip-builds
+
+# Force-rebuild the backend even if nothing changed
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --force-backend
+
+# Force-rebuild the frontend even if nothing changed
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --force-frontend
+
+# Force-rebuild both
+pi-app-update ~/chance-a-maran/apps/backend/scripts/deploy.config.sh --force-builds
 ```
 
-Flags work before or after the config path. Skipping a build does **not** update
-that package's marker file, so the next regular update will still detect any
-accumulated changes correctly.
+Flags work before or after the config path. `--force-*` and `--skip-*` for the
+same package are mutually exclusive and will exit with an error.
 
 ---
 
@@ -110,7 +118,7 @@ cd ~/basket-bot && git pull && apps/backend/scripts/bootstrap.sh
 | Setting      | Value                                                         |
 | ------------ | ------------------------------------------------------------- |
 | Backend port | 3001 (localhost only)                                         |
-| Frontend     | Vite SPA — static files at `apps/mobile/www`, served by Caddy |
+| Frontend     | Vite SPA — static files at `apps/mobile/dist`, served by Caddy |
 | Domain       | chanceamaran.ddns.net                                         |
 | Service name | `chance-a-maran-backend`                                      |
 | Caddy config | `/etc/caddy/conf.d/chance-a-maran.caddy`                      |

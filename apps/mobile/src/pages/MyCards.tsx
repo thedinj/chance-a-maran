@@ -1,4 +1,4 @@
-import { IonButton, IonContent, IonFooter, IonModal, IonPage, useIonViewWillEnter } from "@ionic/react";
+import { IonButton, IonContent, IonFooter, IonModal, IonPage, IonToast, useIonViewWillEnter } from "@ionic/react";
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
@@ -54,6 +54,7 @@ export default function MyCards() {
     const newModalContentRef = useRef<HTMLIonContentElement>(null);
     const newEditorRef = useRef<CardEditorHandle>(null);
     const [newSubmitError, setNewSubmitError] = useState<string | null>(null);
+    const [spiceRaisedLabel, setSpiceRaisedLabel] = useState<string | null>(null);
     const [newPreviewCard, setNewPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
 
     // ── Load my cards on mount and every time the view re-enters ─────────────
@@ -137,8 +138,10 @@ export default function MyCards() {
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
-    async function onEditValidSubmit(data: SubmitCardRequest): Promise<string | null> {
-        if (!selectedCard) return null;
+    async function onEditValidSubmit(
+        data: SubmitCardRequest,
+    ): Promise<{ savedSpiceLevel: number } | { error: string }> {
+        if (!selectedCard) return { savedSpiceLevel: data.spiceLevel };
         const req: SubmitCardRequest = {
             ...data,
             title: data.title.trim(),
@@ -146,12 +149,12 @@ export default function MyCards() {
             isGameChanger: data.cardType === "reparations" ? false : data.isGameChanger,
         };
         const result = await apiClient.updateCard(selectedCard.id, req);
-        if (!result.ok) return result.error.message;
+        if (!result.ok) return { error: result.error.message };
         const updated = result.data;
         setMyCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         closeModal();
-        return null;
+        return { savedSpiceLevel: updated.currentVersion.spiceLevel };
     }
 
     function handleDeactivate() {
@@ -261,7 +264,9 @@ export default function MyCards() {
         setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
     }
 
-    async function onNewCardSubmit(data: SubmitCardRequest): Promise<string | null> {
+    async function onNewCardSubmit(
+        data: SubmitCardRequest,
+    ): Promise<{ savedSpiceLevel: number } | { error: string }> {
         const req: SubmitCardRequest = {
             ...data,
             title: data.title.trim(),
@@ -271,10 +276,10 @@ export default function MyCards() {
         const result = session
             ? await apiClient.submitCard(session.id, req)
             : await apiClient.submitCardOutsideSession(req);
-        if (!result.ok) return result.error.message;
+        if (!result.ok) return { error: result.error.message };
         setMyCards((prev) => [result.data, ...prev]);
         closeNewModal();
-        return null;
+        return { savedSpiceLevel: result.data.currentVersion.spiceLevel };
     }
 
     function handleNewPreview() {
@@ -363,6 +368,13 @@ export default function MyCards() {
     return (
         <IonPage>
             <AppHeader />
+            <IonToast
+                isOpen={!!spiceRaisedLabel}
+                message={`Spice level automatically raised to ${spiceRaisedLabel ?? ""} based on card content.`}
+                duration={4000}
+                onDidDismiss={() => setSpiceRaisedLabel(null)}
+                position="bottom"
+            />
             <IonContent>
                 <div style={styles.root}>
                     {/* Page header */}
@@ -598,6 +610,7 @@ export default function MyCards() {
                                 }}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}
+                                onSpiceLevelRaised={setSpiceRaisedLabel}
                                 readOnly={selectedCard.isGlobal}
                                 disabled={isPending}
                             />
@@ -773,6 +786,7 @@ export default function MyCards() {
                         <CardEditor
                             ref={newEditorRef}
                             onValidSubmit={onNewCardSubmit}
+                            onSpiceLevelRaised={setSpiceRaisedLabel}
                         />
 
                         <div style={styles.divider} />

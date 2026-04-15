@@ -6,7 +6,7 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
-import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, hasRRatedContent, hasDrinkingContent, DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
+import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -29,10 +29,18 @@ export interface CardEditorProps {
     showCardTypeSelector?: boolean;
     /**
      * Called after successful RHF validation (including imageId required check).
-     * Return null on success, or an error message string on failure.
+     * On API success: return `{ savedSpiceLevel: number }` — the spice level actually
+     * stored (may be higher than submitted if content floors were applied).
+     * On API failure: return `{ error: string }`.
      * data.imageId is the committed imageId UUID.
      */
-    onValidSubmit(data: SubmitCardRequest): Promise<string | null>;
+    onValidSubmit(data: SubmitCardRequest): Promise<{ savedSpiceLevel: number } | { error: string }>;
+    /**
+     * Called when the server raised the spice level above what was submitted (content floor applied).
+     * The parent is responsible for surfacing this — e.g. an IonToast outside the modal so it
+     * survives after the modal closes.
+     */
+    onSpiceLevelRaised?: (label: string) => void;
     /** Parent's isPending from useTransition (e.g. during deactivate/reactivate). */
     disabled?: boolean;
     /** True when the card is permanently locked (e.g. global). Hides empty/action-only UI; shows data-carrying fields as static. */
@@ -42,7 +50,7 @@ export interface CardEditorProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEditor(
-    { defaultValues, showCardTypeSelector = true, onValidSubmit, disabled = false, readOnly = false },
+    { defaultValues, showCardTypeSelector = true, onValidSubmit, onSpiceLevelRaised, disabled = false, readOnly = false },
     ref
 ) {
     // ── RHF ───────────────────────────────────────────────────────────────────
@@ -101,13 +109,6 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     const [soundUploading, setSoundUploading] = useState(false);
     const soundFileInputRef = useRef<HTMLInputElement>(null);
 
-    // ── Content warning state ────────────────────────────────────────────────
-    const [contentWarning, setContentWarning] = useState<{
-        suggestDrinking: boolean;
-        suggestSpice: boolean;
-        pendingData: SubmitCardRequest;
-    } | null>(null);
-
     // ── Other state ───────────────────────────────────────────────────────────
     const [availableGames, setAvailableGames] = useState<Game[]>([]);
     const [gamesLoading, setGamesLoading] = useState(true);
@@ -128,32 +129,26 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
     }, []);
 
     // ── Ref handle ────────────────────────────────────────────────────────────
-    async function doSubmit(data: SubmitCardRequest) {
+    async function doSubmit(
+        data: SubmitCardRequest,
+    ): Promise<{ savedSpiceLevel: number } | { error: string }> {
         setSubmitError(null);
-        setContentWarning(null);
         setIsSaving(true);
-        const error = await onValidSubmit(data);
+        const result = await onValidSubmit(data);
         setIsSaving(false);
-        if (error) setSubmitError(error);
+        if ("error" in result) setSubmitError(result.error);
+        return result;
     }
 
     useImperativeHandle(ref, () => ({
         submitForm: () =>
             void handleSubmit(async (data) => {
                 setSubmitError(null);
-                setContentWarning(null);
 
-                // Check if content suggests higher rating levels than selected
-                const text = [data.title, data.description, data.hiddenInstructions ?? ""].join(" ");
-                const suggestDrinking = hasDrinkingContent(text) && data.drinkingLevel < 1;
-                const suggestSpice = hasRRatedContent(text) && data.spiceLevel < 3;
-
-                if (suggestDrinking || suggestSpice) {
-                    setContentWarning({ suggestDrinking, suggestSpice, pendingData: data });
-                    return;
+                const result = await doSubmit(data);
+                if (!("error" in result) && result.savedSpiceLevel > data.spiceLevel) {
+                    onSpiceLevelRaised?.(SPICE_LEVELS.levels[result.savedSpiceLevel].label);
                 }
-
-                await doSubmit(data);
             })(),
         reset: () => {
             resetForm();
@@ -162,7 +157,6 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
             setPendingSoundId(null);
             setSoundFileName(null);
             setSubmitError(null);
-            setContentWarning(null);
         },
         getPreviewData: () => getValues(),
     }));
@@ -815,49 +809,6 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                 )}
             </div>
 
-            {/* ── Content warning ───────────────────────────────────────────── */}
-            {contentWarning && (
-                <div style={styles.contentWarning}>
-                    <p style={styles.contentWarningTitle}>Content suggestion</p>
-                    <p style={styles.contentWarningText}>
-                        Your card content may warrant updated ratings:
-                    </p>
-                    {contentWarning.suggestDrinking && (
-                        <p style={styles.contentWarningItem}>Drinking content detected — at least 🍺</p>
-                    )}
-                    {contentWarning.suggestSpice && (
-                        <p style={styles.contentWarningItem}>Adult content detected — Spicy rating</p>
-                    )}
-                    <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
-                        <button
-                            style={styles.contentWarningBtn}
-                            onClick={() => {
-                                const updated = { ...contentWarning.pendingData };
-                                if (contentWarning.suggestDrinking) {
-                                    updated.drinkingLevel = Math.max(updated.drinkingLevel, 1);
-                                    setValue("drinkingLevel", updated.drinkingLevel);
-                                }
-                                if (contentWarning.suggestSpice) {
-                                    updated.spiceLevel = 3;
-                                    setValue("spiceLevel", 3);
-                                }
-                                void doSubmit(updated);
-                            }}
-                            disabled={isSaving}
-                        >
-                            Update my ratings
-                        </button>
-                        <button
-                            style={styles.contentWarningBtnSecondary}
-                            onClick={() => void doSubmit(contentWarning.pendingData)}
-                            disabled={isSaving}
-                        >
-                            Submit as-is
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {/* ── Submit error ──────────────────────────────────────────────── */}
             {submitError && <p style={styles.submitError}>{submitError}</p>}
         </div>
@@ -1161,56 +1112,4 @@ const styles: Record<string, React.CSSProperties> = {
         margin: "var(--space-4) var(--space-5) 0",
     },
 
-    // Content warning
-    contentWarning: {
-        margin: "var(--space-4) var(--space-5) 0",
-        padding: "var(--space-4)",
-        border: "1.5px solid var(--color-accent-amber)",
-        background: "var(--color-surface)",
-    },
-    contentWarningTitle: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        fontWeight: 600,
-        color: "var(--color-accent-amber)",
-        margin: "0 0 var(--space-2)",
-    },
-    contentWarningText: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        margin: "0 0 var(--space-2)",
-        lineHeight: 1.5,
-    },
-    contentWarningItem: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-primary)",
-        margin: "0",
-        lineHeight: 1.8,
-    },
-    contentWarningBtn: {
-        background: "var(--color-surface)",
-        border: "1.5px solid var(--color-accent-amber)",
-        color: "var(--color-accent-amber)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.1em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "pointer",
-        minHeight: "44px",
-    },
-    contentWarningBtnSecondary: {
-        background: "none",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text-secondary)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-label)",
-        fontWeight: 500,
-        letterSpacing: "0.1em",
-        padding: "var(--space-2) var(--space-4)",
-        cursor: "pointer",
-        minHeight: "44px",
-    },
 };

@@ -74,13 +74,15 @@ export default function SubmitCard() {
         setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
     }
 
-    async function onValidSubmit(data: SubmitCardRequest): Promise<string | null> {
+    async function onValidSubmit(
+        data: SubmitCardRequest,
+    ): Promise<{ savedSpiceLevel: number } | { error: string }> {
         const result = session
             ? await apiClient.submitCard(session.id, data)
             : await apiClient.submitCardOutsideSession(data);
-        if (!result.ok) return result.error.message;
+        if (!result.ok) return { error: result.error.message };
         goToHomeBase();
-        return null;
+        return { savedSpiceLevel: result.data.currentVersion.spiceLevel };
     }
 
     return (

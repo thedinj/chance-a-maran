@@ -1,43 +1,42 @@
 /**
  * Regex-based content classifiers for card submissions.
  *
- * These detect adult/spicy content and drinking-related content so the system can suggest
- * minimum rating floors. They are intentionally broad — false positives are
- * acceptable because the user can always override on the client side.
+ * These detect adult/spicy content so the system can enforce minimum rating floors.
+ * They are intentionally broad — false positives are acceptable because admins can
+ * always override on the server side (admin edits bypass `applyContentFloors`).
+ *
+ * Spice tier:
+ *  - Floor 2 (Spicy): crude language and non-explicit adult terms
+ *
+ * Drinking content is NOT auto-classified — alcohol vocabulary is too ambiguous
+ * to apply reliable floors.
  */
 
-const R_RATED_PATTERN = /\b(fuck|shit|bitch|cock|dick|pussy|cunt|tits?|boob|ass|asshole|penis|vagina|vulva|anus|anal|oral|blowjob|handjob|masturbat\w*|orgasm|cum|jizz|horny|naked|nude|slutty|kinky|erection|dildo|stripper|porn|sex)\b/i;
+/** Crude language and non-explicit adult terms → spice floor 2 (Spicy) */
+const SPICE_FLOOR_2_PATTERN =
+    /\b(fuck|cock|dick|pussy|cunt|blowjob|handjob|masturbat\w*|orgasm|cum|jizz|erection|dildo|porn|penis|vagina|vulva|anus|shit|bitch|tits?|boob|ass|asshole|anal|oral|horny|naked|nude|slut|slutty|sex)\b/i;
 
-const DRINKING_PATTERN = /\b(beer|wine|shots?|drinks?|drinking|drunk|vodka|whiskey|whisky|tequila|rum|gin|cocktails?|alcohol|alcoholic|liquor|booze|champagne|bourbon|scotch|brandy|sake|cider|chug|sip|buzzed|tipsy|hammered|wasted|plastered|sloshed)\b/i;
-
-/** Returns true if the text contains adult/spicy (vulgar or explicit) content. */
-export function hasRRatedContent(text: string): boolean {
-    return R_RATED_PATTERN.test(text);
-}
-
-/** Returns true if the text contains drinking / alcohol-related content. */
-export function hasDrinkingContent(text: string): boolean {
-    return DRINKING_PATTERN.test(text);
+/** Returns true if the text contains crude or adult-themed content (spice floor 2 or higher). */
+export function hasSpice2Content(text: string): boolean {
+    return SPICE_FLOOR_2_PATTERN.test(text);
 }
 
 /**
  * Given card text fields and the currently-set rating levels, returns adjusted
  * levels that enforce content-based minimums.
  *
- * - Adult/spicy content detected → spiceLevel floor of 3
- * - Drinking content detected → drinkingLevel floor of 1
+ * - Crude/adult content detected → spiceLevel floor of 2
+ * - Drinking content: no auto-classification applied
  *
- * Levels are only raised, never lowered.
+ * Levels are only raised, never lowered. Admin edits bypass this function entirely.
  */
 export function applyContentFloors(
     fields: { title: string; description: string; hiddenInstructions?: string | null },
-    current: { drinkingLevel: number; spiceLevel: number },
+    current: { drinkingLevel: number; spiceLevel: number }
 ): { drinkingLevel: number; spiceLevel: number } {
     const text = [fields.title, fields.description, fields.hiddenInstructions ?? ""].join(" ");
-    return {
-        drinkingLevel: hasDrinkingContent(text)
-            ? Math.max(current.drinkingLevel, 1)
-            : current.drinkingLevel,
-        spiceLevel: hasRRatedContent(text) ? Math.max(current.spiceLevel, 3) : current.spiceLevel,
-    };
+    const spiceLevel = SPICE_FLOOR_2_PATTERN.test(text)
+        ? Math.max(current.spiceLevel, 2)
+        : current.spiceLevel;
+    return { drinkingLevel: current.drinkingLevel, spiceLevel };
 }

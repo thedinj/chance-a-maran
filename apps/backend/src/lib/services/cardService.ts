@@ -141,10 +141,13 @@ export function updateCard(
 
     validateRequirementIds(req.requirementIds);
     validateSoundId(req.soundId, userId, isAdmin);
-    const levels = applyContentFloors(
-        { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
-        { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
-    );
+    // Admins can set levels freely; content floors only apply to regular user submissions.
+    const levels = isAdmin
+        ? { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel }
+        : applyContentFloors(
+              { title: req.title, description: req.description, hiddenInstructions: req.hiddenInstructions },
+              { drinkingLevel: req.drinkingLevel, spiceLevel: req.spiceLevel },
+          );
 
     const cv = card.currentVersion;
     const isGameChanger = card.cardType === "reparations" ? false : req.isGameChanger;
