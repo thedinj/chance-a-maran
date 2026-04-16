@@ -1,5 +1,6 @@
+import { useDebouncedValue } from "@mantine/hooks";
 import { IonButton, IonContent, IonFooter, IonModal, IonPage, IonToast, useIonViewWillEnter } from "@ionic/react";
-import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppDialog } from "../components/AppDialog";
@@ -28,6 +29,8 @@ export default function MyCards() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [myCardsSort, setMyCardsSort] = useState<"alpha" | "date">("alpha");
+    const [myCardsSearch, setMyCardsSearch] = useState("");
+    const [myCardsSearchDebounced] = useDebouncedValue(myCardsSearch, 200);
 
     // ── All Cards tab (admin) ─────────────────────────────────────────────────
     const [allCards, setAllCards] = useState<Card[]>([]);
@@ -102,6 +105,31 @@ export default function MyCards() {
 
     // Must be called before any early return — hooks must not be conditional
     const goToHomeBase = useGoToHomeBase();
+
+    // ── Filtered + sorted my-cards list ──────────────────────────────────────
+    const visibleMyCards = useMemo(() => {
+        const q = myCardsSearchDebounced.trim().toLowerCase();
+
+        const filtered = q
+            ? myCards.filter(
+                  (c) =>
+                      c.currentVersion.title.toLowerCase().includes(q) ||
+                      c.currentVersion.description?.toLowerCase().includes(q),
+              )
+            : myCards;
+
+        return [...filtered].sort((a, b) => {
+            // When searching, title matches rank above description-only matches
+            if (q) {
+                const aTitleMatch = a.currentVersion.title.toLowerCase().includes(q);
+                const bTitleMatch = b.currentVersion.title.toLowerCase().includes(q);
+                if (aTitleMatch !== bTitleMatch) return aTitleMatch ? -1 : 1;
+            }
+            return myCardsSort === "alpha"
+                ? a.currentVersion.title.toLowerCase().localeCompare(b.currentVersion.title.toLowerCase())
+                : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+    }, [myCards, myCardsSearchDebounced, myCardsSort]);
 
     // Registered-only page
     if (!user) {
@@ -431,31 +459,29 @@ export default function MyCards() {
                                 </div>
                             )}
                             {!isLoading && myCards.length > 0 && (
-                                <div style={styles.sortRow}>
-                                    <button
-                                        style={styles.sortLink}
-                                        onClick={() =>
-                                            setMyCardsSort((s) => (s === "date" ? "alpha" : "date"))
-                                        }
-                                    >
-                                        {myCardsSort === "alpha" ? "A–Z" : "newest first"}
-                                    </button>
-                                </div>
+                                <>
+                                    <div style={styles.myCardsSearchRow}>
+                                        <input
+                                            style={styles.myCardsSearchInput}
+                                            placeholder="Search…"
+                                            value={myCardsSearch}
+                                            onChange={(e) => setMyCardsSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <div style={styles.sortRow}>
+                                        <button
+                                            style={styles.sortLink}
+                                            onClick={() =>
+                                                setMyCardsSort((s) => (s === "date" ? "alpha" : "date"))
+                                            }
+                                        >
+                                            {myCardsSort === "alpha" ? "A–Z" : "newest first"}
+                                        </button>
+                                    </div>
+                                </>
                             )}
                             <div style={styles.tileList}>
-                                {!isLoading &&
-                                    [...myCards]
-                                        .sort((a, b) =>
-                                            myCardsSort === "alpha"
-                                                ? a.currentVersion.title
-                                                      .toLowerCase()
-                                                      .localeCompare(
-                                                          b.currentVersion.title.toLowerCase()
-                                                      )
-                                                : new Date(b.createdAt).getTime() -
-                                                  new Date(a.createdAt).getTime()
-                                        )
-                                        .map(renderTile)}
+                                {!isLoading && visibleMyCards.map(renderTile)}
                             </div>
                         </>
                     )}
@@ -1051,6 +1077,24 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: "pointer",
         minHeight: "32px",
     },
+    // My cards search
+    myCardsSearchRow: {
+        padding: "0 var(--space-5) var(--space-2)",
+    },
+    myCardsSearchInput: {
+        background: "transparent",
+        border: "none",
+        borderBottom: "1px solid var(--color-border)",
+        color: "var(--color-text-primary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        padding: "var(--space-2) 0",
+        outline: "none",
+        width: "100%",
+        boxSizing: "border-box",
+        opacity: 0.7,
+    },
+
     // Sort toggle
     sortRow: {
         display: "flex",
