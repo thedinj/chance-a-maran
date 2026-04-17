@@ -237,8 +237,13 @@ export function clearVote(userId: string, cardId: string): void {
 
 // ─── Admin operations ─────────────────────────────────────────────────────────
 
-export function promoteToGlobal(cardId: string): Card {
-    if (!cardRepo.findById(cardId)) throw new NotFoundError("Card not found");
+export function promoteToGlobal(cardId: string, expectedVersionId: string): Card {
+    const card = cardRepo.findById(cardId);
+    if (!card) throw new NotFoundError("Card not found");
+    if (card.currentVersionId !== expectedVersionId)
+        throw new ConflictError(
+            "This card was edited after you opened it. Please review the latest version before promoting.",
+        );
     cardRepo.setGlobal(cardId, true);
     return cardRepo.findById(cardId)!;
 }

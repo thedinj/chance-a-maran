@@ -33,7 +33,8 @@
       "Bash(bash --version)",
       "Bash(wait)",
       "mcp__plugin_openbrowser_openbrowser__execute_code",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cat *)"
     ],
     "additionalDirectories": [
       "D:\\Users\\thedinj\\Programming\\Apps\\basket-bot"

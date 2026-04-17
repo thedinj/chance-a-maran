@@ -1011,7 +1011,15 @@ export default function CardsPage() {
             const url = card.isGlobal
                 ? `/api/cards/${card.id}/demote`
                 : `/api/cards/${card.id}/promote`;
-            const res = await adminFetch(url, { method: "POST" });
+            const res = await adminFetch(url, {
+                method: "POST",
+                ...(card.isGlobal
+                    ? {}
+                    : {
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ expectedVersionId: card.currentVersionId }),
+                      }),
+            });
             const data = await res.json();
             if (data.ok) {
                 const updated = data.data as Card;
