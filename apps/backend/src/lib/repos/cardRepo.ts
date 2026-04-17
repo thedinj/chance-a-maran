@@ -51,6 +51,8 @@ export interface DrawPoolEntry {
     netVotes: number;
     gameTagIds: string[];
     requirementElementIds: string[];
+    isPlayerOwned: boolean;
+    createdAt: string;
 }
 
 // ─── Mapping ──────────────────────────────────────────────────────────────────
@@ -491,37 +493,42 @@ export function getDrawPool(
                cv.id             AS card_version_id,
                c.created_in_session_id,
                c.net_votes,
+               c.created_at,
+               CASE WHEN sp.user_id IS NOT NULL THEN 1 ELSE 0 END AS is_player_owned,
                (SELECT GROUP_CONCAT(game_id)
                 FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids,
                (SELECT GROUP_CONCAT(element_id)
                 FROM card_version_requirements WHERE card_version_id = cv.id) AS requirement_element_ids
              FROM cards c
              JOIN card_versions cv ON cv.id = c.current_version_id
+             LEFT JOIN (
+               SELECT DISTINCT user_id FROM session_players
+               WHERE session_id = ?
+                 AND user_id IS NOT NULL
+                 AND card_sharing != 'none'
+             ) sp ON sp.user_id = c.owner_user_id
              WHERE c.active = 1
                AND c.card_type = ?
                AND cv.drinking_level <= ?
                AND cv.spice_level   <= ?
                AND (
                  ${globalClause}c.created_in_session_id = ?
-                 OR c.owner_user_id IN (
-                   SELECT user_id FROM session_players
-                   WHERE session_id = ?
-                     AND user_id IS NOT NULL
-                     AND card_sharing != 'none'
-                 )
+                 OR sp.user_id IS NOT NULL
                )`
         )
         .all(
+            sessionId,
             cardType,
             filters.maxDrinkingLevel,
             filters.maxSpiceLevel,
-            sessionId,
             sessionId
         ) as Array<{
         card_id: string;
         card_version_id: string;
         created_in_session_id: string | null;
         net_votes: number;
+        created_at: string;
+        is_player_owned: number;
         game_tag_ids: string | null;
         requirement_element_ids: string | null;
     }>;
@@ -535,5 +542,7 @@ export function getDrawPool(
         requirementElementIds: r.requirement_element_ids
             ? r.requirement_element_ids.split(",")
             : [],
+        isPlayerOwned: r.is_player_owned === 1,
+        createdAt: r.created_at,
     }));
 }

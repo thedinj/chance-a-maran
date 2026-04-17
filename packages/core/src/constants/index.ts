@@ -23,11 +23,18 @@ export const CARD_ASPECT_RATIO = { width: 412, height: 581 } as const;
 export const BASE_WEIGHT = 1.0;
 
 /**
- * Fraction of draws pulled from the session-born card bucket when it is non-empty.
- * Guarantees session cards appear in ~40% of draws regardless of global pool size.
- * Falls back to the global bucket when the session bucket is exhausted.
+ * Fraction of draws pulled from the session/recent-player bucket (Bucket A) when non-empty.
+ * Guarantees session-born and recently-submitted player cards appear in ~40% of draws
+ * regardless of global pool size.
  */
 export const SESSION_BUCKET_RATIO = 0.4;
+
+/**
+ * Of draws not claimed by the session bucket, this fraction goes to the player-set bucket
+ * (Bucket B: cards owned by session players, older than 24h) vs. the global bucket (Bucket C).
+ * Effective split when all three buckets are non-empty: ~40% A / ~39% B / ~21% C.
+ */
+export const PLAYER_SET_BUCKET_RATIO = 0.65;
 
 /**
  * Per-vote step applied to the vote multiplier in both directions.

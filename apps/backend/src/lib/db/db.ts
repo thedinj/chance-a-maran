@@ -8,12 +8,7 @@ const globalForDb = globalThis as unknown as {
 // Database path is always database.db in the backend directory
 const dbPath = path.join(process.cwd(), "database.db");
 
-export const db =
-    globalForDb.db ??
-    new Database(dbPath, {
-        // eslint-disable-next-line no-console
-        verbose: process.env.NODE_ENV === "development" ? console.log : undefined,
-    });
+export const db = globalForDb.db ?? new Database(dbPath);
 
 // Enable foreign keys
 db.pragma("foreign_keys = ON");

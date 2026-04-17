@@ -1,5 +1,7 @@
 import { IonContent, IonFooter, IonPage } from "@ionic/react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+// Ensures drama sounds are preloaded as soon as the game page chunk is evaluated.
+import "../../lib/sounds";
 import { CardCarousel } from "../../components/CardCarousel";
 import { CardReveal } from "../../components/CardReveal";
 import { AddPlayerModal } from "./components/AddPlayerModal";

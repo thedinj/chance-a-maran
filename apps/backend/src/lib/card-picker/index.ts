@@ -3,6 +3,7 @@ import {
     BASE_WEIGHT,
     DOWNVOTE_FLOOR,
     ElementGroupId,
+    PLAYER_SET_BUCKET_RATIO,
     SESSION_BUCKET_RATIO,
     VOTE_SCALE_CAP,
     VOTE_SCALE_RATIO,
@@ -117,35 +118,59 @@ export function pick(
 
     if (eligible.length === 0) return null;
 
-    // 4. Split into session-born bucket and global bucket, then select a bucket.
-    //    Session cards are guaranteed ~SESSION_BUCKET_RATIO (40%) of draws regardless
-    //    of how large the global pool is. Cards never repeat within a session.
+    // 4. Exclude already-drawn cards
     const drawnCardIds = drawEventRepo.getDrawnCardIds(sessionId);
+    const undrawn = eligible.filter((c) => !drawnCardIds.has(c.cardId));
 
-    const sessionUndrawn = eligible.filter(
-        (c) => c.createdInSessionId === sessionId && !drawnCardIds.has(c.cardId)
+    if (undrawn.length === 0) return null;
+
+    // 5. Split into three priority buckets.
+    //    Bucket A: session-born OR player-owned and submitted within the last 24h
+    //    Bucket B: player-owned, older than 24h (not session-born)
+    //    Bucket C: global-only (not player-owned, not session-born)
+    const cutoffISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const bucketA = undrawn.filter(
+        (c) =>
+            c.createdInSessionId === sessionId ||
+            (c.isPlayerOwned && c.createdAt >= cutoffISO),
     );
-    const otherUndrawn = eligible.filter(
-        (c) => c.createdInSessionId !== sessionId && !drawnCardIds.has(c.cardId)
+    const bucketB = undrawn.filter(
+        (c) =>
+            c.isPlayerOwned &&
+            c.createdInSessionId !== sessionId &&
+            c.createdAt < cutoffISO,
+    );
+    const bucketC = undrawn.filter(
+        (c) => !c.isPlayerOwned && c.createdInSessionId !== sessionId,
     );
 
-    let pool: cardRepo.DrawPoolEntry[];
-    if (sessionUndrawn.length === 0 && otherUndrawn.length === 0) {
-        return null;
-    } else if (sessionUndrawn.length === 0) {
-        pool = otherUndrawn;
-    } else if (otherUndrawn.length === 0) {
-        pool = sessionUndrawn;
-    } else if (Math.random() < SESSION_BUCKET_RATIO) {
-        pool = sessionUndrawn;
-    } else {
-        pool = otherUndrawn;
+    // 6. Bucket selection.
+    //    A gets SESSION_BUCKET_RATIO of draws when non-empty.
+    //    Of remaining draws, B gets PLAYER_SET_BUCKET_RATIO and C gets the rest.
+    const hasA = bucketA.length > 0;
+    const hasB = bucketB.length > 0;
+    const hasC = bucketC.length > 0;
+
+    function pickFromNonA(): cardRepo.DrawPoolEntry[] {
+        if (!hasB) return bucketC;
+        if (!hasC) return bucketB;
+        return Math.random() < PLAYER_SET_BUCKET_RATIO ? bucketB : bucketC;
     }
 
-    // 5. Calculate weights within the chosen bucket
-    const weights = pool.map((entry) => calculateWeight(entry));
+    let pool: cardRepo.DrawPoolEntry[];
+    if (!hasA) {
+        pool = pickFromNonA();
+    } else if (!hasB && !hasC) {
+        pool = bucketA;
+    } else if (Math.random() < SESSION_BUCKET_RATIO) {
+        pool = bucketA;
+    } else {
+        pool = pickFromNonA();
+    }
 
-    // 6. Weighted random selection
+    // 7. Weighted draw within the chosen bucket
+    const weights = pool.map((entry) => calculateWeight(entry));
     const idx = weightedRandom(weights);
     const selected = pool[idx]!;
 
