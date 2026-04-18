@@ -297,6 +297,23 @@ ion-content.game-content::part(scroll) {
     background: var(--color-accent-amber);
 }
 
+/* ─── Dark spice theme (spice level 3) ─────────────────────────────── */
+.game-settings-dark {
+    --color-bg: #0e0608;
+    --color-surface: #160a0d;
+    --color-surface-elevated: #1d0d11;
+    --color-border: #3d1a1a;
+    --color-accent-primary: #b03030;
+    --color-text-secondary: #8a7070;
+}
+
+/* ─── Toggle/chip press feedback ───────────────────────────────────── */
+.chance-toggle:active:not(:disabled) {
+    transform: scale(0.94);
+    background: color-mix(in srgb, var(--color-accent-amber) 10%, var(--color-surface)) !important;
+    transition: transform 0.08s ease-out, background 0.08s ease-out;
+}
+
 /* ─── AppDialog ────────────────────────────────────────────────────── */
 .app-dialog-btn:hover:not(:disabled) {
     background: color-mix(in srgb, currentColor 8%, transparent);
@@ -325,6 +342,11 @@ ion-content.game-content::part(scroll) {
 @keyframes chanceSweep {
     0%   { transform: translateX(-150%) skewX(-20deg); }
     100% { transform: translateX(400%)  skewX(-20deg); }
+}
+
+@keyframes venueBorderPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
 }
 
 .chance-glow-layer {
@@ -359,6 +381,16 @@ ion-content.game-content::part(scroll) {
     .chance-glow-layer {
         animation: none;
         opacity: 0.15;
+    }
+    .venue-tile-shimmering {
+        animation: none !important;
+        border-color: var(--color-accent-amber) !important;
+    }
+    .venue-tile-shimmering .venue-shimmer-overlay {
+        display: none;
+    }
+    .chance-toggle:active:not(:disabled) {
+        transform: none;
     }
 }
 

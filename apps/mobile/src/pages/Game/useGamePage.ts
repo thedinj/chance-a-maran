@@ -64,6 +64,7 @@ function makeFakeDrawEvent(
         currentVersionId: fakeVersion.id,
         currentVersion: fakeVersion,
         netVotes: 0,
+        drawCount: 0,
         createdAt: new Date().toISOString(),
     };
 

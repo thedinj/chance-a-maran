@@ -20,6 +20,7 @@ export interface DbCard {
     created_in_session_id: string | null;
     current_version_id: string;
     net_votes: number;
+    draw_count: number;
     created_at: string;
 }
 
@@ -127,6 +128,7 @@ export function mapCard(cardRow: DbCard, versionRow: DbCardVersion): Card {
         currentVersionId: cardRow.current_version_id,
         currentVersion: mapCardVersion(versionRow),
         netVotes: cardRow.net_votes,
+        drawCount: cardRow.draw_count,
         createdAt: cardRow.created_at,
     };
 }

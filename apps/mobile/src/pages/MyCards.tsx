@@ -1,5 +1,13 @@
 import { useDebouncedValue } from "@mantine/hooks";
-import { IonButton, IonContent, IonFooter, IonModal, IonPage, IonToast, useIonViewWillEnter } from "@ionic/react";
+import {
+    IonButton,
+    IonContent,
+    IonFooter,
+    IonModal,
+    IonPage,
+    IonToast,
+    useIonViewWillEnter,
+} from "@ionic/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
@@ -18,7 +26,7 @@ import { useSession } from "../session/useSession";
 // that need to be wired up here.
 function cardVersionToEditorDefaults(
     cv: CardVersion,
-    cardType: Card["cardType"],
+    cardType: Card["cardType"]
 ): Partial<SubmitCardRequest> {
     return {
         title: cv.title,
@@ -39,6 +47,16 @@ function cardVersionToEditorDefaults(
 function ModalBackButtonTrap({ onBack }: { onBack: () => void }) {
     useOverlayBackButton(onBack);
     return null;
+}
+
+function formatCountLabel(count: number, singular: string, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatVoteCount(count: number) {
+    if (count > 0) return `+${count} votes`;
+    if (count < 0) return `${count} votes`;
+    return "0 votes";
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -75,7 +93,9 @@ export default function MyCards() {
     const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [versions, setVersions] = useState<CardVersion[]>([]);
     const [showVersionHistory, setShowVersionHistory] = useState(false);
-    const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
+    const [previewCard, setPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(
+        null
+    );
     const [editError, setEditError] = useState<string | null>(null);
     const [showNominateConfirm, setShowNominateConfirm] = useState(false);
     const [showDeactivateBlocked, setShowDeactivateBlocked] = useState(false);
@@ -88,7 +108,10 @@ export default function MyCards() {
     const [newSubmitError, setNewSubmitError] = useState<string | null>(null);
     const [newModalOpen, setNewModalOpen] = useState(false);
     const [spiceRaisedLabel, setSpiceRaisedLabel] = useState<string | null>(null);
-    const [newPreviewCard, setNewPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
+    const [newPreviewCard, setNewPreviewCard] = useState<{
+        card: Card;
+        cardVersion: CardVersion;
+    } | null>(null);
 
     // ── Load my cards on mount and every time the view re-enters ─────────────
     const fetchMyCards = useCallback(() => {
@@ -144,7 +167,7 @@ export default function MyCards() {
             ? myCards.filter(
                   (c) =>
                       c.currentVersion.title.toLowerCase().includes(q) ||
-                      c.currentVersion.description?.toLowerCase().includes(q),
+                      c.currentVersion.description?.toLowerCase().includes(q)
               )
             : myCards;
 
@@ -156,7 +179,9 @@ export default function MyCards() {
                 if (aTitleMatch !== bTitleMatch) return aTitleMatch ? -1 : 1;
             }
             return myCardsSort === "alpha"
-                ? a.currentVersion.title.toLowerCase().localeCompare(b.currentVersion.title.toLowerCase())
+                ? a.currentVersion.title
+                      .toLowerCase()
+                      .localeCompare(b.currentVersion.title.toLowerCase())
                 : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
     }, [myCards, myCardsSearchDebounced, myCardsSort]);
@@ -197,7 +222,7 @@ export default function MyCards() {
     // ── Mutations ─────────────────────────────────────────────────────────────
 
     async function onEditValidSubmit(
-        data: SubmitCardRequest,
+        data: SubmitCardRequest
     ): Promise<{ savedSpiceLevel: number } | { error: string }> {
         if (!selectedCard) return { savedSpiceLevel: data.spiceLevel };
         const req: SubmitCardRequest = {
@@ -279,7 +304,6 @@ export default function MyCards() {
         });
     }
 
-
     function handlePreview() {
         if (!editorRef.current || !user || !selectedCard) return;
         const values = editorRef.current.getPreviewData();
@@ -296,7 +320,8 @@ export default function MyCards() {
             imageYOffset: values.imageYOffset ?? 0.5,
             drinkingLevel: values.drinkingLevel ?? 0,
             spiceLevel: values.spiceLevel ?? 0,
-            isGameChanger: values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
+            isGameChanger:
+                values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
             gameTags: [],
             requirements: [],
             authoredByUserId: user.id,
@@ -317,13 +342,14 @@ export default function MyCards() {
             currentVersionId: "preview",
             currentVersion: previewVersion,
             netVotes: 0,
+            drawCount: 0,
             createdAt: selectedCard.createdAt,
         };
         setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
     }
 
     async function onNewCardSubmit(
-        data: SubmitCardRequest,
+        data: SubmitCardRequest
     ): Promise<{ savedSpiceLevel: number } | { error: string }> {
         const req: SubmitCardRequest = {
             ...data,
@@ -356,7 +382,8 @@ export default function MyCards() {
             imageYOffset: values.imageYOffset ?? 0.5,
             drinkingLevel: values.drinkingLevel ?? 0,
             spiceLevel: values.spiceLevel ?? 0,
-            isGameChanger: values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
+            isGameChanger:
+                values.cardType === "reparations" ? false : (values.isGameChanger ?? false),
             gameTags: [],
             requirements: [],
             authoredByUserId: user.id,
@@ -377,6 +404,7 @@ export default function MyCards() {
             currentVersionId: "preview",
             currentVersion: previewVersion,
             netVotes: 0,
+            drawCount: 0,
             createdAt: new Date().toISOString(),
         };
         setNewPreviewCard({ card: previewCardObj, cardVersion: previewVersion });
@@ -391,9 +419,7 @@ export default function MyCards() {
                 <div style={styles.tileHeader}>
                     <span style={styles.tileTitle}>{v.title}</span>
                     <div style={styles.tileBadges}>
-                        {card.isGlobal && (
-                            <span style={styles.badgeGlobal}>GLOBAL</span>
-                        )}
+                        {card.isGlobal && <span style={styles.badgeGlobal}>GLOBAL</span>}
                         {card.pendingGlobal && !card.isGlobal && (
                             <span style={styles.badgePending}>PENDING</span>
                         )}
@@ -415,6 +441,22 @@ export default function MyCards() {
                         ))}
                     </div>
                 )}
+                <div style={styles.tileStatsRow}>
+                    <span
+                        style={
+                            card.netVotes > 0
+                                ? styles.tileStatPositive
+                                : card.netVotes < 0
+                                  ? styles.tileStatNegative
+                                  : styles.tileStat
+                        }
+                    >
+                        {card.netVotes > 0 ? "▲" : card.netVotes < 0 ? "▼" : "—"}{" "}
+                        {Math.abs(card.netVotes)}
+                    </span>
+                    <span style={styles.tileStatDot}>·</span>
+                    <span style={styles.tileStat}>{formatCountLabel(card.drawCount, "draw")}</span>
+                </div>
             </button>
         );
     }
@@ -443,10 +485,7 @@ export default function MyCards() {
                             </button>
                             <h1 style={styles.heading}>My cards</h1>
                         </div>
-                        <button
-                            style={styles.newCardLink}
-                            onClick={openNewCard}
-                        >
+                        <button style={styles.newCardLink} onClick={openNewCard}>
                             + New card
                         </button>
                     </div>
@@ -480,10 +519,7 @@ export default function MyCards() {
                                     <p style={styles.emptyHint}>
                                         Submit your first card to add it to your library.
                                     </p>
-                                    <button
-                                        style={styles.emptyAction}
-                                        onClick={openNewCard}
-                                    >
+                                    <button style={styles.emptyAction} onClick={openNewCard}>
                                         Submit a card
                                     </button>
                                 </div>
@@ -502,7 +538,9 @@ export default function MyCards() {
                                         <button
                                             style={styles.sortLink}
                                             onClick={() =>
-                                                setMyCardsSort((s) => (s === "date" ? "alpha" : "date"))
+                                                setMyCardsSort((s) =>
+                                                    s === "date" ? "alpha" : "date"
+                                                )
                                             }
                                         >
                                             {myCardsSort === "alpha" ? "A–Z" : "newest first"}
@@ -577,7 +615,10 @@ export default function MyCards() {
                 onDidPresent={() => modalContentRef.current?.scrollToTop(0)}
                 style={{ "--border-radius": "0" } as React.CSSProperties}
             >
-                <IonContent ref={modalContentRef} style={{ "--background": "var(--color-bg)" } as React.CSSProperties}>
+                <IonContent
+                    ref={modalContentRef}
+                    style={{ "--background": "var(--color-bg)" } as React.CSSProperties}
+                >
                     {selectedCard && (
                         <div style={styles.modalRoot}>
                             <ModalBackButtonTrap onBack={closeModal} />
@@ -631,9 +672,29 @@ export default function MyCards() {
                                 )}
                             </div>
 
+                            {/* ── Stats ─────────────────────────────────────── */}
+                            <div style={styles.modalStatsRow}>
+                                <span
+                                    style={
+                                        selectedCard.netVotes > 0
+                                            ? styles.modalStatPositive
+                                            : selectedCard.netVotes < 0
+                                              ? styles.modalStatNegative
+                                              : styles.modalStat
+                                    }
+                                >
+                                    {formatVoteCount(selectedCard.netVotes)}
+                                </span>
+                                <span style={styles.modalStatDot}>·</span>
+                                <span style={styles.modalStat}>
+                                    {formatCountLabel(selectedCard.drawCount, "draw")}
+                                </span>
+                            </div>
+
                             {selectedCard.isGlobal && (
                                 <div style={styles.readOnlyBanner}>
-                                    This card is in the global pool and can only be edited by admins.
+                                    This card is in the global pool and can only be edited by
+                                    admins.
                                 </div>
                             )}
 
@@ -643,7 +704,7 @@ export default function MyCards() {
                                 ref={editorRef}
                                 defaultValues={cardVersionToEditorDefaults(
                                     selectedCard.currentVersion,
-                                    selectedCard.cardType,
+                                    selectedCard.cardType
                                 )}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}
@@ -656,10 +717,7 @@ export default function MyCards() {
 
                             {/* ── Preview card ──────────────────────────────── */}
                             <div style={styles.modalSection}>
-                                <button
-                                    style={styles.previewLink}
-                                    onClick={handlePreview}
-                                >
+                                <button style={styles.previewLink} onClick={handlePreview}>
                                     Preview card
                                 </button>
                             </div>
@@ -675,8 +733,7 @@ export default function MyCards() {
                                     <span style={styles.versionToggleLabel}>Version history</span>
                                     {versions.length > 0 && (
                                         <span style={styles.versionToggleCount}>
-                                            {versions.length} version
-                                            {versions.length !== 1 ? "s" : ""}
+                                            {formatCountLabel(versions.length, "version")}
                                         </span>
                                     )}
                                     <span style={styles.versionChevron}>
@@ -719,7 +776,6 @@ export default function MyCards() {
                                 )}
                             </div>
 
-
                             {!selectedCard.isGlobal && selectedCard.active && (
                                 <>
                                     <div style={styles.divider} />
@@ -727,7 +783,8 @@ export default function MyCards() {
                                         {selectedCard.pendingGlobal ? (
                                             <>
                                                 <p style={styles.nominationStatus}>
-                                                    Submitted for global pool review. An admin will approve or decline.
+                                                    Submitted for global pool review. An admin will
+                                                    approve or decline.
                                                 </p>
                                                 <button
                                                     style={styles.retractLink}
@@ -801,7 +858,10 @@ export default function MyCards() {
             {/* ── New card modal ──────────────────────────────────────────────── */}
             <IonModal
                 ref={newModalRef}
-                onDidPresent={() => { newModalContentRef.current?.scrollToTop(0); setNewModalOpen(true); }}
+                onDidPresent={() => {
+                    newModalContentRef.current?.scrollToTop(0);
+                    setNewModalOpen(true);
+                }}
                 onDidDismiss={() => {
                     setNewModalOpen(false);
                     newEditorRef.current?.reset();
@@ -880,7 +940,14 @@ export default function MyCards() {
                     onDismiss={() => setShowNominateConfirm(false)}
                     buttons={[
                         { label: "Cancel", onClick: () => setShowNominateConfirm(false) },
-                        { label: "Submit", variant: "accent", onClick: () => { setShowNominateConfirm(false); handleNominate(); } },
+                        {
+                            label: "Submit",
+                            variant: "accent",
+                            onClick: () => {
+                                setShowNominateConfirm(false);
+                                handleNominate();
+                            },
+                        },
                     ]}
                 />
             )}
@@ -891,9 +958,7 @@ export default function MyCards() {
                     message="This card is submitted for global pool review and cannot be deactivated while the nomination is pending. Retract the nomination to deactivate it."
                     accent="danger"
                     onDismiss={() => setShowDeactivateBlocked(false)}
-                    buttons={[
-                        { label: "OK", onClick: () => setShowDeactivateBlocked(false) },
-                    ]}
+                    buttons={[{ label: "OK", onClick: () => setShowDeactivateBlocked(false) }]}
                 />
             )}
         </IonPage>
@@ -1544,5 +1609,67 @@ const styles: Record<string, React.CSSProperties> = {
         minHeight: "44px",
         display: "flex",
         alignItems: "center",
+    },
+
+    // Tile stats
+    tileStatsRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+    },
+    tileStat: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-text-secondary)",
+        opacity: 0.7,
+    },
+    tileStatPositive: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-accent-green)",
+        fontWeight: 600,
+    },
+    tileStatNegative: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-danger)",
+        fontWeight: 600,
+    },
+    tileStatDot: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        color: "var(--color-text-secondary)",
+        opacity: 0.4,
+    },
+
+    // Modal stats
+    modalStatsRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        padding: "0 var(--space-5) var(--space-3)",
+    },
+    modalStat: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+    },
+    modalStatPositive: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-accent-green)",
+        fontWeight: 600,
+    },
+    modalStatNegative: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-danger)",
+        fontWeight: 600,
+    },
+    modalStatDot: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        opacity: 0.4,
     },
 };

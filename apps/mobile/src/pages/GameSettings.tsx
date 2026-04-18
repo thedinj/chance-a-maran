@@ -45,18 +45,6 @@ const GameSettingsFormSchema = CreateSessionRequestSchema.extend({
 
 type GameSettingsFormValues = z.infer<typeof GameSettingsFormSchema>;
 
-// ─── Card sharing copy ────────────────────────────────────────────────────────
-
-const SHARING_LABELS: Record<"none" | "mine", string> = {
-    mine: "My cards",
-    none: "None",
-};
-
-const SHARING_DESCRIPTIONS: Record<"none" | "mine", string> = {
-    mine: "Your own library cards enter the draw pool",
-    none: "Don't contribute cards to this session",
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function GameSettings() {
@@ -75,10 +63,13 @@ export default function GameSettings() {
     const [availableElements, setAvailableElements] = useState<RequirementElement[]>([]);
     const [elementsLoading, setElementsLoading] = useState(true);
     const [venueExpanded, setVenueExpanded] = useState(false);
+    const [venueHasBeenOpened, setVenueHasBeenOpened] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const prefersReducedMotion = useReducedMotion();
     const [resetPendingId, setResetPendingId] = useState<string | null>(null);
     const contentRef = useRef<HTMLIonContentElement>(null);
+
+    const isShimmering = !isEditMode && !venueHasBeenOpened;
 
     useIonViewWillEnter(() => {
         contentRef.current?.scrollToTop(0);
@@ -96,8 +87,8 @@ export default function GameSettings() {
         defaultValues: {
             name: session?.name ?? "",
             filterSettings: {
-                maxDrinkingLevel: session?.filterSettings.maxDrinkingLevel ?? 3,
-                maxSpiceLevel: session?.filterSettings.maxSpiceLevel ?? 2,
+                maxDrinkingLevel: session?.filterSettings.maxDrinkingLevel ?? 0,
+                maxSpiceLevel: session?.filterSettings.maxSpiceLevel ?? 0,
                 gameTags: session?.filterSettings.gameTags ?? [],
                 includeGlobalCards: session?.filterSettings.includeGlobalCards ?? true,
                 availableElementIds: session?.filterSettings.availableElementIds,
@@ -151,6 +142,10 @@ export default function GameSettings() {
         });
         // isEditMode is derived from URL params (constant); setValue is stable (react-hook-form guarantee)
     }, [isEditMode, setValue]);
+
+    const nameValue = watch("name") ?? "";
+    const nameCharsRemaining = MAX_SESSION_NAME_LENGTH - nameValue.length;
+    const isDark = watch("filterSettings.maxSpiceLevel") === 3;
 
     // Registered-only page
     if (!user) {
@@ -237,14 +232,35 @@ export default function GameSettings() {
     }
 
     return (
-        <IonPage>
+        <IonPage className={isDark ? "game-settings-dark" : undefined}>
             <AppHeader />
-            <IonContent ref={contentRef}>
+            <IonContent
+                ref={contentRef}
+                style={isDark ? ({ "--background": "#0e0608" } as React.CSSProperties) : undefined}
+            >
+                <AnimatePresence>
+                    {isDark && (
+                        <motion.div
+                            key="dark-flash"
+                            initial={{ opacity: 0.3 }}
+                            animate={{ opacity: 0 }}
+                            exit={{ opacity: 0.15 }}
+                            transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+                            style={{
+                                position: "fixed",
+                                inset: 0,
+                                backgroundColor: "#1a0005",
+                                pointerEvents: "none",
+                                zIndex: 9998,
+                            }}
+                        />
+                    )}
+                </AnimatePresence>
                 <div style={styles.root}>
                     {/* Page header */}
                     <div style={styles.pageHeader}>
                         <button style={styles.backLink} onClick={handleCancel} disabled={isPending}>
-                            «
+                            ←
                         </button>
                         <h1 style={styles.heading}>{isEditMode ? "Game Settings" : "New Game"}</h1>
                     </div>
@@ -260,123 +276,25 @@ export default function GameSettings() {
                             disabled={isPending}
                             {...register("name")}
                         />
-                        {errors.name && <p style={styles.fieldError}>{errors.name.message}</p>}
+                        <div style={styles.nameFooter}>
+                            {errors.name && <p style={styles.fieldError}>{errors.name.message}</p>}
+                            {nameCharsRemaining <= 30 && !errors.name && (
+                                <span
+                                    style={{
+                                        ...styles.charCount,
+                                        color:
+                                            nameCharsRemaining <= 10
+                                                ? "var(--color-accent-amber)"
+                                                : "var(--color-text-secondary)",
+                                    }}
+                                >
+                                    {nameCharsRemaining}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div style={styles.divider} />
-
-                    {/* ── Filters ─────────────────────────────────────────── */}
-                    <div style={styles.section}>
-                        <p style={styles.sectionLabel}>FILTERS</p>
-                        <p style={styles.hint}>
-                            Drinking and content themes are independent — a session can be max
-                            drinking and fully Clean.
-                        </p>
-
-                        <Controller
-                            name="filterSettings.maxDrinkingLevel"
-                            control={control}
-                            render={({ field }) => (
-                                <div style={styles.filterBlock}>
-                                    <span style={styles.toggleTitle}>Drinking limit</span>
-                                    <div style={styles.selectorGroup}>
-                                        {DRINKING_LEVELS.levels.map(({ value, label }) => (
-                                            <button
-                                                key={value}
-                                                style={
-                                                    field.value === value
-                                                        ? styles.toggleOn
-                                                        : styles.toggleOff
-                                                }
-                                                onClick={() => field.onChange(value)}
-                                                disabled={isPending}
-                                            >
-                                                {label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <span style={styles.toggleSub}>
-                                        {DRINKING_LEVELS.levels[field.value].filterDescription}
-                                    </span>
-                                </div>
-                            )}
-                        />
-
-                        <Controller
-                            name="filterSettings.maxSpiceLevel"
-                            control={control}
-                            render={({ field }) => (
-                                <div style={styles.filterBlock}>
-                                    <span style={styles.toggleTitle}>Themes</span>
-                                    <div style={styles.selectorGroup}>
-                                        {SPICE_LEVELS.levels.map(({ value, label }) => (
-                                            <button
-                                                key={value}
-                                                style={
-                                                    field.value === value
-                                                        ? styles.toggleOn
-                                                        : styles.toggleOff
-                                                }
-                                                onClick={() => field.onChange(value)}
-                                                disabled={isPending}
-                                            >
-                                                {label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <span style={styles.toggleSub}>
-                                        {SPICE_LEVELS.levels[field.value].filterDescription}
-                                    </span>
-                                </div>
-                            )}
-                        />
-                    </div>
-
-                    <div style={styles.divider} />
-
-                    {/* ── Game tags ────────────────────────────────────────── */}
-                    {!gamesLoading && availableGames.length > 0 && (
-                        <Controller
-                            name="filterSettings.gameTags"
-                            control={control}
-                            render={({ field }) => (
-                                <div style={styles.section}>
-                                    <p style={styles.sectionLabel}>GAME</p>
-                                    <p style={styles.hint}>
-                                        Filter cards by the game you're playing. Leave empty for any
-                                        game.
-                                    </p>
-                                    <div style={styles.tagList}>
-                                        {availableGames.map((game) => {
-                                            const selected = field.value.includes(game.id);
-                                            return (
-                                                <button
-                                                    key={game.id}
-                                                    style={
-                                                        (selected
-                                                            ? styles.gameChipOn
-                                                            : styles.gameChipOff) as React.CSSProperties
-                                                    }
-                                                    onClick={() =>
-                                                        field.onChange(
-                                                            selected
-                                                                ? field.value.filter(
-                                                                      (id) => id !== game.id
-                                                                  )
-                                                                : [...field.value, game.id]
-                                                        )
-                                                    }
-                                                    disabled={isPending}
-                                                >
-                                                    {game.name}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        />
-                    )}
 
                     {/* ── Venue elements ──────────────────────────────────── */}
                     {!elementsLoading && availableElements.length > 0 && (
@@ -442,6 +360,7 @@ export default function GameSettings() {
                                                             !groupDisabled && toggle(el.id)
                                                         }
                                                         disabled={isDisabled}
+                                                        type="button"
                                                     >
                                                         {el.title}
                                                     </button>
@@ -453,19 +372,39 @@ export default function GameSettings() {
 
                                 return (
                                     <div
+                                        className={
+                                            isShimmering ? "venue-tile-shimmering" : undefined
+                                        }
                                         style={{
                                             ...styles.venueTile,
-                                            border: venueExpanded
-                                                ? "1px solid var(--color-accent-amber)"
-                                                : "1px solid color-mix(in srgb, var(--color-accent-amber) 35%, transparent)",
+                                            border:
+                                                venueExpanded || isShimmering
+                                                    ? "1px solid var(--color-accent-amber)"
+                                                    : "1px solid color-mix(in srgb, var(--color-accent-amber) 35%, transparent)",
+                                            animation:
+                                                isShimmering && !prefersReducedMotion
+                                                    ? "venueBorderPulse 2s ease-in-out infinite"
+                                                    : undefined,
                                         }}
                                     >
                                         <button
                                             style={styles.venueTileHeader}
-                                            onClick={() => setVenueExpanded((v) => !v)}
+                                            onClick={() => {
+                                                setVenueExpanded((v) => {
+                                                    if (!v) setVenueHasBeenOpened(true);
+                                                    return !v;
+                                                });
+                                            }}
                                             type="button"
                                             aria-expanded={venueExpanded}
                                         >
+                                            {isShimmering && !prefersReducedMotion && (
+                                                <div
+                                                    className="venue-shimmer-overlay"
+                                                    style={styles.venueShimmerOverlay}
+                                                    aria-hidden="true"
+                                                />
+                                            )}
                                             <div style={styles.venueTitleRow}>
                                                 <span style={styles.venueTileLabel}>Venue</span>
                                                 <span
@@ -490,6 +429,11 @@ export default function GameSettings() {
                                                     {venueExpanded ? "▴" : "▾"}
                                                 </span>
                                             </div>
+                                            {isShimmering && !venueExpanded && (
+                                                <span style={styles.venueNudge} aria-hidden="true">
+                                                    tap to configure ↓
+                                                </span>
+                                            )}
                                         </button>
 
                                         <AnimatePresence initial={false}>
@@ -571,66 +515,210 @@ export default function GameSettings() {
 
                     <div style={styles.divider} />
 
-                    {/* ── Card sharing ─────────────────────────────────────── */}
-                    <Controller
-                        name="cardSharing"
-                        control={control}
-                        render={({ field }) => (
-                            <div style={styles.section}>
-                                <p style={styles.sectionLabel}>YOUR CARDS</p>
-                                <p style={styles.hint}>
-                                    How much of your library enters the draw pool.
-                                </p>
-                                <div style={styles.radioStack}>
-                                    {(["mine", "none"] as const).map((level) => (
-                                        <button
-                                            key={level}
-                                            style={
-                                                (field.value === level
-                                                    ? styles.radioRowSelected
-                                                    : styles.radioRow) as React.CSSProperties
-                                            }
-                                            onClick={() => field.onChange(level)}
-                                            disabled={isPending}
-                                        >
-                                            <div
-                                                style={
-                                                    field.value === level
-                                                        ? styles.radioDotActive
-                                                        : styles.radioDot
-                                                }
-                                            />
-                                            <div>
-                                                <div style={styles.radioLabel}>
-                                                    {SHARING_LABELS[level]}
-                                                </div>
-                                                <div style={styles.radioSub}>
-                                                    {SHARING_DESCRIPTIONS[level]}
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
+                    {/* ── Game tags ────────────────────────────────────────── */}
+                    {!gamesLoading && availableGames.length > 0 && (
+                        <Controller
+                            name="filterSettings.gameTags"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.section}>
+                                    <p style={styles.sectionLabel}>GAME</p>
+                                    <p style={styles.hint}>Leave empty for any game.</p>
+                                    <div style={styles.tagList}>
+                                        {availableGames.map((game) => {
+                                            const selected = field.value.includes(game.id);
+                                            return (
+                                                <button
+                                                    key={game.id}
+                                                    className="chance-toggle"
+                                                    style={
+                                                        (selected
+                                                            ? styles.gameChipOn
+                                                            : styles.gameChipOff) as React.CSSProperties
+                                                    }
+                                                    onClick={() =>
+                                                        field.onChange(
+                                                            selected
+                                                                ? field.value.filter(
+                                                                      (id) => id !== game.id
+                                                                  )
+                                                                : [...field.value, game.id]
+                                                        )
+                                                    }
+                                                    disabled={isPending}
+                                                    type="button"
+                                                >
+                                                    {game.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    />
+                            )}
+                        />
+                    )}
+
+                    {!gamesLoading && availableGames.length > 0 && <div style={styles.divider} />}
+
+                    {/* ── Filters ─────────────────────────────────────────── */}
+                    <div style={styles.section}>
+                        <p style={styles.sectionLabel}>FILTERS</p>
+
+                        <Controller
+                            name="filterSettings.maxDrinkingLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.filterBlock}>
+                                    <span style={styles.toggleTitle}>Drinking limit</span>
+                                    <div style={styles.selectorGroup}>
+                                        {DRINKING_LEVELS.levels.map(({ value, label, emoji }) => (
+                                            <button
+                                                key={value}
+                                                className="chance-toggle"
+                                                style={
+                                                    field.value === value
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(value)}
+                                                disabled={isPending}
+                                                type="button"
+                                            >
+                                                {emoji && (
+                                                    <span style={styles.levelEmoji}>{emoji}</span>
+                                                )}
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <AnimatePresence mode="wait">
+                                        <motion.span
+                                            key={field.value}
+                                            style={styles.toggleSub}
+                                            initial={
+                                                prefersReducedMotion ? false : { opacity: 0, y: 3 }
+                                            }
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={prefersReducedMotion ? {} : { opacity: 0, y: -3 }}
+                                            transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                                        >
+                                            {DRINKING_LEVELS.levels[field.value].filterDescription}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                </div>
+                            )}
+                        />
+
+                        <Controller
+                            name="filterSettings.maxSpiceLevel"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.filterBlock}>
+                                    <span style={styles.toggleTitle}>Themes</span>
+                                    <div style={styles.selectorGroup}>
+                                        {SPICE_LEVELS.levels.map(({ value, label, emoji }) => (
+                                            <button
+                                                key={value}
+                                                className="chance-toggle"
+                                                style={
+                                                    field.value === value
+                                                        ? styles.toggleOn
+                                                        : styles.toggleOff
+                                                }
+                                                onClick={() => field.onChange(value)}
+                                                disabled={isPending}
+                                                type="button"
+                                            >
+                                                {emoji && (
+                                                    <span style={styles.levelEmoji}>{emoji}</span>
+                                                )}
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <AnimatePresence mode="wait">
+                                        <motion.span
+                                            key={field.value}
+                                            style={{
+                                                ...styles.toggleSub,
+                                                ...(field.value === 3 && {
+                                                    color: "var(--color-text-primary)",
+                                                    fontStyle: "italic",
+                                                }),
+                                            }}
+                                            initial={
+                                                prefersReducedMotion ? false : { opacity: 0, y: 3 }
+                                            }
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={prefersReducedMotion ? {} : { opacity: 0, y: -3 }}
+                                            transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                                        >
+                                            {SPICE_LEVELS.levels[field.value].filterDescription}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                </div>
+                            )}
+                        />
+                    </div>
 
                     <div style={styles.divider} />
 
-                    {/* ── Deck composition ─────────────────────────────────── */}
-                    <Controller
-                        name="filterSettings.includeGlobalCards"
-                        control={control}
-                        render={({ field }) => (
-                            <div style={styles.section}>
-                                <p style={styles.sectionLabel}>DECK</p>
-                                <p style={styles.hint}>Control which cards enter the draw pool.</p>
+                    {/* ── Deck ─────────────────────────────────────────────── */}
+                    <div style={styles.section}>
+                        <p style={styles.sectionLabel}>DECK</p>
+
+                        <Controller
+                            name="cardSharing"
+                            control={control}
+                            render={({ field }) => (
+                                <div style={styles.toggleRow}>
+                                    <div style={styles.toggleText}>
+                                        <span style={styles.toggleTitle}>Your cards</span>
+                                    </div>
+                                    <div style={styles.selectorGroup}>
+                                        <button
+                                            type="button"
+                                            className="chance-toggle"
+                                            style={
+                                                field.value === "mine"
+                                                    ? styles.toggleOn
+                                                    : styles.toggleOff
+                                            }
+                                            onClick={() => field.onChange("mine")}
+                                            disabled={isPending}
+                                        >
+                                            Include
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="chance-toggle"
+                                            style={
+                                                field.value === "none"
+                                                    ? styles.toggleOn
+                                                    : styles.toggleOff
+                                            }
+                                            onClick={() => field.onChange("none")}
+                                            disabled={isPending}
+                                        >
+                                            Exclude
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        />
+
+                        <Controller
+                            name="filterSettings.includeGlobalCards"
+                            control={control}
+                            render={({ field }) => (
                                 <div style={styles.toggleRow}>
                                     <div style={styles.toggleText}>
                                         <span style={styles.toggleTitle}>Global cards</span>
                                     </div>
                                     <div style={styles.selectorGroup}>
                                         <button
+                                            type="button"
+                                            className="chance-toggle"
                                             style={field.value ? styles.toggleOn : styles.toggleOff}
                                             onClick={() => field.onChange(true)}
                                             disabled={isPending}
@@ -638,6 +726,8 @@ export default function GameSettings() {
                                             Include
                                         </button>
                                         <button
+                                            type="button"
+                                            className="chance-toggle"
                                             style={
                                                 !field.value ? styles.toggleOn : styles.toggleOff
                                             }
@@ -648,9 +738,9 @@ export default function GameSettings() {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                    />
+                            )}
+                        />
+                    </div>
 
                     {/* ── Player list (edit mode only) ─────────────────────── */}
                     {isEditMode && players.length > 0 && (
@@ -671,6 +761,7 @@ export default function GameSettings() {
                                                         isPending || resetPendingId === player.id
                                                     }
                                                     onClick={() => void handleResetToken(player.id)}
+                                                    type="button"
                                                 >
                                                     {resetPendingId === player.id
                                                         ? "Resetting…"
@@ -703,7 +794,12 @@ export default function GameSettings() {
                     >
                         {isEditMode ? "Save" : "Create game"}
                     </IonButton>
-                    <button style={styles.cancelLink} onClick={handleCancel} disabled={isPending}>
+                    <button
+                        style={styles.cancelLink}
+                        onClick={handleCancel}
+                        disabled={isPending}
+                        type="button"
+                    >
                         Cancel
                     </button>
                 </div>
@@ -774,10 +870,6 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: "var(--color-border)",
         margin: "0 var(--space-5)",
     },
-    rowDivider: {
-        height: "1px",
-        backgroundColor: "var(--color-border)",
-    },
     hint: {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-caption)",
@@ -798,13 +890,19 @@ const styles: Record<string, React.CSSProperties> = {
         width: "100%",
         boxSizing: "border-box",
     },
-    readOnlyValue: {
-        fontFamily: "var(--font-display)",
-        fontSize: "var(--text-subheading)",
-        fontWeight: 600,
-        color: "var(--color-text-primary)",
-        letterSpacing: "-0.02em",
-        margin: 0,
+
+    nameFooter: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        minHeight: "16px",
+    },
+    charCount: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        transition: "color 0.2s",
     },
 
     // Toggles
@@ -847,12 +945,17 @@ const styles: Record<string, React.CSSProperties> = {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-label)",
         fontWeight: 500,
-        letterSpacing: "0.15em",
+        letterSpacing: "0.1em",
         padding: "var(--space-2) var(--space-3)",
         cursor: "pointer",
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "2px",
     },
     toggleOn: {
         background: "var(--color-surface)",
@@ -861,12 +964,23 @@ const styles: Record<string, React.CSSProperties> = {
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-label)",
         fontWeight: 500,
-        letterSpacing: "0.15em",
+        letterSpacing: "0.1em",
         padding: "var(--space-2) var(--space-3)",
         cursor: "pointer",
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "2px",
+    },
+    levelEmoji: {
+        fontSize: "1.15em",
+        lineHeight: 1,
+        display: "block",
+        letterSpacing: 0,
     },
 
     // Game tags
@@ -901,24 +1015,6 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
     },
 
-    // Venue elements
-    collapsibleHeader: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        background: "none",
-        border: "none",
-        padding: 0,
-        cursor: "pointer",
-        minHeight: "28px",
-    },
-    collapsibleMeta: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        flexShrink: 0,
-    },
     // Venue tile
     venueTile: {
         margin: "0 var(--space-5)",
@@ -936,6 +1032,27 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: "pointer",
         textAlign: "left",
         boxSizing: "border-box",
+        position: "relative",
+        overflow: "hidden",
+    } as React.CSSProperties,
+    venueShimmerOverlay: {
+        position: "absolute",
+        inset: 0,
+        width: "40%",
+        background:
+            "linear-gradient(90deg, transparent 0%, rgba(212,168,71,0.18) 50%, transparent 100%)",
+        animation: "chanceSweep 2.4s ease-in-out infinite",
+        pointerEvents: "none",
+        zIndex: 0,
+    } as React.CSSProperties,
+    venueNudge: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        color: "var(--color-accent-amber)",
+        letterSpacing: "0.08em",
+        opacity: 0.75,
+        paddingTop: "var(--space-1)",
     } as React.CSSProperties,
     venueTitleRow: {
         display: "flex",
@@ -1041,72 +1158,6 @@ const styles: Record<string, React.CSSProperties> = {
         display: "inline-flex",
         alignItems: "center",
     } as React.CSSProperties,
-
-    // Card sharing
-    radioStack: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-2)",
-    },
-    radioRow: {
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "var(--space-3)",
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border)",
-        padding: "var(--space-4)",
-        cursor: "pointer",
-        textAlign: "left",
-        width: "100%",
-        boxSizing: "border-box",
-    },
-    radioRowSelected: {
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "var(--space-3)",
-        background: "var(--color-surface)",
-        border: "1.5px solid var(--color-accent-primary)",
-        padding: "var(--space-4)",
-        cursor: "pointer",
-        textAlign: "left",
-        width: "100%",
-        boxSizing: "border-box",
-    },
-    radioDot: {
-        width: "16px",
-        height: "16px",
-        border: "1.5px solid var(--color-border)",
-        borderRadius: "50%",
-        flexShrink: 0,
-        marginTop: "2px",
-        boxSizing: "border-box",
-        background: "none",
-    },
-    radioDotActive: {
-        width: "16px",
-        height: "16px",
-        border: "1.5px solid var(--color-accent-primary)",
-        borderRadius: "50%",
-        flexShrink: 0,
-        marginTop: "2px",
-        boxSizing: "border-box",
-        background: "var(--color-accent-primary)",
-        // Inner surface-colored ring creates the classic radio-selected look
-        boxShadow: "inset 0 0 0 3px var(--color-surface)",
-    },
-    radioLabel: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-body)",
-        fontWeight: 500,
-        color: "var(--color-text-primary)",
-        marginBottom: "var(--space-1)",
-    },
-    radioSub: {
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-caption)",
-        color: "var(--color-text-secondary)",
-        lineHeight: 1.5,
-    },
 
     // Player list
     playerList: {

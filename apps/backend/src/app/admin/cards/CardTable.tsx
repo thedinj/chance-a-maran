@@ -193,6 +193,25 @@ export function CardTable({
                 )}
             </Table.Td>
             <Table.Td>
+                <Group gap={8} wrap="nowrap">
+                    <Tooltip label="Net votes" withArrow>
+                        <Text
+                            size="xs"
+                            c={card.netVotes > 0 ? "green" : card.netVotes < 0 ? "red" : "dimmed"}
+                            fw={card.netVotes !== 0 ? 600 : undefined}
+                        >
+                            {card.netVotes > 0 ? "+" : ""}
+                            {card.netVotes}
+                        </Text>
+                    </Tooltip>
+                    <Tooltip label="Times drawn" withArrow>
+                        <Text size="xs" c="dimmed">
+                            {card.drawCount}×
+                        </Text>
+                    </Tooltip>
+                </Group>
+            </Table.Td>
+            <Table.Td>
                 <Text size="xs" c="dimmed">
                     {card.ownerDisplayName}
                 </Text>
@@ -219,6 +238,7 @@ export function CardTable({
                         <Table.Th>Levels</Table.Th>
                         <Table.Th>Status</Table.Th>
                         <Table.Th>Games</Table.Th>
+                        <Table.Th>Stats</Table.Th>
                         <Table.Th>Owner</Table.Th>
                         <Table.Th>Created</Table.Th>
                     </Table.Tr>

@@ -68,6 +68,7 @@ export function create(data: {
         data.drawnAt,
         data.revealedToAllAt
     );
+    db.prepare("UPDATE cards SET draw_count = draw_count + 1 WHERE id = ?").run(data.cardId);
     return mapDrawEvent(findRaw(data.id)!);
 }
 

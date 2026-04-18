@@ -71,6 +71,7 @@ export default function SubmitCard() {
             currentVersionId: "preview",
             currentVersion: previewVersion,
             netVotes: 0,
+            drawCount: 0,
             createdAt: new Date().toISOString(),
         };
         setPreviewCard({ card: previewCardObj, cardVersion: previewVersion });

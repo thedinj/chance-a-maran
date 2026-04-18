@@ -94,6 +94,7 @@ export function AppMenu() {
         startTransition(async () => {
             await logout();
             exitSession();
+            history.replace("/");
         });
     }
 

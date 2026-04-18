@@ -95,6 +95,8 @@ export const CardSchema = z.object({
     currentVersion: CardVersionSchema,
     /** Net upvotes minus downvotes across all sessions. */
     netVotes: z.number().int().default(0),
+    /** Total number of times this card has been drawn across all sessions. */
+    drawCount: z.number().int().default(0),
     createdAt: z.string(),
 });
 
