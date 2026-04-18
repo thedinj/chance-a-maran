@@ -5,7 +5,7 @@ import { useCallback } from "react";
 /** Returns the canonical "back" destination for all secondary pages. */
 export function useHomeBase(): string {
     const { session } = useSession();
-    return session ? `/game/${session.id}` : "/";
+    return session ? "/game" : "/";
 }
 
 export function useGoToHomeBase() {

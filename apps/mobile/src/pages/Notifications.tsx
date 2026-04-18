@@ -1,5 +1,5 @@
 import { IonContent, IonPage } from "@ionic/react";
-import React, { useTransition } from "react";
+import React, { useRef, useTransition } from "react";
 import { useHistory } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { apiClient } from "../lib/api";
@@ -8,6 +8,13 @@ import { useSession } from "../session/useSession";
 import { useTransfers } from "../transfers/useTransfers";
 
 // ─── Component ───────────────────────────────────────────────────────────────
+
+const NOTIF_EMPTY_LINES = [
+    "No incoming cards. Nobody's feeling generous.",
+    "Nothing pending. Check back after the next round.",
+    "Clean slate. Cards you're offered will show up here.",
+    "No transfers waiting. You're not that popular yet.",
+] as const;
 
 export default function Notifications() {
     const { session, players, devicePlayerIds } = useSession();
@@ -21,6 +28,7 @@ export default function Notifications() {
     }
 
     const currentSession = session;
+    const emptyNotifLine = useRef(NOTIF_EMPTY_LINES[Math.floor(Math.random() * NOTIF_EMPTY_LINES.length)]).current;
 
     // Incoming transfers for device players only
     const incomingTransfers = pendingTransfers.filter((t) =>
@@ -28,7 +36,7 @@ export default function Notifications() {
     );
 
     function handleBack() {
-        history.replace(`/game/${currentSession.id}`);
+        history.replace("/game");
     }
 
     return (
@@ -48,7 +56,7 @@ export default function Notifications() {
                         <p style={styles.sectionLabel}>THIS GAME</p>
 
                         {incomingTransfers.length === 0 ? (
-                            <p style={styles.emptyHint}>No pending notifications.</p>
+                            <p style={styles.emptyHint}>{emptyNotifLine}</p>
                         ) : (
                             <div style={styles.transferList}>
                                 {incomingTransfers.map((transfer) => {

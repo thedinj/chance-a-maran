@@ -21,11 +21,12 @@ function toDrama(card: Card, cardVersion: CardVersion): DrawDrama {
 interface SpotlightCanvasProps {
     isGameChanger: boolean;
     isReparations: boolean;
+    isLateNight: boolean;
     flipping: boolean;
     locked: boolean;
 }
 
-function SpotlightCanvas({ isGameChanger, isReparations, flipping, locked }: SpotlightCanvasProps) {
+function SpotlightCanvas({ isGameChanger, isReparations, isLateNight, flipping, locked }: SpotlightCanvasProps) {
     const prefersReduced =
         typeof window !== "undefined" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -76,7 +77,9 @@ function SpotlightCanvas({ isGameChanger, isReparations, flipping, locked }: Spo
             ? [110, 8, 8]
             : isGameChanger
               ? [165, 18, 18]
-              : [212, 168, 71];
+              : isLateNight
+                ? [153, 102, 255]  // neon violet spotlight at night
+                : [212, 168, 71];
 
         function easeOut(t: number) {
             return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
@@ -207,7 +210,7 @@ function SpotlightCanvas({ isGameChanger, isReparations, flipping, locked }: Spo
             cancelAnimationFrame(frameId);
             ro.disconnect();
         };
-    }, [isGameChanger, isReparations, prefersReduced]);
+    }, [isGameChanger, isReparations, isLateNight, prefersReduced]);
 
     if (prefersReduced) return null;
 
@@ -356,6 +359,8 @@ export interface CardRevealProps {
     footer?: React.ReactNode;
     /** Forwarded to CardFront as onReveal. Called when drawer taps "Tap to reveal". */
     onCardReveal?: () => void;
+    /** Applies the late-night theme (colors, fonts, violet spotlight) inside the portal. */
+    isLateNight?: boolean;
 }
 
 const overlayBackdrop: React.CSSProperties = {
@@ -416,6 +421,7 @@ export function CardReveal({
     mode = "dramatic",
     footer,
     onCardReveal,
+    isLateNight = false,
 }: CardRevealProps) {
     useOverlayBackButton(onDismiss);
 
@@ -434,6 +440,7 @@ export function CardReveal({
                 onDismiss={onDismiss}
                 footer={footer}
                 onCardReveal={onCardReveal}
+                isLateNight={isLateNight}
             />,
             document.body
         );
@@ -453,6 +460,7 @@ export function CardReveal({
             cardVersion={cardVersion}
             isReparations={isReparations}
             isGameChanger={isGameChanger}
+            isLateNight={isLateNight}
             prefersReduced={prefersReduced}
             drama={drama}
             customHitSound={customHitSound}
@@ -472,9 +480,10 @@ interface QuickRevealProps {
     onDismiss: () => void;
     footer?: React.ReactNode;
     onCardReveal?: () => void;
+    isLateNight: boolean;
 }
 
-function QuickReveal({ card, cardVersion, onDismiss, footer, onCardReveal }: QuickRevealProps) {
+function QuickReveal({ card, cardVersion, onDismiss, footer, onCardReveal, isLateNight }: QuickRevealProps) {
     const [flipped, setFlipped] = useState(false);
 
     useEffect(() => {
@@ -485,7 +494,7 @@ function QuickReveal({ card, cardVersion, onDismiss, footer, onCardReveal }: Qui
     }, []);
 
     return (
-        <div style={quickBackdrop} onClick={onDismiss}>
+        <div style={quickBackdrop} className={isLateNight ? "game-late-night" : undefined} onClick={onDismiss}>
             <div
                 style={{
                     flex: 1,
@@ -520,6 +529,7 @@ interface DramaticRevealProps {
     cardVersion: CardVersion;
     isReparations: boolean;
     isGameChanger: boolean;
+    isLateNight: boolean;
     prefersReduced: boolean;
     drama: DrawDrama | null;
     customHitSound: string | undefined;
@@ -533,6 +543,7 @@ function DramaticReveal({
     cardVersion,
     isReparations,
     isGameChanger,
+    isLateNight,
     prefersReduced,
     drama,
     customHitSound,
@@ -646,7 +657,11 @@ function DramaticReveal({
     }, []);
 
     if (phase === "reparations-intro") {
-        return <ReparationsIntroSequence onComplete={handleReparationsIntroDone} />;
+        return (
+            <div className={isLateNight ? "game-late-night" : undefined}>
+                <ReparationsIntroSequence onComplete={handleReparationsIntroDone} />
+            </div>
+        );
     }
 
     const ready = phase === "revealed";
@@ -654,12 +669,14 @@ function DramaticReveal({
 
     return (
         <div
+            className={isLateNight ? "game-late-night" : undefined}
             style={{ ...overlayBackdrop, pointerEvents: ready ? "auto" : "none" }}
             onClick={ready ? onDismiss : undefined}
         >
             <SpotlightCanvas
                 isGameChanger={isGameChanger}
                 isReparations={isReparations}
+                isLateNight={isLateNight}
                 flipping={flipping}
                 locked={ready}
             />

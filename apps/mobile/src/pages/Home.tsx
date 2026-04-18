@@ -95,7 +95,6 @@ export default function Home() {
     function doJoinActiveGame(summary: SessionSummary) {
         void hapticMedium();
         startTransition(async () => {
-            exitSession();
             const joinResult = await apiClient.joinByCode({
                 joinCode: summary.joinCode,
                 displayName: user!.displayName,
@@ -113,8 +112,11 @@ export default function Home() {
                 return;
             }
             void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
+            // exitSession and initSession are batched into one commit so the Game page
+            // never sees session=null and never fires its redirect-to-home effect.
+            exitSession();
             initSession(stateResult.data, player.id);
-            history.push(`/game/${joinedSession.id}`);
+            history.replace("/game");
         });
     }
 
@@ -123,7 +125,7 @@ export default function Home() {
         // Already the active session on this device — just navigate.
         if (session?.id === summary.id) {
             void hapticLight();
-            history.push(`/game/${summary.id}`);
+            history.push("/game");
             return;
         }
         // In a different session — ask before switching.
@@ -249,7 +251,7 @@ export default function Home() {
                                         style={styles.returnButton}
                                         onClick={() => {
                                             void hapticMedium();
-                                            history.push(`/game/${session.id}`);
+                                            history.push("/game");
                                         }}
                                         disabled={isPending}
                                     >

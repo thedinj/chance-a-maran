@@ -76,7 +76,7 @@ export default function PlayerGameOptions() {
             );
             if (result.ok) {
                 updateLocalPlayer(currentPlayer.id, patch);
-                history.replace(`/game/${currentSession.id}`);
+                history.replace("/game");
             } else {
                 setError(result.error.message);
             }
@@ -84,7 +84,7 @@ export default function PlayerGameOptions() {
     }
 
     function handleCancel() {
-        history.replace(`/game/${currentSession.id}`);
+        history.replace("/game");
     }
 
     // ── Render ────────────────────────────────────────────────────────────────

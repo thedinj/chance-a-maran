@@ -182,7 +182,7 @@ export default function GameSettings() {
                         );
                     }
                     void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
-                    history.replace(`/game/${result.data.id}`, { newSession: true });
+                    history.replace("/game", { newSession: true });
                 } else {
                     setSubmitError(result.error.message);
                 }
@@ -208,7 +208,7 @@ export default function GameSettings() {
                     }
                     updateSession(result.data);
                     void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
-                    history.replace(`/game/${sessionId}`);
+                    history.replace("/game");
                 } else {
                     setSubmitError(result.error.message);
                 }
@@ -225,7 +225,7 @@ export default function GameSettings() {
 
     function handleCancel() {
         if (isEditMode) {
-            history.replace(`/game/${sessionId}`);
+            history.replace("/game");
         } else {
             history.replace("/");
         }

@@ -7,6 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { apiClient, SubmitCardRequestSchema } from "../lib/api";
 import type { Game, RequirementElement, SubmitCardRequest } from "../lib/api/types";
 import { MAX_CARD_TITLE_LENGTH, MAX_CARD_DESCRIPTION_LENGTH, DRINKING_LEVELS, SPICE_LEVELS, CARD_IMAGE_ASPECT_RATIO } from "@chance/core";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ export interface CardEditorProps {
      * survives after the modal closes.
      */
     onSpiceLevelRaised?: (label: string) => void;
+    /** Called when the user changes the spice level — lets parents react (e.g. dark theme). */
+    onSpiceLevelChange?: (level: number) => void;
     /** Parent's isPending from useTransition (e.g. during deactivate/reactivate). */
     disabled?: boolean;
     /** True when the card is permanently locked (e.g. global). Hides empty/action-only UI; shows data-carrying fields as static. */
@@ -50,7 +53,7 @@ export interface CardEditorProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEditor(
-    { defaultValues, showCardTypeSelector = true, onValidSubmit, onSpiceLevelRaised, disabled = false, readOnly = false },
+    { defaultValues, showCardTypeSelector = true, onValidSubmit, onSpiceLevelRaised, onSpiceLevelChange, disabled = false, readOnly = false },
     ref
 ) {
     // ── RHF ───────────────────────────────────────────────────────────────────
@@ -85,6 +88,9 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
 
     const cardType = watch("cardType");
     const imageYOffset = watch("imageYOffset") ?? 0.5;
+    const prefersReducedMotion = useReducedMotion();
+    const titleValue = watch("title") ?? "";
+    const titleCharsRemaining = MAX_CARD_TITLE_LENGTH - titleValue.length;
 
     // ── Image state ───────────────────────────────────────────────────────────
     // imagePreview: local URL for display only (not persisted)
@@ -301,7 +307,21 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     disabled={isDisabled}
                     {...register("title")}
                 />
-                {errors.title && <p style={styles.fieldError}>{errors.title.message}</p>}
+                <div style={styles.titleFooter}>
+                    {errors.title && <p style={styles.fieldError}>{errors.title.message}</p>}
+                    {titleCharsRemaining <= 30 && !errors.title && (
+                        <span
+                            style={{
+                                ...styles.charCount,
+                                color: titleCharsRemaining <= 10
+                                    ? "var(--color-accent-amber)"
+                                    : "var(--color-text-secondary)",
+                            }}
+                        >
+                            {titleCharsRemaining}
+                        </span>
+                    )}
+                </div>
 
                 <textarea
                     style={styles.textArea}
@@ -520,27 +540,34 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     name="drinkingLevel"
                     control={control}
                     render={({ field }) => (
-                        <>
-                            <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                {DRINKING_LEVELS.levels.map(({ value, label }) => (
+                        <div style={styles.filterBlock}>
+                            <div style={styles.selectorGroup}>
+                                {DRINKING_LEVELS.levels.map(({ value, label, emoji }) => (
                                     <button
                                         key={value}
-                                        style={
-                                            field.value === value
-                                                ? styles.toggleOn
-                                                : styles.toggleOff
-                                        }
+                                        className="chance-toggle"
+                                        style={field.value === value ? styles.toggleOn : styles.toggleOff}
                                         onClick={() => field.onChange(value)}
                                         disabled={isDisabled}
                                     >
+                                        {emoji && <span style={styles.levelEmoji}>{emoji}</span>}
                                         {label}
                                     </button>
                                 ))}
                             </div>
-                            <p style={styles.hint}>
-                                {DRINKING_LEVELS.levels[field.value].cardDescription}
-                            </p>
-                        </>
+                            <AnimatePresence mode="wait">
+                                <motion.p
+                                    key={field.value}
+                                    style={styles.hint}
+                                    initial={prefersReducedMotion ? false : { opacity: 0, y: 3 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={prefersReducedMotion ? {} : { opacity: 0, y: -3 }}
+                                    transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                                >
+                                    {DRINKING_LEVELS.levels[field.value].cardDescription}
+                                </motion.p>
+                            </AnimatePresence>
+                        </div>
                     )}
                 />
             </div>
@@ -554,27 +581,43 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                     name="spiceLevel"
                     control={control}
                     render={({ field }) => (
-                        <>
-                            <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                                {SPICE_LEVELS.levels.map(({ value, label }) => (
+                        <div style={styles.filterBlock}>
+                            <div style={styles.selectorGroup}>
+                                {SPICE_LEVELS.levels.map(({ value, label, emoji }) => (
                                     <button
                                         key={value}
-                                        style={
-                                            field.value === value
-                                                ? styles.toggleOn
-                                                : styles.toggleOff
-                                        }
-                                        onClick={() => field.onChange(value)}
+                                        className="chance-toggle"
+                                        style={field.value === value ? styles.toggleOn : styles.toggleOff}
+                                        onClick={() => {
+                                            field.onChange(value);
+                                            onSpiceLevelChange?.(value);
+                                        }}
                                         disabled={isDisabled}
                                     >
+                                        {emoji && <span style={styles.levelEmoji}>{emoji}</span>}
                                         {label}
                                     </button>
                                 ))}
                             </div>
-                            <p style={styles.hint}>
-                                {SPICE_LEVELS.levels[field.value].cardDescription}
-                            </p>
-                        </>
+                            <AnimatePresence mode="wait">
+                                <motion.p
+                                    key={field.value}
+                                    style={{
+                                        ...styles.hint,
+                                        ...(field.value === 3 && {
+                                            color: "var(--color-text-primary)",
+                                            fontStyle: "italic",
+                                        }),
+                                    }}
+                                    initial={prefersReducedMotion ? false : { opacity: 0, y: 3 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={prefersReducedMotion ? {} : { opacity: 0, y: -3 }}
+                                    transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                                >
+                                    {SPICE_LEVELS.levels[field.value].cardDescription}
+                                </motion.p>
+                            </AnimatePresence>
+                        </div>
                     )}
                 />
             </div>
@@ -971,6 +1014,11 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "2px",
     },
     toggleOn: {
         background: "var(--color-surface)",
@@ -985,6 +1033,11 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "2px",
     },
     toggleOnViolet: {
         background: "var(--color-surface)",
@@ -999,6 +1052,11 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: "52px",
         minHeight: "44px",
         textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "2px",
     },
 
     // Game chips
@@ -1118,6 +1176,39 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "var(--text-caption)",
         color: "var(--color-danger)",
         margin: "var(--space-4) var(--space-5) 0",
+    },
+
+    // Level selectors (drinking/themes)
+    filterBlock: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+    },
+    selectorGroup: {
+        display: "flex",
+        gap: "var(--space-1)",
+        flexShrink: 0,
+    },
+    levelEmoji: {
+        fontSize: "1.15em",
+        lineHeight: 1,
+        display: "block",
+        letterSpacing: 0,
+    },
+
+    // Title character counter
+    titleFooter: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        minHeight: "16px",
+    },
+    charCount: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-label)",
+        fontWeight: 500,
+        letterSpacing: "0.1em",
+        transition: "color 0.2s",
     },
 
 };

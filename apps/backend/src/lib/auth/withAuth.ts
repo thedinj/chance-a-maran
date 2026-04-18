@@ -39,7 +39,7 @@ export function withAuth(handler: RouteHandler, options?: { requireScopes?: stri
         try {
             const authHeader = req.headers.get("authorization");
             if (!authHeader?.startsWith("Bearer ")) {
-                return authError("Missing or invalid authorization header", "invalid");
+                return authError("Missing or invalid authorization header");
             }
 
             const token = authHeader.substring(7);

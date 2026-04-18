@@ -8,13 +8,16 @@ import {
     IonToast,
     useIonViewWillEnter,
 } from "@ionic/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useHistory, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { AppDialog } from "../components/AppDialog";
 import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
 import { CardReveal } from "../components/CardReveal";
+import { CardBack } from "../components/GameCard";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
 import { useOverlayBackButton } from "../hooks/useOverlayBackButton";
 import { apiClient } from "../lib/api";
@@ -61,6 +64,14 @@ function formatVoteCount(count: number) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+const MY_CARDS_EMPTY_LINES = [
+    { title: "Nothing here yet.", hint: "The deck grows when you play — submit the card you'd most want drawn on you." },
+    { title: "Your library is empty.", hint: "Every legend starts somewhere. Submit your first card." },
+    { title: "No cards in the mix.", hint: "The best sessions run on player-made chaos. Add yours." },
+    { title: "Blank slate.", hint: "You haven't submitted a card yet — which means someone else sets the tone." },
+    { title: "Start building your deck.", hint: "Submit a card that would make the table groan or cheer." },
+] as const;
+
 export default function MyCards() {
     const { user, isInitializing } = useAuth();
     const { session } = useSession();
@@ -101,12 +112,18 @@ export default function MyCards() {
     const [showDeactivateBlocked, setShowDeactivateBlocked] = useState(false);
     const [nominationError, setNominationError] = useState<string | null>(null);
 
+    const emptyLine = useRef(MY_CARDS_EMPTY_LINES[Math.floor(Math.random() * MY_CARDS_EMPTY_LINES.length)]).current;
+    const prefersReducedMotion = useReducedMotion();
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [celebrationCard, setCelebrationCard] = useState<Card | null>(null);
+
     // ── New card modal state ──────────────────────────────────────────────────
     const newModalRef = useRef<HTMLIonModalElement>(null);
     const newModalContentRef = useRef<HTMLIonContentElement>(null);
     const newEditorRef = useRef<CardEditorHandle>(null);
     const [newSubmitError, setNewSubmitError] = useState<string | null>(null);
     const [newModalOpen, setNewModalOpen] = useState(false);
+    const [newCardIsDark, setNewCardIsDark] = useState(false);
     const [spiceRaisedLabel, setSpiceRaisedLabel] = useState<string | null>(null);
     const [newPreviewCard, setNewPreviewCard] = useState<{
         card: Card;
@@ -362,7 +379,13 @@ export default function MyCards() {
             : await apiClient.submitCardOutsideSession(req);
         if (!result.ok) return { error: result.error.message };
         setMyCards((prev) => [result.data, ...prev]);
-        closeNewModal();
+        setCelebrationCard(result.data);
+        setShowCelebration(true);
+        setTimeout(() => {
+            setShowCelebration(false);
+            setCelebrationCard(null);
+            closeNewModal();
+        }, prefersReducedMotion ? 0 : 2200);
         return { savedSpiceLevel: result.data.currentVersion.spiceLevel };
     }
 
@@ -515,10 +538,8 @@ export default function MyCards() {
                             {loadError && <p style={styles.errorInline}>{loadError}</p>}
                             {!isLoading && !loadError && myCards.length === 0 && (
                                 <div style={styles.emptyState}>
-                                    <p style={styles.emptyTitle}>No cards yet.</p>
-                                    <p style={styles.emptyHint}>
-                                        Submit your first card to add it to your library.
-                                    </p>
+                                    <p style={styles.emptyTitle}>{emptyLine.title}</p>
+                                    <p style={styles.emptyHint}>{emptyLine.hint}</p>
                                     <button style={styles.emptyAction} onClick={openNewCard}>
                                         Submit a card
                                     </button>
@@ -866,18 +887,20 @@ export default function MyCards() {
                     setNewModalOpen(false);
                     newEditorRef.current?.reset();
                     setNewSubmitError(null);
+                    setNewCardIsDark(false);
                 }}
+                className={newCardIsDark ? "game-settings-dark" : undefined}
                 style={{ "--border-radius": "0" } as React.CSSProperties}
             >
                 <IonContent
                     ref={newModalContentRef}
-                    style={{ "--background": "var(--color-bg)" } as React.CSSProperties}
+                    style={{ "--background": newCardIsDark ? "#0e0608" : "var(--color-bg)" } as React.CSSProperties}
                 >
-                    <div style={styles.modalRoot}>
+                    <div style={{ ...styles.modalRoot, backgroundColor: newCardIsDark ? "#0e0608" : "var(--color-bg)", transition: "background-color 0.4s ease" }}>
                         {newModalOpen && <ModalBackButtonTrap onBack={closeNewModal} />}
                         <div style={styles.modalHeader}>
                             <h2 style={styles.modalTitle}>New card</h2>
-                            <button style={styles.closeButton} onClick={closeNewModal}>
+                            <button style={{ ...styles.closeButton, color: newCardIsDark ? "#b03030" : "var(--color-text-secondary)", transition: "color 0.3s ease" }} onClick={closeNewModal}>
                                 ×
                             </button>
                         </div>
@@ -886,6 +909,7 @@ export default function MyCards() {
                             ref={newEditorRef}
                             onValidSubmit={onNewCardSubmit}
                             onSpiceLevelRaised={setSpiceRaisedLabel}
+                            onSpiceLevelChange={(level) => setNewCardIsDark(level === 3)}
                         />
 
                         <div style={styles.divider} />
@@ -961,9 +985,77 @@ export default function MyCards() {
                     buttons={[{ label: "OK", onClick: () => setShowDeactivateBlocked(false) }]}
                 />
             )}
+
+            {createPortal(
+                <AnimatePresence>
+                    {newCardIsDark && (
+                        <motion.div
+                            key="new-card-dark-flash"
+                            initial={{ opacity: 0.35 }}
+                            animate={{ opacity: 0 }}
+                            transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+                            style={{
+                                position: "fixed",
+                                inset: 0,
+                                backgroundColor: "#1a0005",
+                                pointerEvents: "none",
+                                zIndex: 9998,
+                            }}
+                        />
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+            {showCelebration && celebrationCard && createPortal(
+                <div style={celebrationStyles.overlay}>
+                    <div style={celebrationStyles.cardWrap}>
+                        <CardBack card={celebrationCard} cardVersion={celebrationCard.currentVersion} />
+                    </div>
+                    <p style={celebrationStyles.title}>Card submitted.</p>
+                    <p style={celebrationStyles.sub}>It's in the deck.</p>
+                </div>,
+                document.body
+            )}
         </IonPage>
     );
 }
+
+// ─── Celebration overlay ──────────────────────────────────────────────────────
+
+const celebrationStyles: Record<string, React.CSSProperties> = {
+    overlay: {
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: "var(--color-bg)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "var(--space-5)",
+        animation: "fadeIn 0.22s ease both",
+    },
+    cardWrap: {
+        width: "min(58vw, 260px)",
+        animation: "cardDeal 0.38s cubic-bezier(0.4, 0, 0.2, 1) both",
+    },
+    title: {
+        fontFamily: "var(--font-display)",
+        fontSize: "var(--text-display)",
+        fontWeight: 700,
+        color: "var(--color-text-primary)",
+        margin: 0,
+        letterSpacing: "-0.02em",
+    },
+    sub: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-body)",
+        color: "var(--color-text-secondary)",
+        margin: 0,
+        letterSpacing: "0.08em",
+        marginTop: "calc(var(--space-2) * -1)",
+    },
+};
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

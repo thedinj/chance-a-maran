@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500&family=Playfair+Display:wght@700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500&family=Jost:wght@300;400;500&family=Playfair+Display:wght@700&display=swap");
 
 /* ─── Chance Design Tokens ─────────────────────────────────────────── */
 :root {
@@ -305,6 +305,40 @@ ion-content.game-content::part(scroll) {
     --color-border: #3d1a1a;
     --color-accent-primary: #b03030;
     --color-text-secondary: #8a7070;
+}
+
+/* ─── Late-night ambient theme (22:00–04:00) — neon dive bar ────────── */
+/* Deep midnight indigo, electric neon violet. Gut-punch shift at 22:00. */
+/* draw button glow auto-neons because keyframes use --color-accent-primary */
+.game-late-night {
+    --color-bg: #060814;
+    --color-surface: #0d1028;
+    --color-surface-elevated: #141830;
+    --color-border: #252a5a;
+    --color-accent-primary: #9966ff;
+    --color-text-primary: #c8cff0;
+    --color-text-secondary: #3e4470;
+
+    /* Fonts — Barlow Condensed reads like a neon sign; Jost is cold geometric */
+    --font-display: "Barlow Condensed", "Impact", condensed, sans-serif;
+    --font-ui: "Jost", "Futura", system-ui, sans-serif;
+
+    /* Ionic overrides */
+    --ion-background-color: #060814;
+    --ion-background-color-rgb: 6, 8, 20;
+    --ion-toolbar-background: #080b1c;
+    --ion-tab-bar-background: #080b1c;
+    --ion-item-background: #0d1028;
+    --ion-font-family: "Jost", "Futura", system-ui, sans-serif;
+}
+
+/* ─── Late-night neon glow — toolbar and footer framing ─────────────── */
+.game-late-night ion-toolbar::part(native) {
+    box-shadow: 0 2px 20px rgba(153, 102, 255, 0.28);
+}
+
+.game-late-night ion-footer::part(native) {
+    box-shadow: 0 -2px 24px rgba(153, 102, 255, 0.22);
 }
 
 /* ─── Toggle/chip press feedback ───────────────────────────────────── */

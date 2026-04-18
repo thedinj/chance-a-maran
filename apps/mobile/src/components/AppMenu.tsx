@@ -62,7 +62,7 @@ export function AppMenu() {
 
     const playNav: NavItem[] = useMemo(
         () => [
-            ...(session ? [{ label: "Return to game", path: `/game/${session.id}` }] : []),
+            ...(session ? [{ label: "Return to game", path: "/game" }] : []),
             ...(session && isHost
                 ? [{ label: "Game settings", path: `/game-settings/${session.id}` }]
                 : []),
@@ -88,7 +88,7 @@ export function AppMenu() {
     );
 
     const isActive = (path: string) =>
-        path === "/" ? pathname === "/" : pathname.startsWith(path);
+        path === "/" || path === "/game" ? pathname === path : pathname.startsWith(path);
 
     function handleSignOut() {
         startTransition(async () => {

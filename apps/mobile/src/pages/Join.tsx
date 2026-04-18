@@ -1,6 +1,8 @@
 import { IonButton, IonContent, IonInput, IonPage, IonSpinner } from "@ionic/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useReducedMotion } from "motion/react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useHistory, useParams } from "react-router-dom";
@@ -69,6 +71,9 @@ export default function Join() {
     const [serverError, setServerError] = useState<string | null>(null);
     const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
     const [isPending, startTransition] = useTransition();
+    const [showWelcome, setShowWelcome] = useState(false);
+    const [welcomeName, setWelcomeName] = useState("");
+    const prefersReducedMotion = useReducedMotion();
 
     const nameInputRef = useRef<HTMLIonInputElement>(null);
 
@@ -176,7 +181,11 @@ export default function Join() {
                 addDrawEvent(event);
             }
             void queryClient.invalidateQueries({ queryKey: ACTIVE_SESSIONS_KEY });
-            history.replace(`/game/${session.id}`);
+            setWelcomeName(trimmedName);
+            setShowWelcome(true);
+            setTimeout(() => {
+                history.replace("/game");
+            }, prefersReducedMotion ? 0 : 1400);
         });
     }
 
@@ -225,9 +234,49 @@ export default function Join() {
                     )}
                 </div>
             </IonContent>
+            {showWelcome && createPortal(
+                <div style={joinWelcomeStyles.overlay}>
+                    <p style={joinWelcomeStyles.greeting}>You're in.</p>
+                    <p style={joinWelcomeStyles.name}>{welcomeName}</p>
+                </div>,
+                document.body
+            )}
         </IonPage>
     );
 }
+
+// ─── Welcome overlay styles ───────────────────────────────────────────────────
+
+const joinWelcomeStyles = {
+    overlay: {
+        position: "fixed" as const,
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: "var(--color-bg)",
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "var(--space-3)",
+        animation: "fadeIn 0.2s ease both",
+    },
+    greeting: {
+        fontFamily: "var(--font-display)",
+        fontSize: "var(--text-display)",
+        fontWeight: 700,
+        color: "var(--color-text-primary)",
+        margin: 0,
+        letterSpacing: "-0.02em",
+    },
+    name: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-subheading)",
+        color: "var(--color-accent-amber)",
+        margin: 0,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase" as const,
+    },
+};
 
 // ─── CodeStep ─────────────────────────────────────────────────────────────────
 

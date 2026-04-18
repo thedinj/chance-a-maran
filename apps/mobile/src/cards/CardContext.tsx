@@ -11,7 +11,16 @@ export function CardProvider({ children }: { children: React.ReactNode }) {
             if (existingIndex === -1) {
                 return [event, ...prev];
             }
-
+            const existing = prev[existingIndex]!;
+            // Only create a new array if mutable fields actually changed.
+            // Polling returns a fresh object each time, so reference equality always fails;
+            // checking fields avoids spurious re-renders on every poll cycle.
+            if (
+                existing.resolved === event.resolved &&
+                existing.descriptionShared === event.descriptionShared
+            ) {
+                return prev;
+            }
             const next = [...prev];
             next[existingIndex] = event;
             return next;

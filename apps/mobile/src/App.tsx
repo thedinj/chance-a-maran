@@ -145,7 +145,7 @@ export default function App() {
                                                 </Suspense>
                                             </Route>
 
-                                            <Route exact path="/game/:sessionId">
+                                            <Route exact path="/game">
                                                 <Suspense fallback={<PageSkeleton />}>
                                                     <Game />
                                                 </Suspense>

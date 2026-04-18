@@ -1,3 +1,4 @@
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import React, { useState } from "react";
 import { AppDialog } from "../../../components/AppDialog";
 import { hapticLight } from "../../../lib/haptics";
@@ -28,8 +29,11 @@ export function CardActions({ event, onDismiss, hasRevealed: hasRevealedProp }: 
     const isDrawer = event.playerId === activePlayerId;
     const pendingTransfer = pendingTransfers.find((t) => t.drawEventId === event.id) ?? null;
 
+    const prefersReducedMotion = useReducedMotion();
     const [voteDir, setVoteDir] = useState<"up" | "down" | null>(null);
     const [votePending, setVotePending] = useState(false);
+    const [voteKey, setVoteKey] = useState(0);
+    const [voteLabelDir, setVoteLabelDir] = useState<"up" | "down" | null>(null);
     const [resolvePending, setResolvePending] = useState(false);
     const [showTransferPicker, setShowTransferPicker] = useState(false);
     const [confirmTransfer, setConfirmTransfer] = useState<{
@@ -54,6 +58,11 @@ export function CardActions({ event, onDismiss, hasRevealed: hasRevealedProp }: 
         if (votePending) return;
         const next = voteDir === dir ? null : dir;
         setVoteDir(next);
+        if (next !== null) {
+            setVoteKey((k) => k + 1);
+            setVoteLabelDir(next);
+            setTimeout(() => setVoteLabelDir(null), 650);
+        }
         setVotePending(true);
         hapticLight();
         await handleVote(cv.cardId, next);
@@ -175,34 +184,102 @@ export function CardActions({ event, onDismiss, hasRevealed: hasRevealedProp }: 
             )}
 
             <div style={styles.actionBar as React.CSSProperties} onClick={(e) => e.stopPropagation()}>
-                <button style={styles.actionBtn as React.CSSProperties} onClick={() => handleVoteClick("up")} disabled={votePending}>
-                    <span
+                <button
+                    style={{ ...(styles.actionBtn as React.CSSProperties), position: "relative" }}
+                    onClick={() => handleVoteClick("up")}
+                    disabled={votePending}
+                >
+                    <AnimatePresence>
+                        {voteLabelDir === "up" && !prefersReducedMotion && (
+                            <motion.span
+                                key={voteKey}
+                                initial={{ opacity: 0, y: 0 }}
+                                animate={{ opacity: 1, y: -20 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    left: "50%",
+                                    transform: "translateX(-50%)",
+                                    fontFamily: "var(--font-ui)",
+                                    fontSize: "var(--text-caption)",
+                                    fontWeight: 700,
+                                    color: "var(--color-accent-amber)",
+                                    pointerEvents: "none",
+                                    zIndex: 10,
+                                    lineHeight: 1,
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                +1
+                            </motion.span>
+                        )}
+                    </AnimatePresence>
+                    <motion.span
                         style={{
                             ...(styles.actionIcon as React.CSSProperties),
-                            color:
-                                voteDir === "up"
-                                    ? "var(--color-accent-amber)"
-                                    : "var(--color-text-secondary)",
+                            color: voteDir === "up" ? "var(--color-accent-amber)" : "var(--color-text-secondary)",
                         }}
+                        animate={!prefersReducedMotion && voteDir === "up" ? { scale: [1, 1.6, 1] } : { scale: 1 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                     >
                         ↑
-                    </span>
+                    </motion.span>
                     <span style={styles.actionLabel as React.CSSProperties}>Up</span>
                 </button>
 
-                <button style={styles.actionBtn as React.CSSProperties} onClick={() => handleVoteClick("down")} disabled={votePending}>
-                    <span
+                <button
+                    style={{ ...(styles.actionBtn as React.CSSProperties), position: "relative" }}
+                    onClick={() => handleVoteClick("down")}
+                    disabled={votePending}
+                >
+                    <AnimatePresence>
+                        {voteLabelDir === "down" && !prefersReducedMotion && (
+                            <motion.span
+                                key={voteKey}
+                                initial={{ opacity: 0, y: 0 }}
+                                animate={{ opacity: 1, y: -20 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    left: "50%",
+                                    transform: "translateX(-50%)",
+                                    fontFamily: "var(--font-ui)",
+                                    fontSize: "var(--text-caption)",
+                                    fontWeight: 700,
+                                    color: "var(--color-danger)",
+                                    pointerEvents: "none",
+                                    zIndex: 10,
+                                    lineHeight: 1,
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                −1
+                            </motion.span>
+                        )}
+                    </AnimatePresence>
+                    <motion.span
                         style={{
                             ...(styles.actionIcon as React.CSSProperties),
-                            color:
-                                voteDir === "down"
-                                    ? "var(--color-danger)"
-                                    : "var(--color-text-secondary)",
+                            color: voteDir === "down" ? "var(--color-danger)" : "var(--color-text-secondary)",
+                        }}
+                        animate={!prefersReducedMotion && voteDir === "down" ? { scale: [1, 1.6, 1] } : { scale: 1 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                        {voteDir === "down" ? "🪦" : "↓"}
+                    </motion.span>
+                    <span
+                        style={{
+                            ...(styles.actionLabel as React.CSSProperties),
+                            color: voteDir === "down" ? "var(--color-danger)" : undefined,
+                            fontStyle: voteDir === "down" ? "italic" : undefined,
                         }}
                     >
-                        ↓
+                        {voteDir === "down" ? "Buried" : "Boo"}
                     </span>
-                    <span style={styles.actionLabel as React.CSSProperties}>Down</span>
                 </button>
 
                 <button style={styles.actionBtn as React.CSSProperties} onClick={handleResolveClick} disabled={resolvePending}>

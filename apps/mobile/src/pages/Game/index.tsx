@@ -20,6 +20,18 @@ import { useGamePage } from "./useGamePage";
 export default function Game() {
     const page = useGamePage();
 
+    const [isLateNight, setIsLateNight] = useState(() => {
+        const h = new Date().getHours();
+        return h >= 22 || h < 4;
+    });
+    useEffect(() => {
+        const id = setInterval(() => {
+            const h = new Date().getHours();
+            setIsLateNight(h >= 22 || h < 4);
+        }, 60_000);
+        return () => clearInterval(id);
+    }, []);
+
     const {
         session,
         history,
@@ -71,10 +83,18 @@ export default function Game() {
 
     return (
         <GamePageProvider value={page}>
-            <IonPage>
+            <IonPage className={isLateNight ? "game-late-night" : undefined}>
                 <GameHeader />
 
-                <IonContent scrollY className="game-content">
+                <IonContent
+                    scrollY
+                    className="game-content"
+                    style={
+                        isLateNight
+                            ? ({ "--background": "#060814" } as React.CSSProperties)
+                            : undefined
+                    }
+                >
                     <div style={styles.contentArea as React.CSSProperties}>
                         <CardCarousel
                             displayCards={displayCards}
@@ -123,6 +143,7 @@ export default function Game() {
                         card={revealCard.card}
                         cardVersion={revealCard.cardVersion}
                         onDismiss={onDismissReveal}
+                        isLateNight={isLateNight}
                     />
                 )}
                 {selectedCard && !revealCard && (
@@ -132,6 +153,7 @@ export default function Game() {
                         mode="quick"
                         onDismiss={handleDismissDetail}
                         onCardReveal={() => setDetailHasRevealed(true)}
+                        isLateNight={isLateNight}
                         footer={
                             <CardActions
                                 event={selectedCard}
