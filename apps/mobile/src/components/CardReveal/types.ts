@@ -17,9 +17,9 @@ export type RevealPhase = "reparations-intro" | "audio-intro" | "flipping" | "re
 export const STANDARD_DRAW_DRAMA: DrawDrama = {
     loopSound: "/sound/drumrollloop.mp3",
     hitSound: "/sound/cymbal.mp3",
-    backMs: 750,
-    flipMs: 1000,
-    hitSoundOffsetMs: 750,
+    backMs: 1500,
+    flipMs: 2000,
+    hitSoundOffsetMs: 2000,
 };
 
 export const GAME_CHANGER_DRAMA: DrawDrama = {
@@ -38,4 +38,5 @@ export const REPARATIONS_DRAMA: DrawDrama = {
     backMs: 5000,
     flipMs: 2000,
     flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)",
+    hitSoundOffsetMs: 6000,
 };

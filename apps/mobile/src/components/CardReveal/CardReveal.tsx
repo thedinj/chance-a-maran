@@ -443,8 +443,9 @@ export function CardReveal({
     const drama = prefersReduced ? null : toDrama(card, cardVersion);
 
     // Resolve custom hit sound from cardVersion.soundId
-    const customHitSound =
-        cardVersion.soundId ? (apiClient.resolveMediaUrl(cardVersion.soundId) ?? undefined) : undefined;
+    const customHitSound = cardVersion.soundId
+        ? (apiClient.resolveMediaUrl(cardVersion.soundId) ?? undefined)
+        : undefined;
 
     return ReactDOM.createPortal(
         <DramaticReveal
@@ -486,7 +487,14 @@ function QuickReveal({ card, cardVersion, onDismiss, footer, onCardReveal }: Qui
     return (
         <div style={quickBackdrop} onClick={onDismiss}>
             <div
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--space-3) var(--space-5)", minHeight: 0 }}
+                style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "var(--space-3) var(--space-5)",
+                    minHeight: 0,
+                }}
             >
                 <div
                     style={{ maxWidth: "430px", width: "100%" }}
@@ -500,9 +508,7 @@ function QuickReveal({ card, cardVersion, onDismiss, footer, onCardReveal }: Qui
                     />
                 </div>
             </div>
-            {flipped && footer && (
-                <div onClick={(e) => e.stopPropagation()}>{footer}</div>
-            )}
+            {flipped && footer && <div onClick={(e) => e.stopPropagation()}>{footer}</div>}
         </div>
     );
 }
@@ -550,11 +556,10 @@ function DramaticReveal({
             return {
                 ...drama,
                 hitSound: customHitSound,
-                ...(isReparations ? { hitSoundOffsetMs: REPARATIONS_DRAMA.flipMs - 250 } : {}),
             };
         }
         return drama;
-    }, [drama, customHitSound, isReparations]);
+    }, [drama, customHitSound]);
 
     const initialPhase: RevealPhase = isReparations
         ? "reparations-intro"
