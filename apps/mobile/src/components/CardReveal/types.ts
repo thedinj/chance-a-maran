@@ -8,7 +8,6 @@ export interface DrawDrama {
     backMs: number;
     flipMs: number;
     flipEasing?: string;
-    preFlipLabel?: string;
     hitSoundOffsetMs?: number;
 }
 
@@ -29,7 +28,6 @@ export const GAME_CHANGER_DRAMA: DrawDrama = {
     backMs: 0,
     flipMs: 3000,
     flipEasing: "cubic-bezier(0.42, 0, 0.58, 1)",
-    preFlipLabel: "GAME CHANGER",
     hitSoundOffsetMs: 2000,
 };
 

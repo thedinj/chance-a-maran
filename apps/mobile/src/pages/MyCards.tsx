@@ -8,6 +8,7 @@ import { AppHeader } from "../components/AppHeader";
 import CardEditor, { type CardEditorHandle } from "../components/CardEditor";
 import { CardReveal } from "../components/CardReveal";
 import { useGoToHomeBase } from "../hooks/useHomeBase";
+import { useOverlayBackButton } from "../hooks/useOverlayBackButton";
 import { apiClient } from "../lib/api";
 import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
 import { useSession } from "../session/useSession";
@@ -33,6 +34,11 @@ function cardVersionToEditorDefaults(
         imageYOffset: cv.imageYOffset ?? 0.5,
         soundId: cv.soundId ?? undefined,
     };
+}
+
+function ModalBackButtonTrap({ onBack }: { onBack: () => void }) {
+    useOverlayBackButton(onBack);
+    return null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -80,6 +86,7 @@ export default function MyCards() {
     const newModalContentRef = useRef<HTMLIonContentElement>(null);
     const newEditorRef = useRef<CardEditorHandle>(null);
     const [newSubmitError, setNewSubmitError] = useState<string | null>(null);
+    const [newModalOpen, setNewModalOpen] = useState(false);
     const [spiceRaisedLabel, setSpiceRaisedLabel] = useState<string | null>(null);
     const [newPreviewCard, setNewPreviewCard] = useState<{ card: Card; cardVersion: CardVersion } | null>(null);
 
@@ -573,6 +580,7 @@ export default function MyCards() {
                 <IonContent ref={modalContentRef} style={{ "--background": "var(--color-bg)" } as React.CSSProperties}>
                     {selectedCard && (
                         <div style={styles.modalRoot}>
+                            <ModalBackButtonTrap onBack={closeModal} />
                             {/* Modal header */}
                             <div style={styles.modalHeader}>
                                 <h2 style={styles.modalTitle}>
@@ -793,8 +801,9 @@ export default function MyCards() {
             {/* ── New card modal ──────────────────────────────────────────────── */}
             <IonModal
                 ref={newModalRef}
-                onDidPresent={() => newModalContentRef.current?.scrollToTop(0)}
+                onDidPresent={() => { newModalContentRef.current?.scrollToTop(0); setNewModalOpen(true); }}
                 onDidDismiss={() => {
+                    setNewModalOpen(false);
                     newEditorRef.current?.reset();
                     setNewSubmitError(null);
                 }}
@@ -805,6 +814,7 @@ export default function MyCards() {
                     style={{ "--background": "var(--color-bg)" } as React.CSSProperties}
                 >
                     <div style={styles.modalRoot}>
+                        {newModalOpen && <ModalBackButtonTrap onBack={closeNewModal} />}
                         <div style={styles.modalHeader}>
                             <h2 style={styles.modalTitle}>New card</h2>
                             <button style={styles.closeButton} onClick={closeNewModal}>
