@@ -464,6 +464,14 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
                                                 </span>
                                             )}
                                         </div>
+                                        {field.value && !soundUploading && (
+                                            <audio
+                                                key={field.value}
+                                                controls
+                                                src={apiClient.resolveMediaUrl(field.value)!}
+                                                style={{ width: "100%", height: "36px" }}
+                                            />
+                                        )}
                                         {!readOnly && (
                                             <div style={{ display: "flex", gap: "var(--space-2)" }}>
                                                 <button

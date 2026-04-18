@@ -12,6 +12,29 @@ import { apiClient } from "../lib/api";
 import type { Card, CardVersion, GetAllCardsFilters, SubmitCardRequest } from "../lib/api/types";
 import { useSession } from "../session/useSession";
 
+// Maps a saved CardVersion + cardType to CardEditor defaultValues.
+// Typed explicitly so TypeScript surfaces any new SubmitCardRequest fields
+// that need to be wired up here.
+function cardVersionToEditorDefaults(
+    cv: CardVersion,
+    cardType: Card["cardType"],
+): Partial<SubmitCardRequest> {
+    return {
+        title: cv.title,
+        description: cv.description ?? "",
+        hiddenInstructions: cv.hiddenInstructions,
+        drinkingLevel: cv.drinkingLevel as SubmitCardRequest["drinkingLevel"],
+        spiceLevel: cv.spiceLevel as SubmitCardRequest["spiceLevel"],
+        isGameChanger: cv.isGameChanger,
+        cardType,
+        gameTags: cv.gameTags.map((g) => g.id),
+        requirementIds: cv.requirements.map((r) => r.id),
+        imageId: cv.imageId ?? undefined,
+        imageYOffset: cv.imageYOffset ?? 0.5,
+        soundId: cv.soundId ?? undefined,
+    };
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyCards() {
@@ -610,30 +633,10 @@ export default function MyCards() {
                             <CardEditor
                                 key={selectedCard.id}
                                 ref={editorRef}
-                                defaultValues={{
-                                    title: selectedCard.currentVersion.title,
-                                    description: selectedCard.currentVersion.description ?? "",
-                                    hiddenInstructions:
-                                        selectedCard.currentVersion.hiddenInstructions,
-                                    drinkingLevel: selectedCard.currentVersion.drinkingLevel as
-                                        | 0
-                                        | 1
-                                        | 2
-                                        | 3,
-                                    spiceLevel: selectedCard.currentVersion.spiceLevel as
-                                        | 0
-                                        | 1
-                                        | 2
-                                        | 3,
-                                    isGameChanger: selectedCard.currentVersion.isGameChanger,
-                                    cardType: selectedCard.cardType,
-                                    gameTags: selectedCard.currentVersion.gameTags.map((g) => g.id),
-                                    requirementIds: selectedCard.currentVersion.requirements.map(
-                                        (r) => r.id
-                                    ),
-                                    imageId: selectedCard.currentVersion.imageId ?? undefined,
-                                    imageYOffset: selectedCard.currentVersion.imageYOffset ?? 0.5,
-                                }}
+                                defaultValues={cardVersionToEditorDefaults(
+                                    selectedCard.currentVersion,
+                                    selectedCard.cardType,
+                                )}
                                 showCardTypeSelector={false}
                                 onValidSubmit={onEditValidSubmit}
                                 onSpiceLevelRaised={setSpiceRaisedLabel}
