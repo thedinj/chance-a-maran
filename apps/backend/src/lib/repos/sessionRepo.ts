@@ -94,13 +94,13 @@ export function findHistoryByUserId(userId: string): DbSessionSummary[] {
     return db
         .prepare(
             `SELECT s.*,
-                    COUNT(DISTINCT sp.id) AS player_count,
+                    COUNT(DISTINCT all_sp.id) AS player_count,
                     COUNT(DISTINCT de.id) AS draw_count
              FROM sessions s
-             JOIN session_players sp ON sp.session_id = s.id
+             JOIN session_players user_sp ON user_sp.session_id = s.id AND user_sp.user_id = ?
+             JOIN session_players all_sp ON all_sp.session_id = s.id
              LEFT JOIN draw_events de ON de.session_id = s.id
-             WHERE sp.user_id = ?
-               AND s.status IN ('ended', 'expired')
+             WHERE s.status IN ('ended', 'expired')
              GROUP BY s.id
              ORDER BY s.created_at DESC`
         )
@@ -138,13 +138,13 @@ export function findActiveByUserId(userId: string): DbSessionSummary[] {
     return db
         .prepare(
             `SELECT s.*,
-                    COUNT(DISTINCT sp.id) AS player_count,
+                    COUNT(DISTINCT all_sp.id) AS player_count,
                     COUNT(DISTINCT de.id) AS draw_count
              FROM sessions s
-             JOIN session_players sp ON sp.session_id = s.id
+             JOIN session_players user_sp ON user_sp.session_id = s.id AND user_sp.user_id = ?
+             JOIN session_players all_sp ON all_sp.session_id = s.id
              LEFT JOIN draw_events de ON de.session_id = s.id
-             WHERE sp.user_id = ?
-               AND s.status = 'active'
+             WHERE s.status = 'active'
              GROUP BY s.id
              ORDER BY s.created_at DESC`
         )

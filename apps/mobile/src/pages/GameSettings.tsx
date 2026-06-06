@@ -260,7 +260,7 @@ export default function GameSettings() {
                     {/* Page header */}
                     <div style={styles.pageHeader}>
                         <button style={styles.backLink} onClick={handleCancel} disabled={isPending}>
-                            ←
+                            «
                         </button>
                         <h1 style={styles.heading}>{isEditMode ? "Game Settings" : "New Game"}</h1>
                     </div>

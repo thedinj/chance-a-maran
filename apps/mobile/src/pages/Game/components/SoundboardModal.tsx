@@ -60,7 +60,12 @@ export function SoundboardModal() {
                     </button>
                 </div>
                 {sounds && sounds.length > 0 ? (
-                    <div style={styles.soundboardGrid as React.CSSProperties}>
+                    <div
+                        style={{
+                            ...(styles.soundboardGrid as React.CSSProperties),
+                            gridTemplateColumns: `repeat(${Math.min(sounds.length, 3)}, 1fr)`,
+                        }}
+                    >
                         {sounds.map((sound) => {
                             const isPopping = poppingIds.has(sound.id);
                             const isPlaying = playingIds.has(sound.id);

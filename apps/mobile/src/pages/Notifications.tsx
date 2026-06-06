@@ -21,6 +21,9 @@ export default function Notifications() {
     const { drawHistory, addDrawEvent, removeDrawEvent } = useCards();
     const { pendingTransfers, removeTransfer } = useTransfers();
     const history = useHistory();
+    const emptyNotifLine = useRef(
+        NOTIF_EMPTY_LINES[Math.floor(Math.random() * NOTIF_EMPTY_LINES.length)]
+    ).current;
 
     if (!session) {
         history.replace("/");
@@ -28,7 +31,6 @@ export default function Notifications() {
     }
 
     const currentSession = session;
-    const emptyNotifLine = useRef(NOTIF_EMPTY_LINES[Math.floor(Math.random() * NOTIF_EMPTY_LINES.length)]).current;
 
     // Incoming transfers for device players only
     const incomingTransfers = pendingTransfers.filter((t) =>
@@ -166,18 +168,10 @@ function TransferItem({
                 </p>
             </div>
             <div style={styles.transferActions}>
-                <button
-                    style={styles.acceptBtn}
-                    onClick={handleAccept}
-                    disabled={isPending}
-                >
+                <button style={styles.acceptBtn} onClick={handleAccept} disabled={isPending}>
                     Accept
                 </button>
-                <button
-                    style={styles.declineBtn}
-                    onClick={handleDecline}
-                    disabled={isPending}
-                >
+                <button style={styles.declineBtn} onClick={handleDecline} disabled={isPending}>
                     Decline
                 </button>
             </div>

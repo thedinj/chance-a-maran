@@ -98,10 +98,11 @@ src/
 **Key patterns:**
 - All queries use prepared statements — no string interpolation.
 - Boolean columns use `boolToInt`/`intToBool` helpers (SQLite has no native bool).
-- Migrations in `src/db/migrations/` tracked in a `_migrations` table. Supports `rollback` to reverse the last migration. Foreign keys are disabled per migration transaction.
+- Migrations in `src/db/migrations/` tracked in a `_migrations` table. Supports `rollback` to reverse the last migration. The migration runner disables foreign keys inside the transaction — migration files themselves do not need to do this. Migration files export `up(db: Database): void` and `down(db: Database): void`; the filename is `YYYYMMDD_HHMMSS_description.ts`.
 - Every API response: `{ ok, data/error, serverTimestamp }` envelope — no exceptions.
 - Mutations return the full updated entity.
 - `GET /api/health` — no auth, no DB; pure liveness probe.
+- All route files must have `export const dynamic = "force-dynamic"` at the top.
 
 **Environment variables** (see `.env.example`):
 ```
@@ -146,6 +147,14 @@ PORT=3001
 
 Mantine UI at `/admin`. Protected by a separate admin session (not user JWT) managed by `AdminSessionContext` / `AdminSessionProvider`. Admins can: manage cards (analyze, promote/demote global, transfer ownership), manage sessions, games, requirement elements, invitation codes, users, and app settings.
 
+**Admin page patterns:**
+- All admin pages are Next.js Client Components (`"use client"` at the top).
+- `useAdminFetch()` — hook from `@/lib/admin/useAdminFetch` that attaches admin session credentials to every fetch. Use for all admin API calls.
+- `useAdminSession()` — hook from `@/lib/admin/useAdminSession` that returns `{ user, isLoading, logout }`. Only needed if rendering the logged-in admin's info.
+- UI uses Mantine v7: `Table`, `Modal`, `Drawer`, `Switch`, `Badge`, `Button`, `Stack`, `Group`, `Text`, `TextInput`, `Center`, `Loader`, `ActionIcon`, `Tooltip`, `ScrollArea`, `Divider`, `Title`.
+- `notifications.show({ message: "...", color: "green" })` for success; `color: "red"` for errors.
+- Nav: add new pages to the `NAV_ITEMS` array in `apps/backend/src/app/admin/layout.tsx`.
+
 ### Card Nomination / Global Promotion
 
 Card owners can nominate a card for global pool review (`POST /api/cards/:id/nominate` / `/unnominate`). Admin promotes (`/promote`) or demotes (`/demote`) it. `card.is_global` (admin-only field) marks globally available cards.
@@ -174,6 +183,8 @@ App startup: before rendering providers, prefetches `appConfigQueryOptions` and 
 
 All routes except `/` are `React.lazy` wrapped in `<Suspense fallback={<PageSkeleton />}>`.
 
+**Registering a new route:** Add a `React.lazy` import near the other lazy imports at the top of `App.tsx`, then add a `<Route exact path="/your-path">` with `<Suspense fallback={<PageSkeleton />}>` inside `<IonRouterOutlet id="main-content">`, before the catch-all `<Route>` that redirects to `/`.
+
 - **Open:** `/`, `/login`, `/register`, `/join/:code?`
 - **Session member (any JWT):** `/game/:sessionId`, `/notifications`
 - **Registered only:** `/game-settings` (create), `/game-settings/:sessionId` (edit), `/game-options/:sessionId/:playerId`, `/settings`, `/submit-card`, `/cards`
@@ -193,6 +204,63 @@ All routes except `/` are `React.lazy` wrapped in `<Suspense fallback={<PageSkel
 - **Queries:** `useSuspenseQuery` everywhere. First visit suspends → skeleton; background refetches never re-suspend.
 - **Mutations:** wrap in React 19 `startTransition`; `isPending` from `useTransition` drives a Mantine `<LoadingOverlay>`. Form stays rendered underneath for retry.
 - **Suspense boundary rule:** always at route level, inside `IonReactRouter` and all Context providers. A boundary above a Context unmounts it on suspend, resetting state.
+
+### Mobile UI Conventions
+
+**Page structure** — every page follows this exact shape:
+- `<IonPage>` → `<AppHeader />` → `<IonContent>` → `<div style={styles.root}>` with `flexDirection: "column"`, `backgroundColor: "var(--color-bg)"`, `paddingTop: "var(--space-5)"`, `paddingBottom: "var(--space-8)"`.
+- Page title lives **inside the content area** in a `pageHeader` div, not in `<IonToolbar>`. `<AppHeader>` renders only the hamburger menu + optional title from context.
+- Styles are defined as `const styles: Record<string, React.CSSProperties> = { ... }` at the bottom of the file.
+
+**Back navigation** — universally `«` (U+00AB, left double angle quotation mark). Styled as:
+```ts
+backLink: {
+    background: "none", border: "none",
+    fontFamily: "var(--font-ui)", fontSize: "var(--text-subheading)",
+    color: "var(--color-accent-primary)", cursor: "pointer",
+    padding: 0, lineHeight: 1,
+    minHeight: "44px", minWidth: "44px",
+    display: "flex", alignItems: "center",
+}
+```
+Never use `←`, `<`, or a text label like "Back". Place it as the first child of `pageHeader`.
+
+**Hit targets** — all interactive elements (buttons, links, toggles) must be at least 44 × 44 px in the touch axis.
+
+**Lists** — plain flex column `<div>`, each row `borderBottom: "1px solid var(--color-border)"`. No `<IonList>`.
+
+**Modals** — `<IonModal>` for sheet editors; `<AppDialog>` (from `../components/AppDialog`) for confirmations. Pass `style={{ "--border-radius": "0" } as React.CSSProperties}` to `IonModal`.
+
+**Empty states** — include a title + hint + optional CTA. Pick a random message with `useRef` at mount to avoid flicker.
+
+**Mantine usage** — only `@mantine/hooks` is used in the mobile app (e.g. `useDebouncedValue`). Do not use Mantine UI components in mobile pages — use Ionic + plain HTML.
+
+**Animations** — use `motion/react` (`AnimatePresence`, `motion.div`, etc.). Always gate animations behind `window.matchMedia("(prefers-reduced-motion: reduce)").matches`.
+
+**CSS design tokens** (defined in `apps/mobile/src/theme/variables.css`):
+
+| Token | Purpose |
+|---|---|
+| `--color-bg` | Page background |
+| `--color-surface` | Card/input background |
+| `--color-surface-elevated` | Elevated surfaces |
+| `--color-border` | Dividers, input borders |
+| `--color-text-primary` | Main text |
+| `--color-text-secondary` | Muted/secondary text |
+| `--color-accent-primary` | Links, back button, primary actions |
+| `--color-accent-amber` | Selected state, toggle-on borders, warnings |
+| `--color-accent-green` | Success states |
+| `--color-danger` | Errors, destructive actions |
+| `--font-display` | Headings (display/wordmark typeface) |
+| `--font-ui` | Body text, buttons, labels |
+| `--text-heading` | Page title font-size |
+| `--text-subheading` | Section heading font-size |
+| `--text-body` | Body copy font-size |
+| `--text-label` | Button label font-size |
+| `--text-caption` | Small/helper text font-size |
+| `--space-1` … `--space-12` | Spacing scale (used in padding, gap, margin) |
+
+Never use hardcoded hex colors or pixel values for spacing — always use these tokens.
 
 ### Forms
 
@@ -347,6 +415,19 @@ print(result)
 ### Global Cards
 
 Cards with `isGlobal = true` return 403 on PATCH for non-admin users. When testing card save on `/cards`, pick an INACTIVE or non-global card. The MyCards UI surfaces this at the list level (blue GLOBAL badge on tiles) and modal level (banner + disabled form + no Save button), so only editable cards ever reach the save flow.
+
+## Slash Commands (Project Skills)
+
+| Command | When to use |
+|---|---|
+| `/implement` | General full-stack implementation guide — reference for layer-by-layer order, domain model, auth model, and key constraints |
+| `/new-feature` | Scaffold a complete new feature: core schema → migration → repo → service → API route → mobile client + UI |
+| `/new-screen` | Create a new mobile page with the correct Ionic/RQ/RHF/CSS-var patterns + register in App.tsx |
+| `/new-api-route` | Create a new backend route with correct auth wrapper, Zod parse, and response envelope |
+| `/new-migration` | Create a timestamped DB migration with `up`/`down`, update init.ts and the repo |
+| `/new-admin-page` | Create a Mantine admin page with Table + Drawer/Modal pattern + register in nav |
+| `/mobile-login` | Log in to the local dev frontend via the React fiber (workaround for Ionic shadow DOM) |
+| `/verify` | Run the app and verify a change works end-to-end in the browser |
 
 ## API Design Conventions
 
