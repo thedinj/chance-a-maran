@@ -415,8 +415,9 @@ export class ApiClient {
 
     // ── Soundboard ────────────────────────────────────────────────────────────
 
-    getSoundboard() {
-        return this.request<SoundboardSound[]>("GET", "/api/soundboard");
+    getSoundboard(maxSpiceLevel?: number) {
+        const qs = maxSpiceLevel !== undefined ? `?maxSpiceLevel=${maxSpiceLevel}` : "";
+        return this.request<SoundboardSound[]>("GET", `/api/soundboard${qs}`);
     }
 
     // ── My Cards management ───────────────────────────────────────────────────

@@ -6,8 +6,8 @@ import { useSoundboard } from "../useSoundboard";
 import { styles } from "../styles";
 
 export function SoundboardModal() {
-    const { setShowSoundboard } = useGamePageContext();
-    const { data: sounds } = useSoundboard();
+    const { setShowSoundboard, session } = useGamePageContext();
+    const { data: sounds } = useSoundboard(session?.filterSettings.maxSpiceLevel);
 
     const [poppingIds, setPoppingIds] = useState<Set<string>>(new Set());
     const [playingIds, setPlayingIds] = useState<Set<string>>(new Set());

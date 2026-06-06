@@ -28,8 +28,8 @@ export function mapSound(row: DbSoundboardSound): SoundboardSound {
 
 function makeStmts() {
     return {
-        listActive: db.prepare<[], DbSoundboardSound>(
-            "SELECT * FROM soundboard_sounds WHERE active = 1 ORDER BY sort_order ASC, name ASC"
+        listActive: db.prepare<[number], DbSoundboardSound>(
+            "SELECT * FROM soundboard_sounds WHERE active = 1 AND spice_level <= ? ORDER BY sort_order ASC, name ASC"
         ),
         listAll: db.prepare<[], DbSoundboardSound>(
             "SELECT * FROM soundboard_sounds ORDER BY sort_order ASC, name ASC"
@@ -49,8 +49,8 @@ function makeStmts() {
 let stmts: ReturnType<typeof makeStmts> | null = null;
 const getStmts = () => (stmts ??= makeStmts());
 
-export function listActive(): SoundboardSound[] {
-    return getStmts().listActive.all().map(mapSound);
+export function listActive(maxSpiceLevel = 3): SoundboardSound[] {
+    return getStmts().listActive.all(maxSpiceLevel).map(mapSound);
 }
 
 export function listAll(): SoundboardSound[] {

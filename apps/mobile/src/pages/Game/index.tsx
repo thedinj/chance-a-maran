@@ -21,7 +21,7 @@ import { useSoundboard } from "./useSoundboard";
 
 export default function Game() {
     const page = useGamePage();
-    useSoundboard(); // pre-fetch on game page mount
+    useSoundboard(page.session?.filterSettings.maxSpiceLevel); // pre-fetch on game page mount
 
     const [isLateNight, setIsLateNight] = useState(() => {
         const h = new Date().getHours();
