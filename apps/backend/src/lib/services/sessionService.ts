@@ -20,23 +20,69 @@ import * as cardTransferRepo from "../repos/cardTransferRepo";
 import { filterDrawEvent } from "./cardService";
 import { db } from "../db/db";
 
-const JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // excludes confusable chars (0/O/1/I)
-const JOIN_CODE_LENGTH = 6;
+const WORDS = [
+    // 3-letter
+    "ACE","AMP","APE","BAD","BIG","BRO","FLY","HOT","ICY","ILL",
+    "JAM","JET","LIT","MAD","MOB","NUT","ODD","PRO","RAD","RAW",
+    "RIP","SIN","VIP","ZEN",
+    // 4-letter
+    "APEX","BEAR","BOLD","BOOM","BOSS","BUCK","BULL","CHAD","CLAW","CLUB",
+    "COOL","CORE","CREW","CROW","DARE","DARK","DASH","DEEP","DRIP","DUNK",
+    "DUSK","EDGE","EPIC","EVIL","FIRE","FLEX","FLOW","FREE","GALE","GLOW",
+    "GOLD","GRIT","HARD","HAWK","HEAT","HELL","HYPE","ICON","IRON","JADE",
+    "JAZZ","JOLT","KEEN","KICK","KING","LEAN","LION","LOCK","LOUD","LUST",
+    "LYNX","MEGA","MIND","MINT","MODE","MOON","NEON","NOIR","NOVA","NUTS",
+    "ONYX","PACE","PEAK","PLAY","PUMA","PUNK","PURE","PUSH","RACE","RAGE",
+    "RAID","RAVE","REAL","RIOT","RISE","ROAR","ROCK","ROLL","RUDE","RULE",
+    "RUSH","SAGE","SICK","SLAM","SLAP","SLAY","SOAR","SOLO","SOUL","STAG",
+    "STAR","SWAG","SWAY","TANK","TIDE","TONE","TRUE","VIBE","VICE","VILE",
+    "VOLT","WAVE","WILD","WOLF","WOKE","ZEAL",
+    // 5-letter
+    "ALPHA","BEAST","BRAVE","BRUTE","CHAOS","CHILL","COBRA","CRAFT","CROWN","CRUSH",
+    "DELTA","DRIFT","EAGLE","ELITE","EMBER","FLAIR","FLAME","FLASH","FLINT","FORGE",
+    "FRESH","FROST","GHOST","GLIDE","GRACE","GRIND","HYPER","LASER","LUNAR","MIGHT",
+    "NIGHT","NOBLE","NORTH","OMEGA","ORBIT","POLAR","POWER","PRIME","PROWL","PULSE",
+    "QUICK","RAVEN","RECON","RIVAL","ROGUE","ROUGH","ROYAL","SCOUT","SHADY","SHARP",
+    "SIGMA","SLEEK","SLICK","SMASH","SOLID","SONIC","SPARK","SPEED","SPICY","SQUAD",
+    "STARK","STEAM","STEEL","STOMP","STORM","STUNT","STYLE","SURGE","SWEEP","SWIFT",
+    "THICK","TIGER","TITAN","TORCH","TURBO","ULTRA","VALOR","VAULT","VENOM","VIGOR",
+    "VIXEN","YOUTH",
+] as const;
+
+const NUMBERS = [
+    "007","13","21","42","67","69","86","99","100","101",
+    "187","314","360","420","555","666","777","1337","8008",
+] as const;
+
+// Fallback: random alphanumeric (excludes confusable chars 0/O/1/I)
+const JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const JOIN_CODE_FALLBACK_LENGTH = 7;
 
 function generateJoinCode(): string {
+    const word = WORDS[Math.floor(Math.random() * WORDS.length)]!;
+    const num  = NUMBERS[Math.floor(Math.random() * NUMBERS.length)]!;
+    return word + num;
+}
+
+function generateFallbackCode(): string {
     let code = "";
-    for (let i = 0; i < JOIN_CODE_LENGTH; i++) {
+    for (let i = 0; i < JOIN_CODE_FALLBACK_LENGTH; i++) {
         code += JOIN_CODE_CHARS[Math.floor(Math.random() * JOIN_CODE_CHARS.length)];
     }
     return code;
 }
 
 function uniqueJoinCode(): string {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 7; i++) {
         const code = generateJoinCode();
         if (!sessionRepo.findByJoinCode(normalizeJoinCode(code))) return code;
     }
-    throw new Error("Failed to generate unique join code after 10 attempts");
+    // Fall back to random alphanumeric if clashes persist
+    for (let i = 0; i < 10; i++) {
+        const code = generateFallbackCode();
+        if (!sessionRepo.findByJoinCode(normalizeJoinCode(code))) return code;
+    }
+    throw new Error("Failed to generate unique join code after 17 attempts");
 }
 
 function getUserDisplayName(userId: string): string {

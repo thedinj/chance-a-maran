@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import QRCode from "react-qr-code";
 import { useGamePageContext } from "../useGamePageContext";
 import { styles } from "../styles";
 
@@ -18,14 +19,15 @@ function AndroidShareIcon() {
 export function JoinCodeModal() {
     const { session, setShowJoinCode } = useGamePageContext();
     const joinCode = session!.joinCode;
-    const formatted =
-        joinCode.length >= 6 ? `${joinCode.slice(0, 3)}-${joinCode.slice(3)}` : joinCode;
+    const formatted = /^[A-Z]+\d+$/.test(joinCode)
+        ? joinCode.replace(/^([A-Z]+)(\d+)$/, "$1-$2")
+        : `${joinCode.slice(0, 3)}-${joinCode.slice(3)}`;
 
     const [status, setStatus] = useState<"idle" | "done">("idle");
 
     async function handleShare() {
         const site = window.location.origin;
-        const text = `Join my Chance game!\nCode: ${joinCode}\n${site}`;
+        const text = `Join my Chance game!\nCode: ${formatted}\n${site}`;
         if (navigator.share) {
             try {
                 await navigator.share({ title: "Chance", text });
@@ -47,6 +49,14 @@ export function JoinCodeModal() {
                 </button>
                 <p style={styles.joinCodeLabel as React.CSSProperties}>INVITE CODE</p>
                 <p style={styles.joinCodeDisplay as React.CSSProperties}>{formatted}</p>
+                <div style={styles.joinCodeQr as React.CSSProperties}>
+                    <QRCode
+                        value={`${window.location.origin}/join/${joinCode}`}
+                        size={140}
+                        fgColor="#0e0f1a"
+                        bgColor="transparent"
+                    />
+                </div>
                 <button
                     style={(status === "done" ? styles.joinCodeShareBtnDone : styles.joinCodeShareBtn) as React.CSSProperties}
                     onClick={handleShare}

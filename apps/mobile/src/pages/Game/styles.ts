@@ -831,4 +831,11 @@ export const styles: Record<string, React.CSSProperties | Record<string, unknown
         padding: 0,
         cursor: "pointer",
     },
+    joinCodeQr: {
+        background: "var(--color-text-primary)",
+        padding: "var(--space-2)",
+        borderRadius: "4px",
+        display: "flex",
+        marginBottom: "var(--space-3)",
+    },
 };
