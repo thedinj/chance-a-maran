@@ -11,14 +11,17 @@ import { DevDrawPanel } from "./components/DevDrawPanel";
 import { DrawButton } from "./components/DrawButton";
 import { GameHeader } from "./components/GameHeader";
 import { JoinCodeModal } from "./components/JoinCodeModal";
+import { SoundboardModal } from "./components/SoundboardModal";
 import { PlayerActionSheet } from "./components/PlayerActionSheet";
 import { ReparationsButton } from "./components/ReparationsButton";
 import { GamePageProvider } from "./GamePageContext";
 import { styles } from "./styles";
 import { useGamePage } from "./useGamePage";
+import { useSoundboard } from "./useSoundboard";
 
 export default function Game() {
     const page = useGamePage();
+    useSoundboard(); // pre-fetch on game page mount
 
     const [isLateNight, setIsLateNight] = useState(() => {
         const h = new Date().getHours();
@@ -49,6 +52,7 @@ export default function Game() {
         error,
         showAddPlayer,
         showJoinCode,
+        showSoundboard,
         showClaim,
     } = page;
 
@@ -165,6 +169,7 @@ export default function Game() {
                 )}
                 {showAddPlayer && <AddPlayerModal />}
                 {showJoinCode && <JoinCodeModal />}
+                {showSoundboard && <SoundboardModal />}
                 {showClaim && <ClaimAccountModal />}
 
                 <PlayerActionSheet />

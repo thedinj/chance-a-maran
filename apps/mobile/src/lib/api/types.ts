@@ -38,5 +38,7 @@ export type {
     AppConfig,
     MediaUploadResponse,
     GetAllCardsFilters,
+    // Soundboard
+    SoundboardSound,
 } from "@chance/core";
 export { SubmitCardRequestSchema } from "@chance/core";

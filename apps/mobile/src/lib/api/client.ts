@@ -21,6 +21,7 @@ import type {
     Session,
     SessionState,
     SessionSummary,
+    SoundboardSound,
     SubmitCardRequest,
     UpdateUserRequest,
     User,
@@ -410,6 +411,12 @@ export class ApiClient {
 
     getRequirementElements() {
         return this.request<RequirementElement[]>("GET", "/api/requirement-elements");
+    }
+
+    // ── Soundboard ────────────────────────────────────────────────────────────
+
+    getSoundboard() {
+        return this.request<SoundboardSound[]>("GET", "/api/soundboard");
     }
 
     // ── My Cards management ───────────────────────────────────────────────────

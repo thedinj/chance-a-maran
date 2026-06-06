@@ -6,3 +6,4 @@ export * from "./card";
 export * from "./draw-event";
 export * from "./card-transfer";
 export * from "./api";
+export * from "./soundboardSound";

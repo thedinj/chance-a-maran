@@ -70,6 +70,7 @@ export function GameHeader() {
         activePlayerId,
         setActivePlayer,
         setShowJoinCode,
+        setShowSoundboard,
         setShowAddPlayer,
         setActionSheetTarget,
     } = useGamePageContext();
@@ -122,6 +123,13 @@ export function GameHeader() {
                     <div style={styles.headerInner as React.CSSProperties}>
                         <IonMenuButton style={styles.menuButton as React.CSSProperties} />
                         <h1 style={styles.sessionName as React.CSSProperties}>{session!.name}</h1>
+                        <button
+                            style={styles.soundboardButton as React.CSSProperties}
+                            onClick={() => setShowSoundboard(true)}
+                            aria-label="Open soundboard"
+                        >
+                            <span style={styles.soundboardIcon as React.CSSProperties}>🔊</span>
+                        </button>
                         <button
                             style={styles.joinCodeButton as React.CSSProperties}
                             onClick={() => setShowJoinCode(true)}

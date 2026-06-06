@@ -113,6 +113,8 @@ export interface UseGamePageReturn {
     onDismissReveal: () => void;
     showJoinCode: boolean;
     setShowJoinCode: React.Dispatch<React.SetStateAction<boolean>>;
+    showSoundboard: boolean;
+    setShowSoundboard: React.Dispatch<React.SetStateAction<boolean>>;
     showAddPlayer: boolean;
     setShowAddPlayer: React.Dispatch<React.SetStateAction<boolean>>;
     showClaim: boolean;
@@ -163,6 +165,7 @@ export function useGamePage(): UseGamePageReturn {
     const [selectedCard, setSelectedCard] = useState<DrawEvent | null>(null);
     const [revealCard, setRevealCard] = useState<DrawEvent | null>(null);
     const [showJoinCode, setShowJoinCode] = useState(false);
+    const [showSoundboard, setShowSoundboard] = useState(false);
     const [showAddPlayer, setShowAddPlayer] = useState(false);
     const [showClaim, setShowClaim] = useState(false);
     const [showResolved, setShowResolved] = useState(false);
@@ -450,6 +453,8 @@ export function useGamePage(): UseGamePageReturn {
         onDismissReveal,
         showJoinCode,
         setShowJoinCode,
+        showSoundboard,
+        setShowSoundboard,
         showAddPlayer,
         setShowAddPlayer,
         showClaim,

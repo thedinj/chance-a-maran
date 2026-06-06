@@ -19,6 +19,7 @@ const NAV_ITEMS = [
     { href: "/admin/requirement-elements", label: "Requirements" },
     { href: "/admin/users", label: "Users" },
     { href: "/admin/invitation-codes", label: "Invitation Codes" },
+    { href: "/admin/soundboard", label: "Soundboard" },
     { href: "/admin/settings", label: "Settings" },
 ];
 

@@ -51,6 +51,21 @@ export const styles: Record<string, React.CSSProperties | Record<string, unknown
         fontSize: "20px",
         color: "var(--color-text-secondary)",
     },
+    soundboardButton: {
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "var(--space-2)",
+        minWidth: "44px",
+        minHeight: "44px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    soundboardIcon: {
+        fontSize: "20px",
+        color: "var(--color-text-secondary)",
+    },
 
     // Player switcher (rendered inside IonHeader — never scrolls)
     switcherWrap: {
@@ -751,6 +766,63 @@ export const styles: Record<string, React.CSSProperties | Record<string, unknown
         fontWeight: 500,
         color: "var(--color-text-secondary)",
         letterSpacing: "0.05em",
+    },
+
+    // SoundboardModal
+    soundboardModal: {
+        background: "var(--color-surface-elevated)",
+        border: "1px solid var(--color-border)",
+        padding: "var(--space-8) var(--space-6)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "var(--space-4)",
+        position: "relative",
+        maxWidth: "380px",
+        width: "100%",
+        clipPath:
+            "polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)",
+    },
+    soundboardGrid: {
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: "var(--space-2)",
+        width: "100%",
+    },
+    soundboardSoundBtn: {
+        background: "none",
+        border: "1px solid var(--color-border)",
+        borderRadius: "6px",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "var(--space-3) var(--space-2)",
+        gap: "var(--space-1)",
+        minHeight: "72px",
+        transition: "background 120ms var(--ease)",
+    },
+    soundboardSoundEmoji: {
+        fontSize: "28px",
+        lineHeight: 1,
+    },
+    soundboardSoundName: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "10px",
+        color: "var(--color-text-secondary)",
+        textAlign: "center",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        maxWidth: "100%",
+    },
+    soundboardEmpty: {
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-caption)",
+        color: "var(--color-text-secondary)",
+        textAlign: "center",
+        padding: "var(--space-6) 0",
     },
 
     // JoinCodeModal

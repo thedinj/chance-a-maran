@@ -439,6 +439,29 @@ ion-content.game-content::part(scroll) {
     }
 }
 
+/* ─── Soundboard animations ─────────────────────────────────────────── */
+
+@keyframes soundboardModalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+@keyframes soundboardBtnPress {
+    0%   { transform: scale(1);    box-shadow: none; }
+    28%  { transform: scale(0.87); box-shadow: none; }
+    65%  { transform: scale(1.07); box-shadow: 0 0 0 1px var(--color-accent-amber), 0 0 14px 3px color-mix(in oklch, var(--color-accent-amber) 22%, transparent); }
+    100% { transform: scale(1);    box-shadow: none; }
+}
+
+@keyframes soundboardBtnPulse {
+    0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-accent-amber) 55%, transparent); }
+    50%      { box-shadow: 0 0 10px 2px color-mix(in oklch, var(--color-accent-amber) 20%, transparent); }
+}
+
+.soundboard-modal-enter { animation: soundboardModalIn 220ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.soundboard-btn--press  { animation: soundboardBtnPress 300ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.soundboard-btn--playing { animation: soundboardBtnPulse 900ms ease-in-out infinite; }
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *,
