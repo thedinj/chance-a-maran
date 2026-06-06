@@ -8,6 +8,7 @@ export interface DbSoundboardSound {
     media_id: string;
     active: number;
     sort_order: number;
+    spice_level: number;
     created_by_user_id: string;
     created_at: string;
 }
@@ -20,6 +21,7 @@ export function mapSound(row: DbSoundboardSound): SoundboardSound {
         mediaId: row.media_id,
         active: row.active === 1,
         sortOrder: row.sort_order,
+        spiceLevel: row.spice_level,
         createdAt: row.created_at,
     };
 }
@@ -35,8 +37,8 @@ function makeStmts() {
         findById: db.prepare<[string], DbSoundboardSound>(
             "SELECT * FROM soundboard_sounds WHERE id = ?"
         ),
-        create: db.prepare<[string, string, string, string, string], void>(
-            "INSERT INTO soundboard_sounds (id, name, emoji, media_id, created_by_user_id) VALUES (?, ?, ?, ?, ?)"
+        create: db.prepare<[string, string, string, string, number, string], void>(
+            "INSERT INTO soundboard_sounds (id, name, emoji, media_id, spice_level, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?)"
         ),
         delete: db.prepare<[string], void>(
             "DELETE FROM soundboard_sounds WHERE id = ?"
@@ -65,15 +67,23 @@ export function create(data: {
     name: string;
     emoji: string;
     mediaId: string;
+    spiceLevel?: number;
     createdByUserId: string;
 }): SoundboardSound {
-    getStmts().create.run(data.id, data.name, data.emoji, data.mediaId, data.createdByUserId);
+    getStmts().create.run(
+        data.id,
+        data.name,
+        data.emoji,
+        data.mediaId,
+        data.spiceLevel ?? 0,
+        data.createdByUserId
+    );
     return findById(data.id)!;
 }
 
 export function update(
     id: string,
-    patch: { name?: string; emoji?: string; active?: boolean; sortOrder?: number }
+    patch: { name?: string; emoji?: string; active?: boolean; sortOrder?: number; spiceLevel?: number }
 ): void {
     if (patch.name !== undefined)
         db.prepare("UPDATE soundboard_sounds SET name = ? WHERE id = ?").run(patch.name, id);
@@ -87,6 +97,11 @@ export function update(
     if (patch.sortOrder !== undefined)
         db.prepare("UPDATE soundboard_sounds SET sort_order = ? WHERE id = ?").run(
             patch.sortOrder,
+            id
+        );
+    if (patch.spiceLevel !== undefined)
+        db.prepare("UPDATE soundboard_sounds SET spice_level = ? WHERE id = ?").run(
+            patch.spiceLevel,
             id
         );
 }

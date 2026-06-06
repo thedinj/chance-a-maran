@@ -19,7 +19,7 @@ export const GET = withAdmin(async () => {
 /** POST /api/admin/soundboard — create a new sound. */
 export const POST = withAdmin(async (req) => {
     try {
-        const body = await req.json() as { name?: string; emoji?: string; mediaId?: string };
+        const body = await req.json() as { name?: string; emoji?: string; mediaId?: string; spiceLevel?: number };
         if (!body.name?.trim()) return fail(new ValidationError("name is required"));
         if (!body.emoji?.trim()) return fail(new ValidationError("emoji is required"));
         if (!body.mediaId) return fail(new ValidationError("mediaId is required"));
@@ -31,6 +31,7 @@ export const POST = withAdmin(async (req) => {
             name: body.name.trim(),
             emoji: body.emoji.trim(),
             mediaId: body.mediaId,
+            spiceLevel: typeof body.spiceLevel === "number" ? Math.max(0, Math.min(3, Math.floor(body.spiceLevel))) : 1,
             createdByUserId: req.auth.sub,
         });
         return ok(sound, 201);

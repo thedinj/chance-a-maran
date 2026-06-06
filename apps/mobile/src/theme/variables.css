@@ -447,19 +447,18 @@ ion-content.game-content::part(scroll) {
 }
 
 @keyframes soundboardBtnPress {
-    0%   { transform: scale(1);    box-shadow: none; }
-    28%  { transform: scale(0.87); box-shadow: none; }
-    65%  { transform: scale(1.07); box-shadow: 0 0 0 1px var(--color-accent-amber), 0 0 14px 3px color-mix(in oklch, var(--color-accent-amber) 22%, transparent); }
-    100% { transform: scale(1);    box-shadow: none; }
+    0%   { transform: translateY(0);  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 0 var(--color-bg), 0 6px 10px rgba(0,0,0,0.45); }
+    35%  { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0px 0 var(--color-bg), 0 1px 4px rgba(0,0,0,0.3),  0 0 10px 2px color-mix(in oklch, var(--color-accent-amber) 18%, transparent); }
+    100% { transform: translateY(0);  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 0 var(--color-bg), 0 6px 10px rgba(0,0,0,0.45); }
 }
 
 @keyframes soundboardBtnPulse {
-    0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-accent-amber) 55%, transparent); }
-    50%      { box-shadow: 0 0 10px 2px color-mix(in oklch, var(--color-accent-amber) 20%, transparent); }
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 0 var(--color-bg), 0 4px 8px rgba(0,0,0,0.4),  0 0 0 1px color-mix(in oklch, var(--color-accent-amber) 60%, transparent); }
+    50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 0 var(--color-bg), 0 6px 14px rgba(0,0,0,0.45), 0 0 12px 3px color-mix(in oklch, var(--color-accent-amber) 20%, transparent); }
 }
 
 .soundboard-modal-enter { animation: soundboardModalIn 220ms cubic-bezier(0.25, 1, 0.5, 1) both; }
-.soundboard-btn--press  { animation: soundboardBtnPress 300ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.soundboard-btn--press  { animation: soundboardBtnPress 280ms cubic-bezier(0.25, 1, 0.5, 1) both; }
 .soundboard-btn--playing { animation: soundboardBtnPulse 900ms ease-in-out infinite; }
 
 /* Reduced motion */

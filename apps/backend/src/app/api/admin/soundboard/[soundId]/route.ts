@@ -16,12 +16,16 @@ export const PATCH = withAdmin(async (req, { params }) => {
             emoji?: string;
             active?: boolean;
             sortOrder?: number;
+            spiceLevel?: number;
         };
         soundRepo.update(soundId, {
             name: body.name?.trim(),
             emoji: body.emoji?.trim(),
             active: body.active,
             sortOrder: body.sortOrder,
+            spiceLevel: typeof body.spiceLevel === "number"
+                ? Math.max(0, Math.min(3, Math.floor(body.spiceLevel)))
+                : undefined,
         });
         return ok(soundRepo.findById(soundId)!);
     } catch (err) {

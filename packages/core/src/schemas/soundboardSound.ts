@@ -7,6 +7,7 @@ export const SoundboardSoundSchema = z.object({
     mediaId: z.string(),
     active: z.boolean(),
     sortOrder: z.number(),
+    spiceLevel: z.number().int().min(0).max(3),
     createdAt: z.string(),
 });
 

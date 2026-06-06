@@ -49,13 +49,16 @@ export function SoundboardModal() {
                 className="soundboard-modal-enter"
                 onClick={(e) => e.stopPropagation()}
             >
-                <button
-                    style={styles.joinCodeClose as React.CSSProperties}
-                    onClick={() => setShowSoundboard(false)}
-                    aria-label="Close"
-                >
-                    ×
-                </button>
+                <div style={styles.soundboardHeader as React.CSSProperties}>
+                    <span style={styles.soundboardTitle as React.CSSProperties}>Soundboard</span>
+                    <button
+                        style={styles.soundboardClose as React.CSSProperties}
+                        onClick={() => setShowSoundboard(false)}
+                        aria-label="Close"
+                    >
+                        ×
+                    </button>
+                </div>
                 {sounds && sounds.length > 0 ? (
                     <div style={styles.soundboardGrid as React.CSSProperties}>
                         {sounds.map((sound) => {
@@ -69,7 +72,11 @@ export function SoundboardModal() {
                             const btnStyle = {
                                 ...(styles.soundboardSoundBtn as React.CSSProperties),
                                 ...(isPlaying && !isPopping
-                                    ? { borderColor: "var(--color-accent-amber)" }
+                                    ? {
+                                          borderColor: "var(--color-accent-amber)",
+                                          background:
+                                              "linear-gradient(to bottom, color-mix(in oklch, var(--color-surface-elevated) 85%, var(--color-accent-amber)), var(--color-surface))",
+                                      }
                                     : {}),
                             };
                             return (

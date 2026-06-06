@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
     Title,
     Table,
-    Badge,
     Switch,
     Button,
     Stack,
@@ -18,6 +17,7 @@ import {
     ScrollArea,
     NumberInput,
     ActionIcon,
+    Select,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAdminFetch } from "@/lib/admin/useAdminFetch";
@@ -35,6 +35,7 @@ export default function SoundboardPage() {
     const [createOpen, setCreateOpen] = useState(false);
     const [newName, setNewName] = useState("");
     const [newEmoji, setNewEmoji] = useState("");
+    const [newSpiceLevel, setNewSpiceLevel] = useState("0");
     const [newMediaId, setNewMediaId] = useState<string | null>(null);
     const [newFileName, setNewFileName] = useState("");
     const [creating, setCreating] = useState(false);
@@ -45,10 +46,18 @@ export default function SoundboardPage() {
     const [editName, setEditName] = useState("");
     const [editEmoji, setEditEmoji] = useState("");
     const [editSortOrder, setEditSortOrder] = useState<number | string>(0);
+    const [editSpiceLevel, setEditSpiceLevel] = useState("1");
     const [editMediaId, setEditMediaId] = useState<string | null>(null);
     const [editFileName, setEditFileName] = useState("");
     const [saving, setSaving] = useState(false);
     const editFileInputRef = useRef<HTMLInputElement>(null);
+
+    const spiceLevelData = [
+        { value: "0", label: "0 — Clean" },
+        { value: "1", label: "1 — Mild 😉" },
+        { value: "2", label: "2 — Mature 🌶️" },
+        { value: "3", label: "3 — Explicit 🔞" },
+    ];
 
     useEffect(() => {
         adminFetch("/api/admin/soundboard")
@@ -64,6 +73,7 @@ export default function SoundboardPage() {
         setEditName(s.name);
         setEditEmoji(s.emoji);
         setEditSortOrder(s.sortOrder);
+        setEditSpiceLevel(String(s.spiceLevel));
         setEditMediaId(null);
         setEditFileName("");
     }
@@ -106,6 +116,7 @@ export default function SoundboardPage() {
                 name: newName.trim(),
                 emoji: newEmoji.trim(),
                 mediaId: newMediaId,
+                spiceLevel: Number(newSpiceLevel),
             }),
         });
         const data = await res.json();
@@ -119,6 +130,7 @@ export default function SoundboardPage() {
             setCreateOpen(false);
             setNewName("");
             setNewEmoji("");
+            setNewSpiceLevel("0");
             setNewMediaId(null);
             setNewFileName("");
         } else {
@@ -136,6 +148,7 @@ export default function SoundboardPage() {
                 name: editName.trim(),
                 emoji: editEmoji.trim(),
                 sortOrder: Number(editSortOrder),
+                spiceLevel: Number(editSpiceLevel),
                 ...(mediaId ? { mediaId } : {}),
             }),
         });
@@ -186,6 +199,7 @@ export default function SoundboardPage() {
                         <Table.Th>Emoji</Table.Th>
                         <Table.Th>Name</Table.Th>
                         <Table.Th>Order</Table.Th>
+                        <Table.Th>Spice</Table.Th>
                         <Table.Th>Preview</Table.Th>
                         <Table.Th>Active</Table.Th>
                     </Table.Tr>
@@ -200,6 +214,9 @@ export default function SoundboardPage() {
                             <Table.Td style={{ fontSize: "1.5rem" }}>{s.emoji}</Table.Td>
                             <Table.Td>{s.name}</Table.Td>
                             <Table.Td>{s.sortOrder}</Table.Td>
+                            <Table.Td>
+                                {["", "😉", "🌶️", "🔞"][s.spiceLevel] ?? s.spiceLevel}
+                            </Table.Td>
                             <Table.Td onClick={(e) => e.stopPropagation()}>
                                 <ActionIcon
                                     variant="subtle"
@@ -222,7 +239,7 @@ export default function SoundboardPage() {
                     ))}
                     {sounds.length === 0 && (
                         <Table.Tr>
-                            <Table.Td colSpan={5}>
+                            <Table.Td colSpan={6}>
                                 <Text c="dimmed" ta="center" py="md">
                                     No sounds yet
                                 </Text>
@@ -233,7 +250,18 @@ export default function SoundboardPage() {
             </Table>
 
             {/* Create modal */}
-            <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Add Sound">
+            <Modal
+                opened={createOpen}
+                onClose={() => {
+                    setCreateOpen(false);
+                    setNewName("");
+                    setNewEmoji("");
+                    setNewSpiceLevel("0");
+                    setNewMediaId(null);
+                    setNewFileName("");
+                }}
+                title="Add Sound"
+            >
                 <Stack>
                     <TextInput
                         label="Emoji"
@@ -242,18 +270,25 @@ export default function SoundboardPage() {
                     />
                     <TextInput
                         label="Name"
-                        placeholder="Airhorn"
+                        placeholder="airhorn"
                         value={newName}
                         onChange={(e) => setNewName(e.currentTarget.value)}
                     />
+                    <Select
+                        label="Spice level"
+                        data={spiceLevelData}
+                        value={newSpiceLevel}
+                        onChange={(v) => setNewSpiceLevel(v ?? "0")}
+                        allowDeselect={false}
+                    />
                     <Stack gap={4}>
                         <Text size="sm" fw={500}>
-                            Audio file (MP3, max 1 MB, 10 s)
+                            Audio file (MP3 or WAV, max 10 s)
                         </Text>
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept="audio/mpeg"
+                            accept="audio/mpeg,audio/wav"
                             style={{ display: "none" }}
                             onChange={async (e) => {
                                 const file = e.target.files?.[0];
@@ -321,6 +356,13 @@ export default function SoundboardPage() {
                                 onChange={setEditSortOrder}
                                 min={0}
                             />
+                            <Select
+                                label="Spice level"
+                                data={spiceLevelData}
+                                value={editSpiceLevel}
+                                onChange={(v) => setEditSpiceLevel(v ?? "1")}
+                                allowDeselect={false}
+                            />
                             <Stack gap={4}>
                                 <Text size="sm" fw={500}>
                                     Replace audio (optional)
@@ -333,7 +375,7 @@ export default function SoundboardPage() {
                                 <input
                                     ref={editFileInputRef}
                                     type="file"
-                                    accept="audio/mpeg"
+                                    accept="audio/mpeg,audio/wav"
                                     style={{ display: "none" }}
                                     onChange={async (e) => {
                                         const file = e.target.files?.[0];
