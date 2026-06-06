@@ -1,0 +1,120 @@
+  What a Chance card IS
+
+  A Chance card is an interrupt — a moment that breaks the predictable flow of play and injects a named, authored
+  personality into the game. It isn't a random stat modifier; it's a tiny story with a rule attached. The name carries
+  the feeling; the instruction carries the mechanic.
+
+  ---
+  The 10 Mechanical Archetypes
+
+  Every card in the 179-card legacy database falls into one or more of these:
+
+  ┌─────┬────────────────────┬────────────────────────────────┬─────────────────────────────────────────────────────┐
+  │  #  │     Archetype      │          What it does          │                    Example cards                    │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 1   │ Windfall           │ Immediate resource/advantage   │ Road House (free road + settlement), Slam Fucking   │
+  │     │                    │ gain                           │ Dunk (8 VPs)                                        │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 2   │ Tax/Drain          │ Steal from others or impose a  │ Tax Man (30% of everyone's resources), Ferguson     │
+  │     │                    │ cost                           │ (loot at will)                                      │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 3   │ Redistribute       │ Shuffles resources among all   │ Shuffle Up and Deal, Jigga What (give to last       │
+  │     │                    │ players                        │ place), Change is Inevitable                        │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │     │                    │ Changes how the game works,    │ Illinois Tollway (roads cost +1 stone for           │
+  │ 4   │ Rule Modifier      │ temporarily or permanently     │ everyone), Trickle-Down Economics (robber           │
+  │     │                    │                                │ threshold), Reductionism (any resource counts)      │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 5   │ Role Grant         │ Gives the holder an ongoing    │ The Banker (deal cards, take interest), The         │
+  │     │                    │ power or ongoing burden        │ Masseuse, Samuel Gompers (construction union boss)  │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │     │                    │ Keep and play later as a       │ Cancel (negate anything once), Blue Shell (attack   │
+  │ 6   │ Holdable/Triggered │ reaction                       │ leader), Fingerguns (5 charges), Champion (hire a   │
+  │     │                    │                                │ proxy fighter)                                      │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 7   │ Challenge          │ A sub-game; winner gets a      │ Duel, Cornholio (cornhole match), Checkmate         │
+  │     │                    │ reward, loser takes a penalty  │ (checkers), Geoguessr, Paper Rock Shot              │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 8   │ Chaos Agent        │ Randomizes the game state      │ Three Card Monte (flip all numbers face-down), Fuck │
+  │     │                    │ itself                         │  the Numbers, Back Asswards (reverse turn order)    │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ 9   │ Inversion          │ Flips standings or swaps       │ Snaked (1st and last swap), Change is Inevitable    │
+  │     │                    │ positions                      │ (cities ↔ settlements), Carousel (rotate seats)     │
+  ├─────┼────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────┤
+  │     │                    │ Activates on a future game     │ Even Steven (drink every even roll), T-Rex Island   │
+  │ 10  │ Passive Trigger    │ event                          │ (doubles = lose sheep), Beer for My Horses (sheep → │
+  │     │                    │                                │  also get wheat)                                    │
+  └─────┴────────────────────┴────────────────────────────────┴─────────────────────────────────────────────────────┘
+
+  ---
+  The Anatomy of a Great Card
+
+  NAME         — evocative, punny, or cultural reference (not descriptive)
+  IMMEDIATE    — fires once on draw, OR
+  DURATION     — lasts until a condition ("for the rest of the game", "until X happens")
+  TARGET       — YOU / ONE OPPONENT (your choice) / ALL PLAYERS
+  DIRECTION    — boon, burden, or chaos (many are chaos — neither pure good nor bad)
+  SOCIAL LAYER — optional: requires a physical or behavioral act on top of the mechanic
+  HIDDEN       — optional: a second instruction revealed only after committing
+
+  The best cards combine a mechanical layer with a behavioral layer. The Bartender gives you nothing mechanical — it's
+  pure role-play. The Masseuse gives you one board modification and makes you serve others. Dwarven gives a resource
+  bonus and forces you to sit on the floor. The social act is the real content.
+
+  ---
+  Principles That Survive Translation to Video Games
+
+  1. Names evoke feel, not function. "Blue Shell" is not called "City Downgrade." "Waterfall" is not called "Sequential
+  Mandatory Drink." The name comes first — it's a brand.
+  2. Duration is condition-based, not timed. Cards last until something happens ("until you roll that number again,"
+  "until someone builds"), not "for 30 seconds." This creates tension and narrative.
+  3. Chaos cards are the most memorable. Shuffle Up and Deal, Fuck the Numbers, Carousel — the cards that scramble the
+  entire game state are talked about forever. Pure chaos is a valid and beloved archetype.
+  4. Power is wildly asymmetric. Slam Fucking Dunk is worth 8 victory points. Crusty Bitch makes you eat someone's pizza
+   crust. Both are legitimate cards. The asymmetry is the point — drawing a card is exciting because you don't know
+  which one you'll get.
+  5. Cards that target the leader are universally loved. Blue Shell is a Mario Kart reference for a reason. High Roller,
+   Incite Revolt, Snaked — the game self-balances through card chaos.
+  6. Holdable cards create meta-game tension. Knowing someone has a Cancel card changes how everyone plays. The card
+  does work just by existing in someone's hand.
+  7. Hidden instructions add a reveal moment. The card already fired — but then there's a second shoe to drop. This is
+  pure drama.
+  8. Player-specific cards (Reparations) are negative cards earned through losing — they function as a catch-up penalty
+  on the player who already fell behind. They're not random; they're punitive and thematic.
+
+  ---
+  Video Game Translation Map
+
+  ┌────────────────────┬─────────────────────────────────────────────────┐
+  │ Board game concept │              Video game equivalent              │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Resource cards     │ Currency / ammo / health / mana / XP            │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Settlements/cities │ Structures / bases / spawn points / territories │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Roads              │ Paths / travel routes / infrastructure          │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Victory points     │ Score / rank / level / lives                    │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ The robber         │ An enemy / aggro mechanic / debuff zone         │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Ports              │ Fast-travel points / trade hubs                 │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Turn order         │ Initiative / action economy                     │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Development cards  │ Skill unlocks / abilities                       │
+  ├────────────────────┼─────────────────────────────────────────────────┤
+  │ Card draw          │ Loot box / power-up spawn / event trigger       │
+  └────────────────────┴─────────────────────────────────────────────────┘
+
+  ---
+  The Irreducible Core
+
+  A Chance card is: a named moment that injects personality, breaks expectation, and reassigns power — either instantly
+  or through an ongoing rule that colors every subsequent action. The mechanical effect is secondary to the feeling of
+  drawing it. The best ones make the whole table react.
+
+  For an LLM generating a video game with a Chance mechanic, the generative formula is:
+
+  ▎ [Evocative Name] + [One-sentence rule] + [Optional: duration condition] + [Optional: behavioral/social layer] +
+  ▎ [Optional: hidden second effect]

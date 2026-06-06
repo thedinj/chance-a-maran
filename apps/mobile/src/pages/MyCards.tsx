@@ -97,6 +97,8 @@ export default function MyCards() {
     const [search, setSearch] = useState("");
     const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("active");
 
+    const pageContentRef = useRef<HTMLIonContentElement>(null);
+
     // ── Edit modal state ──────────────────────────────────────────────────────
     const modalRef = useRef<HTMLIonModalElement>(null);
     const modalContentRef = useRef<HTMLIonContentElement>(null);
@@ -116,6 +118,9 @@ export default function MyCards() {
     const prefersReducedMotion = useReducedMotion();
     const [showCelebration, setShowCelebration] = useState(false);
     const [celebrationCard, setCelebrationCard] = useState<Card | null>(null);
+
+    const justSubmittedCardIdRef = useRef<string | null>(null);
+    const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null);
 
     // ── New card modal state ──────────────────────────────────────────────────
     const newModalRef = useRef<HTMLIonModalElement>(null);
@@ -379,6 +384,7 @@ export default function MyCards() {
             : await apiClient.submitCardOutsideSession(req);
         if (!result.ok) return { error: result.error.message };
         setMyCards((prev) => [result.data, ...prev]);
+        justSubmittedCardIdRef.current = result.data.id;
         setCelebrationCard(result.data);
         setShowCelebration(true);
         setTimeout(() => {
@@ -438,7 +444,7 @@ export default function MyCards() {
     function renderTile(card: Card) {
         const v = card.currentVersion;
         return (
-            <button key={card.id} style={styles.tile} onClick={() => openCard(card)}>
+            <button key={card.id} data-card-id={card.id} style={styles.tile} className={highlightedCardId === card.id ? "card-tile--flash" : undefined} onClick={() => openCard(card)}>
                 <div style={styles.tileHeader}>
                     <span style={styles.tileTitle}>{v.title}</span>
                     <div style={styles.tileBadges}>
@@ -498,7 +504,7 @@ export default function MyCards() {
                 onDidDismiss={() => setSpiceRaisedLabel(null)}
                 position="bottom"
             />
-            <IonContent>
+            <IonContent ref={pageContentRef}>
                 <div style={styles.root}>
                     {/* Page header */}
                     <div style={styles.pageHeader}>
@@ -888,6 +894,24 @@ export default function MyCards() {
                     newEditorRef.current?.reset();
                     setNewSubmitError(null);
                     setNewCardIsDark(false);
+                    const cardId = justSubmittedCardIdRef.current;
+                    justSubmittedCardIdRef.current = null;
+                    if (cardId && pageContentRef.current) {
+                        const cardEl = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
+                        if (cardEl) {
+                            pageContentRef.current.getScrollElement().then((scrollEl) => {
+                                const elCenter = cardEl.offsetTop + cardEl.offsetHeight / 2;
+                                const targetY = elCenter - scrollEl.clientHeight / 2;
+                                void pageContentRef.current!.scrollToPoint(0, Math.max(0, targetY), 300);
+                                setTimeout(() => {
+                                    setHighlightedCardId(cardId);
+                                    setTimeout(() => setHighlightedCardId(null), 900);
+                                }, 350);
+                            });
+                        }
+                    } else {
+                        pageContentRef.current?.scrollToTop(0);
+                    }
                 }}
                 className={newCardIsDark ? "game-settings-dark" : undefined}
                 style={{ "--border-radius": "0" } as React.CSSProperties}

@@ -75,14 +75,14 @@ export function AppMenu() {
                   ]
                 : []),
             { label: "Create game", path: "/game-settings", disabled: !!session || !user },
+            { label: "Game history", path: "/history", disabled: !user },
             {
-                label: "Submit card",
+                label: "Create card",
                 path: "/submit-card",
                 disabled: !user,
                 onClick: user ? () => history.push("/cards", { newCard: true }) : undefined,
             },
             { label: "My cards", path: "/cards", disabled: !user },
-            { label: "Game history", path: "/history", disabled: !user },
         ],
         [history, isHost, registeredDevicePlayer, session, user]
     );

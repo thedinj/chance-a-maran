@@ -357,6 +357,17 @@ ion-content.game-content::part(scroll) {
     background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
+/* ─── My Cards — new card highlight flash ──────────────────────────── */
+@keyframes cardTileFlash {
+    0%   { border-color: var(--color-border);       background: var(--color-surface); }
+    30%  { border-color: var(--color-accent-amber); background: color-mix(in srgb, var(--color-accent-amber) 10%, var(--color-surface)); }
+    100% { border-color: var(--color-border);       background: var(--color-surface); }
+}
+
+.card-tile--flash {
+    animation: cardTileFlash 900ms var(--ease) forwards;
+}
+
 /* ─── PageSkeleton & BackendErrorPage animations ───────────────────── */
 @keyframes fadeIn {
     from { opacity: 0; }

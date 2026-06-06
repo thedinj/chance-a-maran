@@ -203,7 +203,7 @@ const CardEditor = forwardRef<CardEditorHandle, CardEditorProps>(function CardEd
         }
 
         setImagePreview(URL.createObjectURL(file));
-        setValue("imageId", "", { shouldValidate: false });
+        setValue("imageId", null, { shouldValidate: false });
         setImageUploading(true);
 
         const compressed = await imageCompression(file, {
