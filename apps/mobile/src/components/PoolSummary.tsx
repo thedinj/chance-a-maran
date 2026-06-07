@@ -89,8 +89,8 @@ function TypeBreakdown({
     data: PoolSummaryType["standard"];
     isEditMode: boolean;
 }) {
-    const maxDrinking = Math.max(...Object.values(data.byDrinkingLevel), 1);
-    const maxSpice = Math.max(...Object.values(data.bySpiceLevel), 1);
+    const maxDrinking = data.total || 1;
+    const maxSpice = data.total || 1;
 
     return (
         <div style={styles.typeBlock}>
