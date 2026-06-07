@@ -652,11 +652,10 @@ const styles: Record<string, React.CSSProperties> = {
         margin: 0,
     },
     revealDescriptionReadOnly: {
+        flex: 1,
+        minHeight: 0,
         overflow: "hidden",
-        display: "-webkit-box",
-        WebkitBoxOrient: "vertical" as const,
-        WebkitLineClamp: 3,
-    } as React.CSSProperties,
+    },
     hiddenInstrSection: {
         display: "flex",
         flexDirection: "column",

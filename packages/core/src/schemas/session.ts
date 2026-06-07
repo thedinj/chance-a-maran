@@ -46,3 +46,40 @@ export const SessionSchema = z.object({
 });
 
 export type Session = z.infer<typeof SessionSchema>;
+
+// ─── Pool summary ─────────────────────────────────────────────────────────────
+
+const BucketSchema = z.object({
+    count: z.number(),
+    /** Fraction of draws that come from this bucket (0–1), derived from SESSION_BUCKET_RATIO / PLAYER_SET_BUCKET_RATIO. */
+    drawProbability: z.number(),
+});
+
+const PoolTypeBreakdownSchema = z.object({
+    total: z.number(),
+    drawn: z.number(),
+    remaining: z.number(),
+    buckets: z.object({
+        /** Session-born OR player-owned and submitted within the last 24 h (Bucket A). */
+        priority: BucketSchema,
+        /** Player-owned, older than 24 h (Bucket B). */
+        playerOwned: BucketSchema,
+        /** Global-only (Bucket C). */
+        global: BucketSchema,
+    }),
+    /** Count of eligible cards at each drinking level (keys "0"–"3"). */
+    byDrinkingLevel: z.record(z.string(), z.number()),
+    /** Count of eligible cards at each spice level (keys "0"–"3"). */
+    bySpiceLevel: z.record(z.string(), z.number()),
+    bySource: z.object({
+        playerSubmitted: z.number(),
+        globalPool: z.number(),
+    }),
+});
+
+export const PoolSummarySchema = z.object({
+    standard: PoolTypeBreakdownSchema,
+    reparations: PoolTypeBreakdownSchema,
+});
+
+export type PoolSummary = z.infer<typeof PoolSummarySchema>;

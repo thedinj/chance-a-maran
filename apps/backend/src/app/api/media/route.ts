@@ -61,7 +61,6 @@ export const POST = withAuth(async (req) => {
             );
         }
 
-        // eslint-disable-next-line prefer-const
         let buffer: Buffer = Buffer.from(await file.arrayBuffer() as ArrayBuffer);
         let mimeType = file.type;
 

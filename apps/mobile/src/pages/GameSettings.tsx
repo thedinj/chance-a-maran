@@ -17,6 +17,7 @@ import { z } from "zod";
 import { useAuth } from "../auth/useAuth";
 import { useCards } from "../cards/useCards";
 import { AppHeader } from "../components/AppHeader";
+import { PoolSummary } from "../components/PoolSummary";
 import { ACTIVE_SESSIONS_KEY } from "../hooks/useSessionQueries";
 import { apiClient } from "../lib/api";
 import type { Game, RequirementElement } from "../lib/api/types";
@@ -146,6 +147,7 @@ export default function GameSettings() {
     const nameValue = watch("name") ?? "";
     const nameCharsRemaining = MAX_SESSION_NAME_LENGTH - nameValue.length;
     const isDark = watch("filterSettings.maxSpiceLevel") === 3;
+    const filterSettingsValue = watch("filterSettings");
 
     // Registered-only page
     if (!user) {
@@ -739,6 +741,16 @@ export default function GameSettings() {
                                     </div>
                                 </div>
                             )}
+                        />
+                    </div>
+
+                    <div style={styles.divider} />
+
+                    {/* ── Pool summary ──────────────────────────────────────── */}
+                    <div style={styles.section}>
+                        <PoolSummary
+                            filterSettings={filterSettingsValue}
+                            sessionId={sessionId}
                         />
                     </div>
 

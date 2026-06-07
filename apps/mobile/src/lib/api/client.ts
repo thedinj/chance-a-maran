@@ -16,6 +16,7 @@ import type {
     JoinByCodeResponse,
     LoginRequest,
     Player,
+    PoolSummary,
     RegisterRequest,
     RequirementElement,
     Session,
@@ -277,6 +278,16 @@ export class ApiClient {
             filterSettings: opts.filterSettings,
             ...(opts.name !== undefined ? { name: opts.name } : {}),
         });
+    }
+
+    getPoolSummary(sessionId: string, filterSettings: FilterSettings) {
+        return this.request<PoolSummary>("POST", `/api/sessions/${sessionId}/pool-summary`, {
+            filterSettings,
+        });
+    }
+
+    previewPool(filterSettings: FilterSettings) {
+        return this.request<PoolSummary>("POST", "/api/cards/pool-preview", { filterSettings });
     }
 
     endSession(sessionId: string) {

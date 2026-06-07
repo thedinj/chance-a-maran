@@ -50,6 +50,8 @@ export interface DrawPoolEntry {
     cardVersionId: string;
     createdInSessionId: string | null;
     netVotes: number;
+    drinkingLevel: number;
+    spiceLevel: number;
     gameTagIds: string[];
     requirementElementIds: string[];
     isPlayerOwned: boolean;
@@ -479,7 +481,7 @@ export function setOwnerUserId(id: string, userId: string): void {
     db.prepare("UPDATE cards SET owner_user_id = ? WHERE id = ?").run(userId, id);
 }
 
-// ─── Draw pool query ──────────────────────────────────────────────────────────
+// ─── Draw pool queries ────────────────────────────────────────────────────────
 
 export function getDrawPool(
     sessionId: string,
@@ -496,6 +498,8 @@ export function getDrawPool(
                c.created_in_session_id,
                c.net_votes,
                c.created_at,
+               cv.drinking_level,
+               cv.spice_level,
                CASE WHEN sp.user_id IS NOT NULL THEN 1 ELSE 0 END AS is_player_owned,
                (SELECT GROUP_CONCAT(game_id)
                 FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids,
@@ -530,6 +534,8 @@ export function getDrawPool(
         created_in_session_id: string | null;
         net_votes: number;
         created_at: string;
+        drinking_level: number;
+        spice_level: number;
         is_player_owned: number;
         game_tag_ids: string | null;
         requirement_element_ids: string | null;
@@ -540,6 +546,79 @@ export function getDrawPool(
         cardVersionId: r.card_version_id,
         createdInSessionId: r.created_in_session_id,
         netVotes: r.net_votes,
+        drinkingLevel: r.drinking_level,
+        spiceLevel: r.spice_level,
+        gameTagIds: r.game_tag_ids ? r.game_tag_ids.split(",") : [],
+        requirementElementIds: r.requirement_element_ids
+            ? r.requirement_element_ids.split(",")
+            : [],
+        isPlayerOwned: r.is_player_owned === 1,
+        createdAt: r.created_at,
+    }));
+}
+
+/**
+ * Draw pool for pool-preview (no session yet). Returns global cards and cards
+ * owned by the given user. isPlayerOwned is true for user-owned cards.
+ */
+export function getDrawPoolForUser(
+    userId: string,
+    filters: { maxDrinkingLevel: number; maxSpiceLevel: number; includeGlobalCards?: boolean },
+    cardType: "standard" | "reparations"
+): DrawPoolEntry[] {
+    const includeGlobal = filters.includeGlobalCards !== false;
+    const globalClause = includeGlobal ? "c.is_global = 1 OR " : "";
+    const rows = db
+        .prepare(
+            `SELECT
+               c.id              AS card_id,
+               cv.id             AS card_version_id,
+               c.created_in_session_id,
+               c.net_votes,
+               c.created_at,
+               cv.drinking_level,
+               cv.spice_level,
+               CASE WHEN c.owner_user_id = ? THEN 1 ELSE 0 END AS is_player_owned,
+               (SELECT GROUP_CONCAT(game_id)
+                FROM card_game_tags WHERE card_version_id = cv.id) AS game_tag_ids,
+               (SELECT GROUP_CONCAT(element_id)
+                FROM card_version_requirements WHERE card_version_id = cv.id) AS requirement_element_ids
+             FROM cards c
+             JOIN card_versions cv ON cv.id = c.current_version_id
+             WHERE c.active = 1
+               AND c.card_type = ?
+               AND cv.drinking_level <= ?
+               AND cv.spice_level   <= ?
+               AND (
+                 ${globalClause}c.owner_user_id = ?
+               )`
+        )
+        .all(
+            userId,
+            cardType,
+            filters.maxDrinkingLevel,
+            filters.maxSpiceLevel,
+            userId
+        ) as Array<{
+        card_id: string;
+        card_version_id: string;
+        created_in_session_id: string | null;
+        net_votes: number;
+        created_at: string;
+        drinking_level: number;
+        spice_level: number;
+        is_player_owned: number;
+        game_tag_ids: string | null;
+        requirement_element_ids: string | null;
+    }>;
+
+    return rows.map((r) => ({
+        cardId: r.card_id,
+        cardVersionId: r.card_version_id,
+        createdInSessionId: r.created_in_session_id,
+        netVotes: r.net_votes,
+        drinkingLevel: r.drinking_level,
+        spiceLevel: r.spice_level,
         gameTagIds: r.game_tag_ids ? r.game_tag_ids.split(",") : [],
         requirementElementIds: r.requirement_element_ids
             ? r.requirement_element_ids.split(",")

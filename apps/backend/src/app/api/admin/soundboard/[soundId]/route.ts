@@ -34,7 +34,7 @@ export const PATCH = withAdmin(async (req, { params }) => {
 });
 
 /** DELETE /api/admin/soundboard/:soundId — permanently remove a sound. */
-export const DELETE = withAdmin(async (req, { params }) => {
+export const DELETE = withAdmin(async (_req, { params }) => {
     try {
         const { soundId } = await params;
         if (!soundRepo.findById(soundId)) return fail(new NotFoundError("Sound not found"));

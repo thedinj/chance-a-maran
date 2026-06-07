@@ -40,5 +40,7 @@ export type {
     GetAllCardsFilters,
     // Soundboard
     SoundboardSound,
+    // Pool summary
+    PoolSummary,
 } from "@chance/core";
 export { SubmitCardRequestSchema } from "@chance/core";
