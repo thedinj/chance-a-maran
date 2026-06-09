@@ -76,22 +76,15 @@ export function CardTable({
             onClick={() => onCardClick(card)}
         >
             <Table.Td onClick={(e) => e.stopPropagation()}>
-                <Tooltip
-                    label="Maximum 20 cards selected"
-                    disabled={selectedIds.has(card.id) || selectedIds.size < 20}
-                    withArrow
-                >
-                    <Checkbox
-                        checked={selectedIds.has(card.id)}
-                        disabled={!selectedIds.has(card.id) && selectedIds.size >= 20}
-                        onChange={(e) => {
-                            const next = new Set(selectedIds);
-                            if (e.currentTarget.checked) next.add(card.id);
-                            else next.delete(card.id);
-                            onSelectedIdsChange(next);
-                        }}
-                    />
-                </Tooltip>
+                <Checkbox
+                    checked={selectedIds.has(card.id)}
+                    onChange={(e) => {
+                        const next = new Set(selectedIds);
+                        if (e.currentTarget.checked) next.add(card.id);
+                        else next.delete(card.id);
+                        onSelectedIdsChange(next);
+                    }}
+                />
             </Table.Td>
             <Table.Td>
                 {card.currentVersion.imageId ? (
@@ -218,6 +211,11 @@ export function CardTable({
             </Table.Td>
             <Table.Td>
                 <Text size="xs" c="dimmed">
+                    {card.authorDisplayName}
+                </Text>
+            </Table.Td>
+            <Table.Td>
+                <Text size="xs" c="dimmed">
                     {formatDate(card.createdAt)}
                 </Text>
             </Table.Td>
@@ -240,6 +238,7 @@ export function CardTable({
                         <Table.Th>Games</Table.Th>
                         <Table.Th>Stats</Table.Th>
                         <Table.Th>Owner</Table.Th>
+                        <Table.Th>Author</Table.Th>
                         <Table.Th>Created</Table.Th>
                     </Table.Tr>
                 </Table.Thead>

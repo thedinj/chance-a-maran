@@ -481,6 +481,24 @@ export function setOwnerUserId(id: string, userId: string): void {
     db.prepare("UPDATE cards SET owner_user_id = ? WHERE id = ?").run(userId, id);
 }
 
+export function bulkReassignAuthor(cardIds: string[], toUserId: string): number {
+    if (cardIds.length === 0) return 0;
+    const placeholders = cardIds.map(() => "?").join(", ");
+    const result = db
+        .prepare(`UPDATE cards SET author_user_id = ? WHERE id IN (${placeholders})`)
+        .run(toUserId, ...cardIds);
+    return result.changes;
+}
+
+export function bulkReassignOwner(cardIds: string[], toUserId: string): number {
+    if (cardIds.length === 0) return 0;
+    const placeholders = cardIds.map(() => "?").join(", ");
+    const result = db
+        .prepare(`UPDATE cards SET owner_user_id = ? WHERE id IN (${placeholders})`)
+        .run(toUserId, ...cardIds);
+    return result.changes;
+}
+
 // ─── Draw pool queries ────────────────────────────────────────────────────────
 
 export function getDrawPool(

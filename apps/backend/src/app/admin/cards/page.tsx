@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import {
     Title,
     Badge,
+    Checkbox,
     Switch,
     TextInput,
     Group,
@@ -13,6 +14,7 @@ import {
     Button,
     Divider,
     Select,
+    Modal,
     ScrollArea,
     Loader,
     Center,
@@ -43,6 +45,8 @@ type FilterState = {
     gameId: string;
     drinkingLevel: string;
     spiceLevel: string;
+    ownerUserId: string;
+    authorUserId: string;
 };
 
 function cardMatchesFilters(card: Card, filters: FilterState): boolean {
@@ -73,6 +77,8 @@ function cardMatchesFilters(card: Card, filters: FilterState): boolean {
         card.currentVersion.spiceLevel !== parseInt(filters.spiceLevel)
     )
         return false;
+    if (filters.ownerUserId && card.ownerUserId !== filters.ownerUserId) return false;
+    if (filters.authorUserId && card.authorUserId !== filters.authorUserId) return false;
     return true;
 }
 
@@ -936,13 +942,20 @@ export default function CardsPage() {
         gameId: "",
         drinkingLevel: "",
         spiceLevel: "",
+        ownerUserId: "",
+        authorUserId: "",
     });
+    const [filterUsers, setFilterUsers] = useState<UserOption[]>([]);
     const [filterGames, setFilterGames] = useState<GameOption[]>([]);
     const [viewMode, setViewMode] = useState<"table" | "grid">("table");
     const [selected, setSelected] = useState<Card | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAnalysisOpen, setBulkAnalysisOpen] = useState(false);
     const [singleAnalyzeCard, setSingleAnalyzeCard] = useState<Card | null>(null);
+    const [reassignOpen, setReassignOpen] = useState(false);
+    const [reassignTargetUserId, setReassignTargetUserId] = useState<string | null>(null);
+    const [reassignFields, setReassignFields] = useState<string[]>(["author", "owner"]);
+    const [reassigning, setReassigning] = useState(false);
     const [analyzedCardIdsArr, setAnalyzedCardIdsArr] = useSessionStorage<string[]>({
         key: "admin-analyzed-card-ids",
         defaultValue: [],
@@ -984,6 +997,11 @@ export default function CardsPage() {
             .then((r) => r.json())
             .then((d) => {
                 if (d.ok) setFilterGames(d.data as GameOption[]);
+            });
+        adminFetch("/api/admin/users")
+            .then((r) => r.json())
+            .then((d) => {
+                if (d.ok) setFilterUsers(d.data as UserOption[]);
             });
     }, [adminFetch]);
 
@@ -1036,6 +1054,42 @@ export default function CardsPage() {
     function handleCardChanged(updated: Card) {
         setAllCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         setSelected(cardMatchesFilters(updated, filters) ? updated : null);
+    }
+
+    async function handleReassign() {
+        if (!reassignTargetUserId || reassignFields.length === 0) return;
+        setReassigning(true);
+        try {
+            const res = await adminFetch("/api/admin/cards/bulk-reassign", {
+                method: "POST",
+                body: JSON.stringify({
+                    cardIds: [...selectedIds],
+                    targetUserId: reassignTargetUserId,
+                    fields: reassignFields,
+                }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const { authorUpdated, ownerUpdated } = data.data as {
+                    authorUpdated: number;
+                    ownerUpdated: number;
+                };
+                notifications.show({
+                    message: `Reassigned author on ${authorUpdated} card${authorUpdated !== 1 ? "s" : ""}, owner on ${ownerUpdated} card${ownerUpdated !== 1 ? "s" : ""}`,
+                    color: "green",
+                });
+                setReassignOpen(false);
+                setSelectedIds(new Set());
+                // Refresh cards
+                const cardsRes = await adminFetch("/api/cards");
+                const cardsData = await cardsRes.json();
+                if (cardsData.ok) setAllCards(cardsData.data as Card[]);
+            } else {
+                notifications.show({ message: data.error?.message ?? "Error", color: "red" });
+            }
+        } finally {
+            setReassigning(false);
+        }
     }
 
     return (
@@ -1124,6 +1178,30 @@ export default function CardsPage() {
                         clearable
                         w={120}
                     />
+                    <Select
+                        placeholder="Owner"
+                        data={filterUsers.map((u) => ({
+                            value: u.id,
+                            label: `${u.displayName} (${u.email})`,
+                        }))}
+                        value={filters.ownerUserId || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, ownerUserId: v ?? "" }))}
+                        clearable
+                        searchable
+                        w={180}
+                    />
+                    <Select
+                        placeholder="Author"
+                        data={filterUsers.map((u) => ({
+                            value: u.id,
+                            label: `${u.displayName} (${u.email})`,
+                        }))}
+                        value={filters.authorUserId || null}
+                        onChange={(v) => setFilters((f) => ({ ...f, authorUserId: v ?? "" }))}
+                        clearable
+                        searchable
+                        w={180}
+                    />
                     <SegmentedControl
                         value={viewMode}
                         onChange={(v) => setViewMode(v as "table" | "grid")}
@@ -1153,11 +1231,17 @@ export default function CardsPage() {
                             >
                                 {selectedIds.size} selected
                             </Text>
-                            <Text size="xs" c="dimmed">
-                                (max 20)
-                            </Text>
                         </Group>
                         <Group gap="sm">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                color="gray"
+                                disabled={cards.length === 0 || selectedIds.size === cards.length}
+                                onClick={() => setSelectedIds(new Set(cards.map((c) => c.id)))}
+                            >
+                                Select all ({cards.length})
+                            </Button>
                             <Button
                                 variant="subtle"
                                 size="xs"
@@ -1167,16 +1251,38 @@ export default function CardsPage() {
                             >
                                 Clear
                             </Button>
+                            <Tooltip
+                                label="AI analysis is limited to 20 cards at a time"
+                                disabled={selectedIds.size <= 20}
+                                withArrow
+                            >
+                                <Button
+                                    size="xs"
+                                    color="teal"
+                                    disabled={selectedIds.size === 0 || selectedIds.size > 20}
+                                    onClick={() => setBulkAnalysisOpen(true)}
+                                >
+                                    Analyze
+                                    {selectedIds.size > 0
+                                        ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`
+                                        : ""}
+                                </Button>
+                            </Tooltip>
                             <Button
                                 size="xs"
-                                color="teal"
+                                color="orange"
                                 disabled={selectedIds.size === 0}
-                                onClick={() => setBulkAnalysisOpen(true)}
+                                onClick={() => {
+                                    const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
+                                    const systemUser = filterUsers.find(
+                                        (u) => u.id === SYSTEM_USER_ID
+                                    );
+                                    setReassignTargetUserId(systemUser?.id ?? null);
+                                    setReassignFields(["author", "owner"]);
+                                    setReassignOpen(true);
+                                }}
                             >
-                                Analyze
-                                {selectedIds.size > 0
-                                    ? ` ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`
-                                    : ""}
+                                Reassign…
                             </Button>
                         </Group>
                     </Group>
@@ -1263,6 +1369,63 @@ export default function CardsPage() {
                     setDismissedCardIdsArr((prev) => [...new Set([...prev, ...ids])])
                 }
             />
+
+            <Modal
+                opened={reassignOpen}
+                onClose={() => setReassignOpen(false)}
+                title={`Reassign ${selectedIds.size} card${selectedIds.size !== 1 ? "s" : ""}`}
+                size="sm"
+            >
+                <Stack gap="md">
+                    <Select
+                        label="Target user"
+                        placeholder="Search users…"
+                        data={filterUsers.map((u) => ({
+                            value: u.id,
+                            label: `${u.displayName} (${u.email})`,
+                        }))}
+                        value={reassignTargetUserId}
+                        onChange={setReassignTargetUserId}
+                        searchable
+                        clearable
+                    />
+                    <Stack gap="xs">
+                        <Text size="sm" fw={500}>
+                            Fields to update
+                        </Text>
+                        <Checkbox
+                            label="Author"
+                            checked={reassignFields.includes("author")}
+                            onChange={(e) =>
+                                setReassignFields((prev) =>
+                                    e.currentTarget.checked
+                                        ? [...prev, "author"]
+                                        : prev.filter((f) => f !== "author")
+                                )
+                            }
+                        />
+                        <Checkbox
+                            label="Owner"
+                            checked={reassignFields.includes("owner")}
+                            onChange={(e) =>
+                                setReassignFields((prev) =>
+                                    e.currentTarget.checked
+                                        ? [...prev, "owner"]
+                                        : prev.filter((f) => f !== "owner")
+                                )
+                            }
+                        />
+                    </Stack>
+                    <Button
+                        onClick={() => void handleReassign()}
+                        loading={reassigning}
+                        disabled={!reassignTargetUserId || reassignFields.length === 0}
+                        color="orange"
+                    >
+                        Reassign {selectedIds.size} card{selectedIds.size !== 1 ? "s" : ""}
+                    </Button>
+                </Stack>
+            </Modal>
 
             {singleAnalyzeCard && (
                 <BulkAnalysisModal
