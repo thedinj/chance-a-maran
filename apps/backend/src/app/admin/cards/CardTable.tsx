@@ -227,7 +227,23 @@ export function CardTable({
             <Table striped highlightOnHover withTableBorder>
                 <Table.Thead>
                     <Table.Tr>
-                        <Table.Th w={40} />
+                        <Table.Th w={40}>
+                            <Checkbox
+                                checked={cards.length > 0 && cards.every((c) => selectedIds.has(c.id))}
+                                indeterminate={
+                                    cards.some((c) => selectedIds.has(c.id)) &&
+                                    !cards.every((c) => selectedIds.has(c.id))
+                                }
+                                onChange={(e) => {
+                                    if (e.currentTarget.checked) {
+                                        onSelectedIdsChange(new Set(cards.map((c) => c.id)));
+                                    } else {
+                                        onSelectedIdsChange(new Set());
+                                    }
+                                }}
+                                disabled={cards.length === 0}
+                            />
+                        </Table.Th>
                         <Table.Th w={36} />
                         <Table.Th>Title</Table.Th>
                         <Table.Th>Type</Table.Th>
