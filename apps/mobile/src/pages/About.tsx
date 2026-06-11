@@ -226,8 +226,24 @@ export default function About() {
                                     desc: "The first time a number comes up that has 3 settlements adjacent to that tile",
                                 },
                                 {
+                                    trigger: "Three doubles in a row",
+                                    desc: "Any three consecutive rolls where both dice show the same number",
+                                },
+                                {
+                                    trigger: "Three 7s in a row",
+                                    desc: "Three consecutive rolls all land on 7",
+                                },
+                                {
+                                    trigger: "Same double twice in a row",
+                                    desc: "The same dice combination rolls back-to-back — e.g. 2+2 then 2+2, or 3+3 then 3+3",
+                                },
+                                {
                                     trigger: "First city hex",
                                     desc: "The first time a number comes up that has 2 or 3 cities on that tile",
+                                },
+                                {
+                                    trigger: "Resource buy-in",
+                                    desc: "Trade 12 cards of the same resource to earn a Chance card — no bank needed",
                                 },
                             ].map(({ trigger, desc }, i, arr) => (
                                 <div
